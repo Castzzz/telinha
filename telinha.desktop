@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Telinha (WatchParty & Voz)
+Comment=Transmissão de tela e voz estilo Discord/TeamSpeak com áudio do sistema independente
+Exec=sh -c "cd /home/castzin/Dev/telinha && npm run app"
+Path=/home/castzin/Dev/telinha
+Terminal=false
+Type=Application
+Categories=AudioVideo;Network;Chat;
+StartupNotify=true

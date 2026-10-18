@@ -1,0 +1,84 @@
+{
+  "name": "telinha",
+  "version": "1.1.0",
+  "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
+  "type": "module",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "app": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) electron/main.cjs)'",
+    "test": "node tests/runner.js",
+    "sfu": "go run ./sfu",
+    "dist:linux": "electron-builder --linux",
+    "dist:win": "npm run build:win-audio && electron-builder --win nsis portable",
+    "dist": "npm run build:win-audio && electron-builder --linux --win",
+    "build:win-audio": "sh native/win-audio/build.sh",
+    "release": "npm run build:win-audio && GH_TOKEN=$(gh auth token) electron-builder --linux --win --publish always"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "express": "^4.21.2",
+    "socket.io": "^4.8.1"
+  },
+  "devDependencies": {
+    "@sapphi-red/web-noise-suppressor": "^0.4.1",
+    "electron-builder": "^26.15.3",
+    "socket.io-client": "^4.8.1"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "author": "castzin",
+  "build": {
+    "appId": "com.castzin.telinha",
+    "productName": "Telinha",
+    "electronVersion": "42.11.11",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**",
+      "public/**",
+      "server.js",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "AudioVideo",
+      "artifactName": "Telinha-${version}.${ext}"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "artifactName": "Telinha-Setup-${version}.exe"
+    },
+    "portable": {
+      "artifactName": "Telinha-Portatil-${version}.exe"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Castzzz",
+        "repo": "telinha",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "desktopName": "telinha.desktop",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Castzzz/telinha.git"
+  }
+}

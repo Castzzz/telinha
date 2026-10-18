@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <title>Telinha</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+      background: #1e1f22; color: #f2f3f5; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    }
+    .card { width: min(520px, 92vw); background: #2b2d31; border-radius: 12px; padding: 32px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+    h1 { margin: 0 0 4px; font-size: 26px; }
+    p.sub { margin: 0 0 24px; color: #b5bac1; }
+    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #b5bac1; margin: 24px 0 8px; }
+    button {
+      width: 100%; padding: 12px; border: 0; border-radius: 8px; font-size: 15px; font-weight: 600;
+      cursor: pointer; background: #5865f2; color: #fff;
+    }
+    button:hover:not(:disabled) { background: #4752c4; }
+    button:disabled { opacity: .6; cursor: wait; }
+    button.secondary { background: #4e5058; }
+    button.secondary:hover:not(:disabled) { background: #6d6f78; }
+    .row { display: flex; gap: 8px; }
+    .row button { width: auto; white-space: nowrap; padding: 12px 18px; }
+    input {
+      flex: 1; min-width: 0; padding: 12px; border-radius: 8px; border: 1px solid #1e1f22;
+      background: #1e1f22; color: #f2f3f5; font-size: 15px;
+    }
+    .msg { margin-top: 16px; font-size: 14px; min-height: 1em; }
+    .msg.error { color: #f23f43; }
+    .link-box { display: none; margin-top: 16px; padding: 16px; background: #1e1f22; border-radius: 8px; }
+    .link-box code { display: block; word-break: break-all; color: #23a55a; font-size: 15px; margin-bottom: 12px; }
+    .link-box .row { margin-top: 8px; }
+    .link-box .row button { flex: 1; }
+    small { color: #949ba4; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>📺 Telinha</h1>
+    <p class="sub">Voz e transmissão de tela com o som do PC.</p>
+
+    <h2>Hospedar a sala</h2>
+    <button id="btn-host">🏠 Hospedar no meu PC</button>
+    <div class="link-box" id="link-box">
+      <small>Mande este link para seus amigos:</small>
+      <code id="public-link"></code>
+      <div class="row">
+        <button class="secondary" id="btn-copy">📋 Copiar link</button>
+        <button id="btn-enter-host">Entrar na sala</button>
+      </div>
+    </div>
+
+    <h2>Entrar na sala de um amigo</h2>
+    <div class="row">
+      <input id="server-url" type="text" placeholder="https://xxxx.trycloudflare.com" spellcheck="false" />
+      <button id="btn-join">Entrar</button>
+    </div>
+
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <script>
+    const api = window.telinhaLauncher;
+    const $ = (id) => document.getElementById(id);
+    const msg = (text, isError) => {
+      $('msg').textContent = text || '';
+      $('msg').className = 'msg' + (isError ? ' error' : '');
+    };
+
+    let hostLocalUrl = null;
+
+    api.getState().then((state) => {
+      if (state.lastServerUrl) $('server-url').value = state.lastServerUrl;
+      if (state.error) msg(state.error, true);
+    });
+
+    $('btn-host').addEventListener('click', async () => {
+      $('btn-host').disabled = true;
+      msg('Iniciando servidor e criando link público (pode levar até 1 minuto)…');
+      const res = await api.host();
+      $('btn-host').disabled = false;
+      if (!res.ok) return msg(res.error, true);
+      hostLocalUrl = res.localUrl;
+      if (res.publicUrl) {
+        $('public-link').textContent = res.publicUrl;
+        $('link-box').style.display = 'block';
+        msg('');
+      } else {
+        msg(res.tunnelError || 'Servidor iniciado, mas não deu para criar o link público.', true);
+        $('public-link').textContent = 'Só na rede local: ' + (res.lanUrls.join(', ') || res.localUrl);
+        $('btn-copy').style.display = 'none';
+        $('link-box').style.display = 'block';
+      }
+    });
+
+    $('btn-copy').addEventListener('click', async () => {
+      await api.copy($('public-link').textContent);
+      $('btn-copy').textContent = '✅ Copiado!';
+      setTimeout(() => { $('btn-copy').textContent = '📋 Copiar link'; }, 1500);
+    });
+
+    $('btn-enter-host').addEventListener('click', () => api.open(hostLocalUrl));
+
+    const join = async () => {
+      const url = $('server-url').value.trim();
+      if (!url) return msg('Cole o link que seu amigo mandou.', true);
+      $('btn-join').disabled = true;
+      msg('Conectando…');
+      const res = await api.join(url);
+      $('btn-join').disabled = false;
+      if (!res.ok) msg(res.error, true);
+    };
+    $('btn-join').addEventListener('click', join);
+    $('server-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+  </script>
+</body>
+</html>

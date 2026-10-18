@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Telinha — Transmissão e Voz estilo Discord / TeamSpeak</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="theme-discord">
+
+  <!-- TOPBAR / TITLEBAR -->
+  <header id="app-topbar" class="app-topbar">
+    <div class="topbar-left">
+      <div class="brand-logo">
+        <span class="logo-emoji">📺</span>
+        <span class="brand-text">Telinha <span class="badge-pro">PRO</span></span>
+      </div>
+      <div class="active-channel-pill" id="topbar-channel-pill">
+        <span class="channel-icon">🔊</span>
+        <span id="topbar-channel-name">Geral</span>
+        <span class="channel-users-badge" id="topbar-users-count" title="Usuários no canal">0</span>
+      </div>
+      <button id="btn-copy-invite" class="btn-topbar-action" title="Copiar link direto para esta sala">
+        🔗 Convidar
+      </button>
+    </div>
+
+    <!-- ACTIVE STREAMS BAR (M3 Tab Switcher) -->
+    <div id="stream-tabs" class="stream-tabs" aria-label="Transmissões de tela ativas">
+      <!-- Inserido dinamicamente via JS: [🔴 Castzin] [🔴 Amigo2] -->
+    </div>
+
+    <div class="topbar-right">
+      <div class="quality-selector-wrap">
+        <label for="quality-select" class="visually-hidden">Qualidade:</label>
+        <select id="quality-select" class="quality-select" title="Qualidade da sua transmissão de tela">
+          <option value="1080p60" selected>1080p · 60 fps</option>
+          <option value="1080p30">1080p · 30 fps</option>
+          <option value="720p60">720p · 60 fps</option>
+          <option value="720p30">720p · 30 fps</option>
+          <option value="1440p60">1440p · 60 fps</option>
+          <option value="nativa60">Nativa · 60 fps</option>
+        </select>
+      </div>
+
+      <button id="btn-toggle-mosaic" class="btn-topbar-tool" title="Alternar entre Palco Único e Modo Mosaico (Grid)">
+        🔲 Mosaico
+      </button>
+
+      <button id="btn-toggle-chat" class="btn-topbar-tool active" title="Alternar Chat do Canal">
+        💬 Chat
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APP CONTAINER (3-PANE LAYOUT) -->
+  <div id="app-layout" class="app-layout">
+
+    <!-- LEFT SIDEBAR: CHANNELS TREE & USER DOCK -->
+    <aside id="sidebar-channels" class="sidebar-channels">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">Salas & Canais</h2>
+        <button id="btn-header-add-channel" class="btn-icon-add" title="Criar novo canal de voz">+</button>
+      </div>
+
+      <!-- CHANNELS LIST WRAPPER -->
+      <nav class="channels-scroller" aria-label="Canais de voz">
+        <div class="category-header">
+          <span class="category-caret">▼</span>
+          <span class="category-title">Canais de Voz</span>
+          <button id="btn-add-channel-category" class="btn-category-add" title="Criar Canal">+</button>
+        </div>
+
+        <ul class="channels-tree" id="channels-tree">
+          <!-- 1. GERAL -->
+          <li class="channel-item channel-active" id="channel-geral" data-channel-id="geral">
+            <div class="channel-row" role="button" tabindex="0">
+              <span class="channel-speaker-icon">🔊</span>
+              <span class="channel-name">Geral</span>
+              <span class="channel-count" id="count-geral">0</span>
+            </div>
+            <ul class="channel-users" id="channel-users-geral">
+              <!-- Renderizado dinamicamente via JS -->
+            </ul>
+          </li>
+
+          <!-- 2. CINEMA -->
+          <li class="channel-item" id="channel-cinema" data-channel-id="cinema">
+            <div class="channel-row" role="button" tabindex="0">
+              <span class="channel-speaker-icon">🎬</span>
+              <span class="channel-name">Cinema</span>
+              <span class="channel-count" id="count-cinema">0</span>
+            </div>
+            <ul class="channel-users" id="channel-users-cinema"></ul>
+          </li>
+
+          <!-- 3. FUTEBOL -->
+          <li class="channel-item" id="channel-futebol" data-channel-id="futebol">
+            <div class="channel-row" role="button" tabindex="0">
+              <span class="channel-speaker-icon">⚽</span>
+              <span class="channel-name">Futebol</span>
+              <span class="channel-count" id="count-futebol">0</span>
+            </div>
+            <ul class="channel-users" id="channel-users-futebol"></ul>
+          </li>
+
+          <!-- 4. GAMEPLAY -->
+          <li class="channel-item" id="channel-gameplay" data-channel-id="gameplay">
+            <div class="channel-row" role="button" tabindex="0">
+              <span class="channel-speaker-icon">🎮</span>
+              <span class="channel-name">Gameplay</span>
+              <span class="channel-count" id="count-gameplay">0</span>
+            </div>
+            <ul class="channel-users" id="channel-users-gameplay"></ul>
+          </li>
+
+          <!-- CANAIS CUSTOMIZADOS DINÂMICOS -->
+          <div id="dynamic-channels-container"></div>
+        </ul>
+
+        <div class="sidebar-action-wrap">
+          <button id="btn-open-create-modal" class="btn-create-channel-row">
+            <span class="plus-icon">+</span> Criar Canal
+          </button>
+        </div>
+      </nav>
+
+      <!-- PERSISTENT BOTTOM USER DOCK -->
+      <footer id="user-dock" class="user-dock">
+        <div class="user-profile" id="user-profile" title="Editar seu perfil" role="button" tabindex="0">
+          <div class="user-avatar-wrap" id="dock-avatar-wrap">
+            <div class="user-avatar" id="dock-user-avatar" style="background-color: var(--accent-brand);">
+              <span id="dock-avatar-initials">TU</span>
+            </div>
+            <span class="status-indicator online"></span>
+          </div>
+          <div class="user-info">
+            <span class="user-name" id="dock-user-name">Você</span>
+            <span class="user-status-text" id="dock-user-status">#Conectado</span>
+          </div>
+        </div>
+
+        <div class="dock-controls">
+          <!-- Mic Toggle -->
+          <button id="btn-toggle-mic" class="dock-btn" title="Mutar Microfone">
+            <span class="dock-icon" id="dock-mic-icon">🎙️</span>
+          </button>
+
+          <!-- Deafen Toggle -->
+          <button id="btn-toggle-deafen" class="dock-btn" title="Ensurdecer (Desativar Áudio)">
+            <span class="dock-icon" id="dock-deafen-icon">🎧</span>
+          </button>
+
+          <!-- Screen Share Toggle -->
+          <button id="btn-share-screen" class="dock-btn btn-dock-share" title="Transmitir Tela com Som do Sistema">
+            <span class="dock-icon" id="dock-share-icon">🖥️</span>
+          </button>
+
+          <!-- Settings Modal -->
+          <button id="btn-open-settings" class="dock-btn" title="Configurações de Áudio e Vídeo">
+            <span class="dock-icon">⚙️</span>
+          </button>
+        </div>
+      </footer>
+    </aside>
+
+    <!-- CENTER MAIN STAGE / VIDEO AREA -->
+    <main id="stage-section" class="stage-section">
+
+      <!-- MODE A: VOICE LOUNGE (Default state when no screen is transmitted) -->
+      <section id="voice-lounge" class="voice-lounge">
+        <div class="lounge-header">
+          <span class="lounge-icon" id="lounge-channel-icon">🔊</span>
+          <h2 id="lounge-channel-title">Canal de Voz: Geral</h2>
+          <p class="lounge-subtitle">Converse por voz ou transmita sua tela com som do jogo/vídeo sem precisar do microfone.</p>
+        </div>
+
+        <div id="lounge-users-grid" class="lounge-users-grid">
+          <!-- Cards grandes dos amigos conectados no canal com VAD verde pulsante -->
+        </div>
+
+        <div class="lounge-cta">
+          <button id="btn-lounge-start-share" class="btn-share-primary btn-large">
+            🖥️ Transmitir Minha Tela
+          </button>
+          <p class="hint-text">
+            💡 No Linux, o som do sistema é capturado diretamente da saída do PC (Monitor Sink), 100% isolado do microfone.
+          </p>
+        </div>
+      </section>
+
+      <!-- MODE B & C: VIDEOS CONTAINER (Single Stage or Mosaic Grid) -->
+      <section id="videos-grid" class="videos-grid hidden">
+        <!-- Vídeos injetados dinamicamente com overlay de HUD, estatísticas e volume -->
+      </section>
+
+      <!-- FLOATING EMOJI REACTIONS LAYER -->
+      <div id="reactions-layer" class="reactions-layer" aria-hidden="true"></div>
+
+      <!-- STAGE BOTTOM CONTROLS & REACTIONS BAR -->
+      <footer id="stage-controls-bar" class="stage-controls-bar">
+        <div class="stage-controls-left">
+          <span id="watching-stream-label" class="watching-stream-label">Nenhuma transmissão</span>
+          <div class="stream-volume-control" id="stream-volume-control" title="Volume da transmissão (0-200%)">
+            <span id="stream-volume-icon">🔊</span>
+            <input type="range" id="input-stream-volume" min="0" max="2" step="0.05" value="1" />
+            <span id="stream-volume-text">100%</span>
+          </div>
+        </div>
+
+        <div class="reactions-bar" aria-label="Reações rápidas">
+          <button class="reaction-btn" data-emoji="🔥" title="Fogo!">🔥</button>
+          <button class="reaction-btn" data-emoji="😂" title="Rindo">😂</button>
+          <button class="reaction-btn" data-emoji="😱" title="Chocado">😱</button>
+          <button class="reaction-btn" data-emoji="⚽" title="Golaço">⚽</button>
+          <button class="reaction-btn" data-emoji="🎮" title="GG / Gameplay">🎮</button>
+          <button class="reaction-btn" data-emoji="👏" title="Aplausos">👏</button>
+          <button class="reaction-btn" data-emoji="❤️" title="Amei">❤️</button>
+        </div>
+
+        <div class="stage-controls-right">
+          <button id="btn-stage-pip" class="btn-control-tool" title="Picture-in-Picture (Janela Flutuante)">
+            🖼️ PiP
+          </button>
+          <button id="btn-stage-fullscreen" class="btn-control-tool" title="Tela Cheia (F)">
+            ⛶ Tela Cheia
+          </button>
+        </div>
+      </footer>
+    </main>
+
+    <!-- RIGHT CHANNEL TEXT CHAT DRAWER -->
+    <aside id="chat-drawer" class="chat-drawer">
+      <div class="chat-header">
+        <div class="chat-header-title">
+          <span class="chat-hash">💬</span>
+          <span id="chat-channel-label">#geral-chat</span>
+        </div>
+        <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
+      </div>
+
+      <!-- SCROLLABLE MESSAGES LIST -->
+      <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
+        <div class="chat-welcome-banner" id="chat-welcome-banner">
+          <h3>Bem-vindo ao chat do canal!</h3>
+          <p>As mensagens enviadas aqui são visíveis apenas para os amigos conectados neste canal.</p>
+        </div>
+      </div>
+
+      <!-- CHAT INPUT FORM -->
+      <form id="chat-form" class="chat-form">
+        <input
+          type="text"
+          id="chat-input"
+          class="chat-input"
+          placeholder="Conversar em #geral..."
+          maxlength="400"
+          autocomplete="off"
+        />
+        <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar Mensagem">
+          Enviar
+        </button>
+      </form>
+    </aside>
+  </div>
+
+  <!-- ==================== MODALS & OVERLAYS ==================== -->
+
+  <!-- 1. MODAL CRIAR NOVO CANAL DE VOZ -->
+  <div id="modal-create-channel" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-create-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-create-title">Criar Canal de Voz</h3>
+        <button class="modal-close-btn" data-close-modal="modal-create-channel">✕</button>
+      </div>
+
+      <form id="form-create-channel">
+        <div class="form-group">
+          <label for="input-channel-name">Nome do Canal</label>
+          <input
+            type="text"
+            id="input-channel-name"
+            class="form-input"
+            placeholder="ex: anime, estudos, cs-go, resenha"
+            maxlength="30"
+            required
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="form-group">
+          <label>Sugestões Rápidas</label>
+          <div class="preset-chips">
+            <button type="button" class="preset-chip" data-preset="Anime">🎬 Anime</button>
+            <button type="button" class="preset-chip" data-preset="Música">🎵 Música</button>
+            <button type="button" class="preset-chip" data-preset="Estudos">📚 Estudos</button>
+            <button type="button" class="preset-chip" data-preset="CS / Valorant">🔫 CS / Valorant</button>
+            <button type="button" class="preset-chip" data-preset="Resenha">🍻 Resenha</button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" data-close-modal="modal-create-channel">Cancelar</button>
+          <button type="submit" class="btn-primary" id="btn-submit-channel">Criar Canal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- 2. MODAL CONFIGURAÇÕES DE ÁUDIO E DISPOSITIVOS -->
+  <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
+    <div class="modal-card modal-settings-card">
+      <div class="modal-header">
+        <h3 id="modal-settings-title">Configurações de Áudio e Voz</h3>
+        <button class="modal-close-btn" data-close-modal="modal-settings">✕</button>
+      </div>
+
+      <div class="modal-body settings-body">
+        <!-- Dispositivo de Microfone -->
+        <div class="form-group">
+          <label for="select-audio-input">Microfone (Entrada de Voz)</label>
+          <select id="select-audio-input" class="form-select"></select>
+        </div>
+
+        <!-- Cancelamento de ruído do microfone -->
+        <div class="form-group">
+          <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
+          <select id="select-noise-suppression" class="form-select">
+            <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
+            <option value="basico">Básico (filtro do navegador)</option>
+            <option value="off">Desligado (som cru do microfone)</option>
+          </select>
+          <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
+        </div>
+
+        <!-- Dispositivo de Saída -->
+        <div class="form-group">
+          <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>
+          <select id="select-audio-output" class="form-select"></select>
+        </div>
+
+        <!-- Dispositivo do Som do Sistema (Linux Loopback Monitor Sink) -->
+        <div class="form-group">
+          <label for="select-audio-system">Áudio da Transmissão (Som do Sistema / Som do PC)</label>
+          <select id="select-audio-system" class="form-select"></select>
+          <p class="form-help">
+            🔊 No Linux PipeWire/PulseAudio, selecione o monitor de áudio do sistema (ex: <code>som_do_pc</code> ou <code>Monitor of...</code>). O som do jogo/vídeo será enviado em estéreo sem exigir microfone ligado.
+          </p>
+        </div>
+
+        <!-- Atalhos de teclado -->
+        <div class="form-group">
+          <label>Atalhos de teclado</label>
+          <div class="hotkey-row">
+            <span>🎙️ Mutar / desmutar</span>
+            <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="mute"></button>
+          </div>
+          <div class="hotkey-row">
+            <span>🎧 Ensurdecer</span>
+            <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="deafen"></button>
+          </div>
+          <label class="hotkey-global" id="hotkey-global-wrap">
+            <input type="checkbox" id="input-hotkey-global" />
+            Funcionar mesmo com o Telinha minimizado (ex: no meio do jogo)
+          </label>
+          <p class="form-help">
+            Clique no botão e aperte a tecla (Esc cancela, Backspace remove).
+            Com o Telinha minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
+            pra não roubar letras que você digita em outros programas.
+          </p>
+        </div>
+
+        <!-- VAD Test Meter -->
+        <div class="form-group">
+          <label>Teste de Atividade de Voz (VAD)</label>
+          <div class="vad-meter-container">
+            <div id="vad-meter-bar" class="vad-meter-bar"></div>
+          </div>
+          <p class="form-help">O anel verde no seu avatar acende automaticamente quando você fala.</p>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" data-close-modal="modal-settings">Concluído</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. MODAL PERFIL (PRIMEIRA ENTRADA E CLIQUE NO SEU NOME) -->
+  <div id="modal-profile" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-profile-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-profile-title">Seu perfil</h3>
+        <button class="modal-close-btn" data-close-modal="modal-profile">✕</button>
+      </div>
+      <form id="form-profile">
+        <div class="profile-editor-top">
+          <div class="profile-avatar-preview user-avatar" id="profile-avatar-preview"></div>
+          <div class="profile-avatar-actions">
+            <label class="btn-secondary profile-file-btn">
+              📷 Escolher foto
+              <input type="file" id="input-profile-avatar" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            </label>
+            <button type="button" class="btn-secondary" id="btn-profile-remove-avatar">Remover foto</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-profile-name">Nome</label>
+          <input type="text" id="input-profile-name" class="form-input" placeholder="Ex: Castzin" maxlength="24" required autocomplete="off" />
+        </div>
+
+        <div class="form-group">
+          <label>Cor</label>
+          <div class="profile-colors" id="profile-colors"></div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-profile-bio">Sobre você <span class="form-help-inline">(aparece quando clicam em você)</span></label>
+          <textarea id="input-profile-bio" class="form-input profile-bio" maxlength="140" rows="2" placeholder="Ex: só jogo de noite 🌙"></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="submit" class="btn-primary btn-large">Salvar perfil</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- POPUP DE UM AMIGO: PERFIL + VOLUME SÓ PRA VOCÊ -->
+  <div id="user-popover" class="user-popover hidden" role="dialog" aria-label="Perfil do amigo">
+    <div class="user-popover-head">
+      <div class="user-avatar user-popover-avatar" id="user-popover-avatar"></div>
+      <div class="user-popover-names">
+        <strong id="user-popover-name"></strong>
+        <span id="user-popover-bio" class="user-popover-bio"></span>
+      </div>
+    </div>
+    <label class="user-popover-label" for="user-popover-volume">Volume da voz (só pra você)</label>
+    <div class="user-popover-volume">
+      <input type="range" id="user-popover-volume" min="0" max="200" step="5" value="100" />
+      <span id="user-popover-volume-text">100%</span>
+    </div>
+    <div class="user-popover-actions">
+      <button type="button" class="btn-secondary" id="user-popover-mute">🔇 Silenciar pra mim</button>
+      <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
+    </div>
+  </div>
+
+  <!-- 4. MODAL NATIVO ELECTRON SCREEN PICKER (PREPARADO PARA M4) -->
+  <div id="modal-screen-picker" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card modal-screen-picker-card">
+      <div class="modal-header">
+        <h3>Compartilhar sua Tela ou Janela</h3>
+        <button class="modal-close-btn" data-close-modal="modal-screen-picker">✕</button>
+      </div>
+      <div class="picker-tabs">
+        <button class="picker-tab active" data-picker-tab="screens">Telas Inteiras</button>
+        <button class="picker-tab" data-picker-tab="windows">Janelas de Aplicativos</button>
+      </div>
+      <div id="screen-picker-grid" class="screen-picker-grid">
+        <!-- Miniaturas ao vivo capturadas via desktopCapturer do Electron -->
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-close-modal="modal-screen-picker">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUAL SOM TRANSMITIR (app desktop no Linux) -->
+  <div id="modal-audio-picker" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Qual som transmitir?</h3>
+        <button class="modal-close-btn" data-close-modal="modal-audio-picker">✕</button>
+      </div>
+      <p style="margin:0 0 12px;color:#b5bac1;font-size:13px;">
+        Escolha um app pra mandar <strong>só o som dele</strong> (sem as vozes da chamada e sem outros sons do PC).
+        O app precisa estar aberto tocando algum som.
+      </p>
+      <div id="audio-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;"></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="audio-picker-refresh">🔄 Atualizar lista</button>
+        <button type="button" class="btn-secondary" data-close-modal="modal-audio-picker">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS CONTAINER -->
+  <div id="toast-container" class="toast-container" aria-live="assertive"></div>
+
+  <!-- HIDDEN AUDIO STREAMS CONTAINER (FOR WEBRTC VOICE TRACKS) -->
+  <div id="voice-streams-container" class="visually-hidden"></div>
+
+  <!-- SCRIPTS -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

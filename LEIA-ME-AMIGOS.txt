@@ -1,0 +1,59 @@
+==============================================
+  TELINHA - como instalar e entrar na sala
+==============================================
+
+ONDE BAIXAR
+-----------
+  https://github.com/Castzzz/telinha/releases/latest
+  (lá embaixo, em "Assets")
+
+WINDOWS
+-------
+1. Baixe o "Telinha-Setup-<versão>.exe" e abra.
+2. Se aparecer "O Windows protegeu o computador":
+   clique em "Mais informações" e depois em "Executar assim mesmo".
+   (o app é seguro, só não tem assinatura digital paga)
+3. O Telinha instala e abre sozinho. Depois fica no Menu Iniciar.
+4. Se o Windows perguntar sobre o Firewall, clique em "Permitir".
+5. As próximas versões chegam sozinhas: o app avisa quando baixar.
+
+LINUX
+-----
+1. Baixe o "Telinha-<versão>.AppImage".
+2. No terminal, na pasta onde baixou:
+     chmod +x Telinha-*.AppImage
+     ./Telinha-*.AppImage
+3. Se der erro de "libfuse.so.2", instale o fuse2:
+     Arch/CachyOS:  sudo pacman -S fuse2
+     Ubuntu/Mint:   sudo apt install libfuse2   (24.04+: libfuse2t64)
+     Fedora:        sudo dnf install fuse fuse-libs
+4. As próximas versões chegam sozinhas.
+   (Se o AppImage não abrir mesmo assim, baixe o .tar.gz, extraia e
+   rode ./telinha dentro da pasta; esse não se atualiza sozinho.)
+
+ENTRAR NA SALA
+--------------
+1. Peça o link da sala pro anfitrião
+   (algo como https://palavra-palavra.trycloudflare.com).
+2. No Telinha, cole o link em "Entrar na sala de um amigo"
+   e clique em "Entrar".
+3. O link muda toda vez que o anfitrião abre a sala.
+   Se der erro, peça o link novo.
+
+DICAS
+-----
+- M = mutar microfone   |   D = ensurdecer
+  (dá pra trocar em Configurações > Atalhos de teclado; com Ctrl/Alt
+  ou F1-F24 funciona até com o Telinha minimizado, no meio do jogo)
+- Clique no seu nome (embaixo, à esquerda) pra pôr foto, cor e frase.
+- Clique no nome de um amigo pra aumentar/diminuir o volume dele
+  ou silenciar só pra você.
+- Botão de tela = transmitir sua tela COM som.
+- No Windows 10/11 atualizado:
+    * escolheu uma JANELA  -> vai só o som daquele programa;
+    * escolheu a TELA INTEIRA -> vai o som do PC, sem as vozes da call.
+  Em Windows antigo vai o som do PC inteiro: use fone de ouvido
+  (senão o som das vozes vai junto e dá eco).
+- Se transmitir sem som, o aviso que aparece diz o erro: manda print
+  pro anfitrião.
+- Ctrl+Shift+H = voltar pra tela inicial.

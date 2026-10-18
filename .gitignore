@@ -1,0 +1,8 @@
+node_modules/
+dist/
+telinha-sfu
+# Compilado pelo npm run build:win-audio (vai dentro do instalador, não no git)
+electron/bin/
+# Anotações de trabalho dos agentes de IA que montaram o projeto
+.agents/
+ORIGINAL_REQUEST.md
