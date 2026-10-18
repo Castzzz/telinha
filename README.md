@@ -1,171 +1,142 @@
-# 📺 Telinha PRO — App Desktop & Web (Estilo Discord / TeamSpeak)
+# 📺 Telinha
 
-Aplicativo completo de **Salas de Voz e Transmissão de Tela Ao Vivo (Watch Party)** estilo Discord/TeamSpeak, com **Aplicativo Desktop Nativo (Electron)** e **Acesso Web**, onde o **som do seu PC/jogo/vídeo é capturado diretamente da saída do sistema (100% separado do microfone)**.
+Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá pra assistir filme, jogo ou vídeo junto: **o som do PC vai na transmissão, separado do microfone**, então você pode ficar mutado e todo mundo ouve o filme direitinho.
 
----
-
-## ✨ Principais Recursos
-
-1. **Interface Estilo Discord / TeamSpeak:**
-   - **Canais de Voz na Barra Lateral:** `🔊 Geral`, `🎬 Cinema`, `⚽ Futebol`, `🎮 Gameplay` + botão **`+ Criar Canal`** para criar salas personalizadas em tempo real.
-   - **Presença em Tempo Real:** Veja quem está em cada sala, quem está falando (**anel verde pulsante de atividade de voz - VAD**), quem está mutado/ensurdecido e quem está **`🔴 AO VIVO`**.
-   - **Barra Inferior de Controles (User Dock):**
-     - **🎙️ Mutar / Desmutar Microfone** (atalho `M`, dá pra trocar)
-     - **🎧 Ensurdecer / Desativar Áudio (Deafen)** (atalho `D`, dá pra trocar)
-     - **🖥️ Transmitir Tela com Som do Sistema**
-     - **⚙️ Configurações de Dispositivos de Entrada, Saída e Som do Sistema**
-   - **Volume por pessoa (0% a 200%):** clique num amigo pra aumentar, diminuir ou silenciar a voz dele só pra você. Fica salvo pro próximo dia, mesmo com link novo.
-   - **Perfil:** nome, foto, cor e uma frase "sobre você". Clique no seu nome lá embaixo pra editar.
-   - **Atalhos configuráveis:** troque as teclas de mutar/ensurdecer em ⚙️ Configurações. No app desktop eles funcionam até com o Telinha minimizado (ex: no meio do jogo).
-
-2. **🔊 Som do Jogo/Vídeo 100% Independente do Microfone:**
-   - Ao transmitir a tela, o áudio vem direto do **Monitor de Saída do Sistema** (`som_do_pc` / PipeWire / PulseAudio Loopback) em **Opus 48kHz Estéreo (256 kbps)** sem filtros de voz (`echoCancellation: false`, `noiseSuppression: false`, `autoGainControl: false`).
-   - **Voz limpa:** cancelamento de ruído com IA (RNNoise) tira teclado, ventilador e barulho de fundo, e a voz vai em Opus 64 kbps (o dobro do padrão). Quando a internet aperta, o som tem prioridade sobre o vídeo.
-   - **Você NÃO precisa ligar o microfone para transmitir o som do vídeo ou jogo!** Seu microfone pode ficar 100% desligado (`🔇`) enquanto seus amigos ouvem o áudio do filme ou partida perfeitamente.
-
-3. **🎬 Palco Multi-Tela & Modo Mosaico:**
-   - Vários amigos podem transmitir a tela ao mesmo tempo no mesmo canal.
-   - Alterne entre as transmissões com 1 clique nas abas superiores ou ative o **🔲 Modo Mosaico** para assistir várias telas lado a lado.
-   - Suporte a **Tela Cheia**, **Picture-in-Picture (PiP)**, **Chat de Texto por Canal** e **Reações Flutuantes Ao Vivo** (🔥, 😂, 😱, ⚽, 🎮, 👏, ❤️).
+- 🔊 Canais de voz (`Geral`, `Cinema`, `Futebol`, `Gameplay` e os que vocês criarem)
+- 🖥️ Várias pessoas transmitindo a tela ao mesmo tempo, com modo mosaico
+- 🎧 No Windows e no Linux dá pra mandar **só o som de um app** (sem as vozes da chamada)
+- 🧠 Cancelamento de ruído com IA no microfone (tira teclado, ventilador, barulho da rua)
+- 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
+- 🔄 O app se atualiza sozinho
 
 ---
 
-## 🚀 Guia rápido
+## ⬇️ Downloads
 
-O Telinha funciona assim: **um PC hospeda a sala** (o seu) e **os amigos entram nela** pelo app, usando um link que você manda.
-
-```
-  Você (anfitrião)                         Amigos (Windows ou Linux)
-  ┌──────────────────┐    link https://    ┌──────────────────┐
-  │ Telinha          │ ◄────────────────── │ Telinha          │
-  │ 🏠 Hospedar      │   ...trycloudflare  │ Entrar na sala   │
-  │ servidor+túnel   │        .com         │ (cola o link)    │
-  └──────────────────┘                     └──────────────────┘
-```
-
----
-
-## 🏠 Parte 1 — Como iniciar aqui (no seu PC)
-
-### Passo 1: abrir o app
-Escolha **um** dos jeitos:
-
-- **Pelo menu de aplicativos:** procure **"Telinha (WatchParty & Voz)"** e clique.
-- **Pelo terminal:**
-  ```bash
-  cd ~/Dev/telinha
-  npm run app
-  ```
-
-Vai abrir a tela inicial do Telinha.
-
-### Passo 2: hospedar a sala
-1. Clique em **🏠 Hospedar no meu PC**.
-2. Espere a mensagem *"Iniciando servidor e criando link público…"*. **Pode levar até 1 minuto.**
-3. Aparece um link parecido com `https://palavra-palavra-palavra.trycloudflare.com`.
-4. Clique em **📋 Copiar link** e mande pros seus amigos (WhatsApp, Discord, etc.).
-5. Clique em **Entrar na sala**.
-
-### Passo 3: usar
-- Escolha um canal na barra lateral (`🔊 Geral`, `🎬 Cinema`…).
-- **🖥️ Transmitir tela:** escolha a tela ou janela. O som do PC vai junto automaticamente.
-  - **No Linux** aparece antes a janela *"Qual som transmitir?"*: escolha o jogo pra mandar **só o som dele** (sem as vozes da chamada), *Som do PC inteiro* ou *Sem som*. O jogo precisa estar aberto tocando algum som. Você continua ouvindo o jogo normalmente.
-  - **No Windows** (10 versão 2004+ ou 11): se escolher uma **janela**, vai **só o som daquele app**; se escolher a **tela inteira**, vai o som do PC **sem as vozes da chamada**. Em Windows mais antigo vai o som do PC inteiro.
-- **🎙️ `M`** muta o microfone · **🎧 `D`** ensurdece. O som da transmissão continua indo mesmo com o microfone mutado.
-- **Seu perfil:** clique no seu nome (canto de baixo à esquerda) pra trocar nome, foto, cor e a frase "sobre você". Na primeira vez que abre, o Telinha já pede.
-- **Volume de um amigo:** clique no nome dele (na lista ou no card do meio). Aparece o perfil dele com uma barra de volume (0–200%) e o botão **Silenciar pra mim**. Só muda pra você, e fica salvo.
-- **Cancelamento de ruído:** ⚙️ → *Cancelamento de ruído do microfone*. **Forte, com IA** (padrão) tira teclado, ventilador e barulho da rua; **Básico** é o filtro do navegador; **Desligado** manda o som cru. Só afeta a sua voz, nunca o som da transmissão.
-- **Trocar os atalhos:** ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova. Pra funcionar com o Telinha minimizado, use uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`: letra sozinha só funciona com o Telinha na frente, senão você não conseguiria digitar essa letra em outros programas.
-
-### ⚠️ Importante
-- **O link muda toda vez** que você clica em *Hospedar*. Sempre mande o link novo.
-- **A sala só existe enquanto o seu Telinha estiver aberto.** Se você fechar, todo mundo cai.
-- Precisa do `cloudflared` instalado (já está neste PC). Se não estiver: `sudo pacman -S cloudflared`.
-
-### Atalhos
-| Atalho | O que faz |
-|---|---|
-| `Ctrl+Shift+H` | Voltar à tela inicial |
-| `Ctrl+Shift+L` | Copiar o link da sala |
-| `Alt` | Mostrar o menu do app |
-
----
-
-## 📦 Parte 2 — Como mandar o app pros amigos
-
-Os instaladores ficam publicados no GitHub. Mande **sempre este link** (ele aponta pra versão mais nova):
-
-👉 **https://github.com/Castzzz/telinha/releases/latest**
-
-Lá embaixo, em *Assets*, cada um baixa o arquivo do seu sistema:
-
-| Seu amigo usa… | Arquivo | Atualiza sozinho? |
+| Sistema | Baixar | Atualiza sozinho? |
 |---|---|---|
-| **Windows** | `Telinha-Setup-<versão>.exe` | ✅ Sim |
-| **Windows** (sem instalar) | `Telinha-Portatil-<versão>.exe` | ❌ Não, precisa baixar de novo |
-| **Linux** | `Telinha-<versão>.AppImage` | ✅ Sim |
-| **Linux** (se o AppImage não abrir) | `Telinha-<versão>.tar.gz` | ❌ Não, precisa baixar de novo |
+| **Windows** 10/11 | **[Telinha-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe)** | ✅ Sim |
+| **Linux** (qualquer distro) | **[Telinha.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage)** | ✅ Sim |
 
-> Os amigos só baixam **uma vez**. Quando você publica uma versão nova, o app deles baixa sozinho em segundo plano e pergunta se quer reiniciar (ou instala quando eles fecharem o app).
+<details>
+<summary>Outras opções (não se atualizam sozinhas)</summary>
 
-### Publicar uma versão nova (quando mudar o código)
-1. Aumente a versão no `package.json` (ex: `"version": "1.1.0"` → `"1.2.0"`). **Sem aumentar, ninguém recebe a atualização.**
-2. Salve as mudanças no git e mande pro GitHub:
-   ```bash
-   cd ~/Dev/telinha
-   git add -A
-   git commit -m "O que mudou"
-   git push
-   ```
-3. Gere e publique os instaladores (leva uns 3–5 minutos):
-   ```bash
-   npm run release
-   ```
-   Isso compila tudo e cria a versão em *Releases* no GitHub, usando o login do `gh`.
+| Sistema | Baixar | Quando usar |
+|---|---|---|
+| Windows | [Telinha-Portatil.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Portatil.exe) | Se não puder instalar nada no PC |
+| Linux | [Telinha.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.tar.gz) | Se o AppImage não abrir de jeito nenhum |
 
-> 💡 A parte da sala (chat, perfil, volume, botões) vem do **servidor de quem hospeda**. Se você só mudou arquivos de `public/` ou o `server.js`, basta você hospedar com o código novo: todo mundo recebe na hora, sem reinstalar. A atualização do app só é necessária quando muda algo em `electron/` ou `native/`.
+Todas as versões e o que mudou em cada uma: [Releases](https://github.com/Castzzz/telinha/releases).
+</details>
 
 ---
 
-## 🙋 Parte 3 — O que os amigos fazem
+## 🪟 Instalar no Windows
 
-### Windows
-1. Abra **https://github.com/Castzzz/telinha/releases/latest** e baixe o `Telinha-Setup-<versão>.exe` (em *Assets*).
-2. Abra o arquivo. O Windows vai mostrar **"O Windows protegeu o computador"**. Isso acontece porque o app não tem assinatura paga. Clique em **Mais informações → Executar assim mesmo**.
-3. O Telinha instala e abre sozinho (depois fica no Menu Iniciar).
-4. Cole o link da sala que você mandou em **Entrar na sala de um amigo** → **Entrar**.
-5. Se o Windows perguntar sobre o firewall, clique em **Permitir**.
+1. Baixe o **[Telinha-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe)** e abra.
+2. Vai aparecer **"O Windows protegeu o computador"**. É porque o app não tem assinatura digital paga, não é vírus. Clique em **Mais informações** e depois em **Executar assim mesmo**.
+3. O Telinha instala e abre sozinho. Depois ele fica no **Menu Iniciar**.
+4. Se o Windows perguntar sobre o **Firewall**, clique em **Permitir**.
 
-> 💡 Ao transmitir no Windows 10 (2004+) ou 11: escolhendo uma **janela**, vai só o som daquele app; escolhendo a **tela inteira**, vai o som do PC sem as vozes do Telinha (não dá eco). Em Windows mais antigo o app pega **todo** o som do PC, inclusive as vozes — aí use **fone de ouvido**.
+Pronto. Agora é [entrar na sala](#-entrar-na-sala).
 
-### Linux (passo a passo)
-1. Abra **https://github.com/Castzzz/telinha/releases/latest** e baixe o `Telinha-<versão>.AppImage` (em *Assets*).
-2. Abra um terminal na pasta onde baixou (normalmente `~/Downloads`) e dê permissão de execução:
+## 🐧 Instalar no Linux
+
+1. Baixe o **[Telinha.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage)**.
+2. Abra um terminal na pasta onde baixou e libere a execução:
    ```bash
    cd ~/Downloads
-   chmod +x Telinha-*.AppImage
+   chmod +x Telinha.AppImage
    ```
-   (ou: botão direito no arquivo → *Propriedades* → *Permissões* → marcar *Permitir executar como programa*)
+   *(sem terminal: botão direito no arquivo → Propriedades → Permissões → marque "Permitir executar como programa")*
 3. Abra:
    ```bash
-   ./Telinha-*.AppImage
+   ./Telinha.AppImage
    ```
-   Se der erro falando de **`libfuse.so.2`**, instale o fuse2 e tente de novo:
-   - Arch / CachyOS / Manjaro: `sudo pacman -S fuse2`
-   - Ubuntu / Mint / Pop!_OS: `sudo apt install libfuse2` (no Ubuntu 24.04+: `sudo apt install libfuse2t64`)
-   - Fedora: `sudo dnf install fuse fuse-libs`
-4. *(Opcional)* Pra ter no menu de aplicativos: mova o AppImage pra uma pasta fixa (ex: `~/Aplicativos`) **antes** de criar atalho. Se mover depois, o atalho quebra.
-5. Cole o link da sala em **Entrar na sala de um amigo** → **Entrar**.
+4. Se der erro falando de **`libfuse.so.2`**, instale o fuse2 e tente de novo:
 
-As atualizações chegam sozinhas: o AppImage baixa a versão nova e substitui o próprio arquivo.
+   | Distro | Comando |
+   |---|---|
+   | Arch, CachyOS, Manjaro | `sudo pacman -S fuse2` |
+   | Ubuntu, Mint, Pop!_OS | `sudo apt install libfuse2` *(Ubuntu 24.04 ou mais novo: `libfuse2t64`)* |
+   | Fedora | `sudo dnf install fuse fuse-libs` |
 
-**Se o AppImage não funcionar de jeito nenhum**, use o `.tar.gz` (esse não se atualiza sozinho):
+> 💡 **Dica:** coloque o AppImage numa pasta fixa (ex: `~/Aplicativos`) antes de criar atalho no menu. Se mover o arquivo depois, o atalho quebra.
+
+<details>
+<summary>Se o AppImage não abrir de jeito nenhum (usar o .tar.gz)</summary>
+
+Baixe o **[Telinha.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.tar.gz)** e:
 ```bash
 cd ~/Downloads
-tar -xzf Telinha-*.tar.gz
-cd Telinha-*/
+tar -xzf Telinha.tar.gz
+cd Telinha*/
 ./telinha
 ```
+Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
+</details>
+
+---
+
+## 🚪 Entrar na sala
+
+1. Peça o **link da sala** pra quem está hospedando. Ele é parecido com `https://palavra-palavra-palavra.trycloudflare.com`.
+2. No Telinha, cole o link em **Entrar na sala de um amigo** e clique em **Entrar**.
+3. Na primeira vez, o Telinha pede seu **perfil** (nome, foto, cor). Dá pra mudar depois.
+
+> ⚠️ **O link muda toda vez** que alguém abre a sala. Se der erro, peça o link novo.
+
+<details>
+<summary>Quero hospedar a sala eu mesmo</summary>
+
+1. Instale o [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (no Arch/CachyOS: `sudo pacman -S cloudflared`; no Windows: `winget install --id Cloudflare.cloudflared`).
+2. No Telinha, clique em **🏠 Hospedar no meu PC** e espere o link aparecer (pode levar até 1 minuto).
+3. Clique em **📋 Copiar link**, mande pros amigos e clique em **Entrar na sala**.
+
+A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo mundo cai.
+</details>
+
+---
+
+## 🎮 Como usar
+
+| Quero… | Como |
+|---|---|
+| **Mutar o microfone** | Botão 🎙️ ou tecla `M` |
+| **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D` |
+| **Transmitir minha tela** | Botão 🖥️ → escolha a tela ou a janela |
+| **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
+| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda |
+| **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
+| **Trocar os atalhos** | ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova |
+| **Ver várias transmissões juntas** | Botão 🔲 **Mosaico**, lá em cima |
+| **Voltar pra tela inicial** | `Ctrl+Shift+H` |
+
+### 🔊 O som da transmissão
+O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
+
+- **Windows 10 (versão 2004 ou mais nova) ou 11:**
+  - escolhendo uma **janela**, vai **só o som daquele programa**;
+  - escolhendo a **tela inteira**, vai o som do PC **sem as vozes da chamada** (não dá eco).
+  - Em Windows mais antigo vai o som do PC inteiro, inclusive as vozes. Aí use **fone de ouvido**.
+- **Linux:** antes de transmitir aparece *"Qual som transmitir?"*. Escolha o jogo/app pra mandar só o som dele (ele precisa estar aberto tocando algum som), o **som do PC inteiro** ou **sem som**.
+
+### 🧠 Cancelamento de ruído
+Em ⚙️ → *Cancelamento de ruído do microfone*:
+- **Forte, com IA** (padrão): tira teclado, ventilador, barulho da rua;
+- **Básico**: o filtro do navegador;
+- **Desligado**: som cru do microfone.
+
+Só afeta a sua voz, nunca o som da transmissão.
+
+### ⌨️ Atalhos com o jogo aberto
+Os atalhos funcionam mesmo com o Telinha minimizado, se forem uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Telinha na frente, senão você não conseguiria digitar essa letra no jogo.
+
+---
+
+## 🔄 Atualizações
+
+Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não precisa fazer nada. O Telinha confere se tem versão nova quando abre, baixa em segundo plano e pergunta se quer reiniciar. Se escolher "Depois", ele instala quando você fechar o app.
 
 ---
 
@@ -173,32 +144,55 @@ cd Telinha-*/
 
 | Problema | Solução |
 |---|---|
-| *"Não encontrei uma sala do Telinha nesse link"* | O anfitrião fechou o app ou o link é antigo. Peça o link novo. Logo depois de gerar, espere uns segundos e tente de novo. |
-| *"A porta 8080 está ocupada"* | Tem um servidor antigo rodando. Feche com `pkill -f "node server.js"` e tente de novo. |
-| *"cloudflared não está instalado"* | `sudo pacman -S cloudflared` |
-| Tela branca / app travou | `Alt` → **Telinha → Recarregar**, ou `Ctrl+Shift+H` para voltar ao início. |
-| Amigos não ouvem o som da transmissão (Linux) | ⚙️ Configurações → *Som do sistema* → escolha **Som_do_PC_Jogos_e_Videos** ou **Monitor of …**. |
-| Amigos não ouvem o som da transmissão (Windows) | Veja o aviso que aparece ao começar a transmitir: ele diz o erro. Se continuar, `Alt` → **Telinha → Ferramentas de desenvolvedor** → aba *Console* e procure linhas `[WebRTC]`. |
-| Windows transmite o som do PC inteiro em vez de só o app | O Windows é anterior à versão 2004, ou o `telinha-audio.exe` falhou (no Console aparece `Per-app audio unavailable` com o motivo). |
-| Atalho não funciona com o Telinha minimizado | Use `Ctrl`/`Alt` + tecla ou `F1`–`F24`. Se aparecer *"Outro programa já usa esse atalho"*, escolha outro. No Linux com Wayland depende do ambiente gráfico permitir atalhos globais (KDE e GNOME recentes permitem). |
-| Perfil ou volumes sumiram | No navegador eles ficam salvos por link, e o link muda toda vez. Use o app desktop, que guarda no próprio PC. |
-| AppImage não abre (*"libfuse.so.2"*) | Use o `.tar.gz`, ou instale: `sudo pacman -S fuse2`. |
+| *"Não encontrei uma sala do Telinha nesse link"* | A sala fechou ou o link é antigo. Peça o link novo. Se o link acabou de ser criado, espere uns segundos e tente de novo. |
+| *"O Windows protegeu o computador"* | Normal: **Mais informações → Executar assim mesmo**. |
+| AppImage não abre (*"libfuse.so.2"*) | Instale o fuse2 ([veja a tabela](#-instalar-no-linux)) ou use o `.tar.gz`. |
+| Amigos não ouvem o som da minha transmissão (Linux) | ⚙️ → *Áudio da Transmissão* → escolha **Som_do_PC_Jogos_e_Videos** ou **Monitor of …**. |
+| Amigos não ouvem o som da minha transmissão (Windows) | O aviso que aparece ao começar a transmitir diz o motivo. Mande um print dele pra quem hospeda. |
+| Ninguém me ouve | Veja se o 🎙️ não está riscado e se o microfone certo está em ⚙️. Teste falando: a barra *Teste de Atividade de Voz* tem que mexer. |
+| Atalho não funciona com o jogo aberto | Use `Ctrl`/`Alt` + tecla ou `F1`–`F24`. Se aparecer *"Outro programa já usa esse atalho"*, escolha outro. |
+| Tela branca / travou | `Alt` → **Telinha → Recarregar**, ou `Ctrl+Shift+H` pra voltar ao início. |
 
 ---
 
-## 👩‍💻 Para desenvolvedores
+## 👩‍💻 Para quem mantém o projeto
 
+<details>
+<summary>Rodar pelo código, publicar versões e estrutura</summary>
+
+### Rodar pelo código
+```bash
+npm install
+npm run app     # app desktop (usa o Electron do sistema)
+npm start       # só o servidor web em http://localhost:8080
+```
+
+### Comandos
 | Comando | O que faz |
 |---|---|
-| `npm run app` | Abre o app desktop (Electron do sistema) |
-| `npm start` | Só o servidor web em `http://localhost:8080` |
-| `npm run dev` | Servidor que reinicia sozinho ao editar `server.js` |
-| `npm run dist` | Gera instaladores Linux + Windows em `dist/` (sem publicar) |
-| `npm run release` | Gera e **publica** os instaladores no GitHub Releases (atualização automática) |
-| `npm run dist:linux` / `npm run dist:win` | Só um dos sistemas |
-| `npm run build:win-audio` | Só compila o `electron/bin/telinha-audio.exe` (precisa de `mingw-w64-gcc`) |
-| `npm test` | Suíte de testes |
+| `npm run app` | Abre o app desktop |
+| `npm start` / `npm run dev` | Servidor web (o `dev` reinicia ao editar o `server.js`) |
+| `npm test` | Testes |
+| `npm run dist` | Gera os instaladores Linux + Windows em `dist/` (sem publicar) |
+| `npm run release` | Gera e **publica** os instaladores no GitHub Releases |
+| `npm run build:win-audio` | Compila o `electron/bin/telinha-audio.exe` (precisa de `mingw-w64-gcc`) |
+
+### Publicar uma versão nova
+1. Aumente o `version` no `package.json` (ex: `1.1.0` → `1.2.0`). **Sem aumentar, ninguém recebe a atualização.**
+2. Envie o código: `git add -A && git commit -m "O que mudou" && git push`
+3. Publique: `npm run release` (usa o login do `gh`; leva uns 3–5 minutos).
+
+Os links de download deste README apontam sempre pra versão mais nova, então não precisa mudar nada aqui.
+
+> A interface da sala (`public/`) e o `server.js` vêm do **servidor de quem hospeda**: se só mudou isso, basta hospedar com o código novo, sem publicar versão. Publicar só é necessário quando muda algo em `electron/` ou `native/`.
+
+### Estrutura
+- `server.js`: servidor de sinalização e canais (Socket.IO)
+- `public/`: interface da sala (servida por quem hospeda)
+- `electron/main.cjs`: app desktop (hospedar, túnel, captura de tela, atualização, atalhos globais)
+- `electron/connect.html`: tela inicial
+- `native/win-audio/`: auxiliar do Windows que captura o som de um processo só
+- `public/vendor/noise-suppressor/`: RNNoise (cancelamento de ruído)
 
 Pelo navegador também funciona (`npm start` + `cloudflared tunnel --url http://localhost:8080`), mas transmitir o som do PC só funciona bem no app desktop ou no Chrome/Edge.
-
-Estrutura: `server.js` (servidor de sinalização), `public/` (interface), `electron/main.cjs` (app desktop: hospedar, túnel, captura de tela), `electron/connect.html` (tela inicial), `native/win-audio/` (auxiliar do Windows que captura o som de um processo só).
+</details>

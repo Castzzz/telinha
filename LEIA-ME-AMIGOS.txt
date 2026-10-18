@@ -4,12 +4,14 @@
 
 ONDE BAIXAR
 -----------
-  https://github.com/Castzzz/telinha/releases/latest
-  (lá embaixo, em "Assets")
+  Passo a passo completo: https://github.com/Castzzz/telinha
+
+  Windows: https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe
+  Linux:   https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage
 
 WINDOWS
 -------
-1. Baixe o "Telinha-Setup-<versão>.exe" e abra.
+1. Baixe o Telinha-Setup.exe e abra.
 2. Se aparecer "O Windows protegeu o computador":
    clique em "Mais informações" e depois em "Executar assim mesmo".
    (o app é seguro, só não tem assinatura digital paga)
@@ -19,17 +21,15 @@ WINDOWS
 
 LINUX
 -----
-1. Baixe o "Telinha-<versão>.AppImage".
+1. Baixe o Telinha.AppImage.
 2. No terminal, na pasta onde baixou:
-     chmod +x Telinha-*.AppImage
-     ./Telinha-*.AppImage
+     chmod +x Telinha.AppImage
+     ./Telinha.AppImage
 3. Se der erro de "libfuse.so.2", instale o fuse2:
      Arch/CachyOS:  sudo pacman -S fuse2
      Ubuntu/Mint:   sudo apt install libfuse2   (24.04+: libfuse2t64)
      Fedora:        sudo dnf install fuse fuse-libs
 4. As próximas versões chegam sozinhas.
-   (Se o AppImage não abrir mesmo assim, baixe o .tar.gz, extraia e
-   rode ./telinha dentro da pasta; esse não se atualiza sozinho.)
 
 ENTRAR NA SALA
 --------------
