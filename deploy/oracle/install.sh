@@ -17,13 +17,20 @@ MEDIA_PORT=50000
 log() { printf '\n== %s\n' "$*"; }
 
 log "Swap (a micro tem só 1 GB de RAM)"
-if [ ! -f /swapfile-telinha ]; then
-  fallocate -l 1G /swapfile-telinha
-  chmod 600 /swapfile-telinha
-  mkswap -q /swapfile-telinha
-  echo '/swapfile-telinha none swap defaults 0 0' >> /etc/fstab
+# A imagem da Oracle às vezes já vem com swap (/.swapfile); só cria se não tiver nenhum
+if [ -z "$(swapon --noheadings --show)" ]; then
+  if [ ! -f /swapfile-telinha ]; then
+    fallocate -l 1G /swapfile-telinha
+    chmod 600 /swapfile-telinha
+    mkswap /swapfile-telinha >/dev/null
+    echo '/swapfile-telinha none swap defaults 0 0' >> /etc/fstab
+  fi
+  swapon /swapfile-telinha
 fi
-swapon /swapfile-telinha 2>/dev/null || true
+
+log "Desligando o dnf-makecache automático (usa ~500 MB e trava a micro)"
+systemctl disable -q --now dnf-makecache.timer 2>/dev/null || true
+systemctl stop dnf-makecache.service 2>/dev/null || true
 
 log "Usuários e pastas"
 id telinha >/dev/null 2>&1 || useradd --system --home-dir "$APP" --shell /sbin/nologin telinha
