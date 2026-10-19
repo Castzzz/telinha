@@ -109,7 +109,8 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
 | **Trocar os atalhos** | ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova |
-| **Ver várias transmissões juntas** | Botão 🔲 **Mosaico**, lá em cima |
+| **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
+| **Tela cheia** | Botão ⛶ no canto de baixo, tecla `F` ou duplo clique na transmissão |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |
 
 ### 🔊 O som da transmissão

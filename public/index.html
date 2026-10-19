@@ -32,10 +32,6 @@
     </div>
 
     <div class="topbar-right">
-      <button id="btn-toggle-mosaic" class="btn-topbar-tool" title="Alternar entre Palco Único e Modo Mosaico (Grid)">
-        🔲 Mosaico
-      </button>
-
       <button id="btn-toggle-chat" class="btn-topbar-tool active" title="Alternar Chat do Canal">
         💬 Chat
       </button>
@@ -208,12 +204,7 @@
         </div>
 
         <div class="stage-controls-right">
-          <button id="btn-stage-pip" class="btn-control-tool" title="Picture-in-Picture (Janela Flutuante)">
-            🖼️ PiP
-          </button>
-          <button id="btn-stage-fullscreen" class="btn-control-tool" title="Tela Cheia (F)">
-            ⛶ Tela Cheia
-          </button>
+          <button id="btn-stage-fullscreen" class="btn-control-icon" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
         </div>
       </footer>
     </main>
@@ -499,7 +490,8 @@
   <div id="voice-streams-container" class="visually-hidden"></div>
 
   <!-- SCRIPTS -->
-  <script src="/socket.io/socket.io.js"></script>
+  <!-- Cliente do Socket.IO junto da interface (no app ela não vem do servidor da sala) -->
+  <script src="vendor/socket.io.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

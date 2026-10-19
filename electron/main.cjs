@@ -5,6 +5,9 @@ const http = require('http');
 const os = require('os');
 const { pathToFileURL } = require('url');
 const { execSync, execFileSync, spawn } = require('child_process');
+const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
+
+registerAppScheme();
 
 // Habilita suporte nativo a PipeWire e loopback de áudio de tela no Linux/Wayland/X11
 // GlobalShortcutsPortal: atalhos globais (mutar com o app em segundo plano) no Wayland
@@ -511,14 +514,14 @@ function setupLauncherIpc() {
       return { ok: false, error: 'Não encontrei uma sala do Telinha nesse link. Confira se seu amigo está hospedando.' };
     }
     saveConfig({ lastServerUrl: origin });
-    await mainWindow.loadURL(origin);
+    await mainWindow.loadURL(roomUrl(origin));
     return { ok: true };
   });
 
   ipcMain.handle('launcher-open', async (event, url) => {
     if (!fromLauncher(event)) return { ok: false };
     if (!/^http:\/\/localhost:\d+$/.test(String(url))) return { ok: false };
-    await mainWindow.loadURL(url);
+    await mainWindow.loadURL(roomUrl(url));
     return { ok: true };
   });
 
@@ -539,9 +542,9 @@ function setupMenu() {
           label: 'Copiar link da sala',
           accelerator: 'CmdOrCtrl+Shift+L',
           click: () => {
-            const current = mainWindow && mainWindow.webContents.getURL();
-            const isLocal = current && current.startsWith('http://localhost');
-            const link = isLocal ? publicUrl : current && new URL(current).origin;
+            const server = mainWindow && serverFromUrl(mainWindow.webContents.getURL());
+            const isLocal = server && server.startsWith('http://localhost');
+            const link = isLocal ? publicUrl : server;
             if (link) clipboard.writeText(link);
           }
         },
@@ -667,7 +670,7 @@ async function createWindow() {
 
   // Se a sala cair (servidor do amigo desligou, sem internet), volta para a tela inicial
   mainWindow.webContents.on('did-fail-load', (_e, _code, desc, url, isMainFrame) => {
-    if (isMainFrame && !url.startsWith('file:')) {
+    if (isMainFrame && !url.startsWith('file:') && !url.startsWith('telinha:')) {
       showLauncher(`Não foi possível abrir a sala (${desc}).`);
     }
   });
@@ -680,6 +683,7 @@ async function createWindow() {
 }
 
 app.whenReady().then(() => {
+  handleAppProtocol();
   setupPermissionsAndCapture();
   setupLauncherIpc();
   setupMenu();

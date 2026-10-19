@@ -151,7 +151,8 @@ const appState = {
   unreadChannels: new Set(),
   activeStreams: new Map(), // userId -> { stream, userName, isLocal }
   focusedStreamUserId: null,
-  isMosaicMode: false,
+  // Com 2+ transmissões o palco vira mosaico; clicar numa abre só ela (null = mosaico)
+  expandedStreamUserId: null,
 
   // MediaStreams
   localScreenStream: null,
@@ -221,7 +222,14 @@ const appState = {
 // -----------------------------------------------------------------------------
 // 3. SOCKET.IO CLIENT SETUP
 // -----------------------------------------------------------------------------
-const socket = io({
+// No app desktop a interface vem instalada no app (telinha://app/...?server=<sala>) e
+// da sala só vem a conexão; no navegador a página é servida pela própria sala.
+const SERVER_URL = (() => {
+  const fromQuery = new URLSearchParams(window.location.search).get('server');
+  return fromQuery && /^https?:\/\//.test(fromQuery) ? fromQuery.replace(/\/+$/, '') : window.location.origin;
+})();
+
+const socket = io(SERVER_URL, {
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: Infinity,
@@ -528,7 +536,10 @@ function switchChannel(targetChannelId) {
   localStorage.setItem('telinha_last_channel', cleanId);
 
   // Update browser URL without reload
-  const newUrl = `${window.location.pathname}?channel=${encodeURIComponent(cleanId)}`;
+  // Mantém o ?server= (no app, sem ele o Ctrl+R perderia a sala)
+  const params = new URLSearchParams(window.location.search);
+  params.set('channel', cleanId);
+  const newUrl = `${window.location.pathname}?${params}`;
   window.history.replaceState({}, '', newUrl);
 
   // Call M2 WebRTC teardown hook
@@ -793,7 +804,7 @@ function avatarInitials(name) {
 
 function avatarSrc(userId, avatarV) {
   if (userId && userId === appState.myId && myProfile.avatar) return myProfile.avatar;
-  if (userId && avatarV) return `/api/avatar/${encodeURIComponent(userId)}?v=${encodeURIComponent(avatarV)}`;
+  if (userId && avatarV) return `${SERVER_URL}/api/avatar/${encodeURIComponent(userId)}?v=${encodeURIComponent(avatarV)}`;
   return '';
 }
 
@@ -1032,7 +1043,7 @@ function setupChatAndReactions() {
 
   // Copy invite link
   $('#btn-copy-invite')?.addEventListener('click', () => {
-    const url = window.location.href;
+    const url = `${SERVER_URL}/?channel=${encodeURIComponent(appState.currentChannelId)}`;
     navigator.clipboard?.writeText(url).then(() => {
       showToast('Link de convite copiado!', 'success');
     }).catch(() => {
@@ -1107,11 +1118,7 @@ function setupModals() {
     }
   });
 
-  // Toggle mosaic mode
-  $('#btn-toggle-mosaic')?.addEventListener('click', () => {
-    appState.isMosaicMode = !appState.isMosaicMode;
-    updateStageLayout();
-  });
+  $('#btn-stage-fullscreen')?.addEventListener('click', toggleStageFullscreen);
 
   // Populate audio devices in settings modal
   const populateSettingsDevices = async () => {
@@ -1214,12 +1221,41 @@ function setupModals() {
       e.target.offsetParent !== null;
     // Digitando no chat, só valem atalhos que não são letras soltas
     if (typing && !canBeGlobalHotkey(accelerator)) return;
+    let handled = false;
     for (const [action, hotkey] of Object.entries(hotkeys)) {
       if (hotkey && hotkey === accelerator) {
         e.preventDefault();
         triggerHotkey(action);
+        handled = true;
       }
     }
+    // F = tela cheia da transmissão (se a pessoa não usou F pra mutar/ensurdecer)
+    if (!handled && !typing && accelerator === 'F') {
+      e.preventDefault();
+      toggleStageFullscreen();
+    }
+  });
+}
+
+// -----------------------------------------------------------------------------
+// 8a. TELA CHEIA DA TRANSMISSÃO (botão da barra de baixo, tecla F, duplo clique)
+// -----------------------------------------------------------------------------
+function toggleStageFullscreen() {
+  if (document.fullscreenElement) {
+    document.exitFullscreen().catch(() => {});
+    return;
+  }
+  // Mosaico: todas as telas juntas; uma aberta: só ela
+  const target = isMosaicView()
+    ? $('#videos-grid')
+    : document.getElementById(`video-tile-${appState.focusedStreamUserId}`);
+  if (!target || !appState.activeStreams.size) {
+    showToast('Nenhuma transmissão pra colocar em tela cheia.');
+    return;
+  }
+  target.requestFullscreen().catch((err) => {
+    console.warn('[Stage] Tela cheia recusada:', err);
+    showToast('❌ Não consegui abrir em tela cheia.', 'error');
   });
 }
 
@@ -1631,8 +1667,10 @@ function setupHotkeys() {
   renderHotkeys();
 }
 
+// Abas do topo e "AO VIVO" da lista: abre essa transmissão (com várias, sai do mosaico)
 function focusStream(userId) {
   appState.focusedStreamUserId = userId;
+  if (appState.activeStreams.size > 1) appState.expandedStreamUserId = userId;
   updateStageLayout();
   console.log(`[Stream Focus] Focado na transmissão de ${userId}`);
 }
@@ -1837,7 +1875,15 @@ function registerScreenStream(userId, userName, stream, isLocal) {
       unmuteBtn.classList.add('hidden');
     });
 
+    // Clique: abre só essa transmissão / volta pro mosaico. Duplo clique: tela cheia.
+    // O clique espera um instante pra não disparar junto com o duplo clique.
+    let clickTimer = null;
+    video.addEventListener('click', () => {
+      clearTimeout(clickTimer);
+      clickTimer = setTimeout(() => toggleExpandedStream(userId), 250);
+    });
     video.addEventListener('dblclick', () => {
+      clearTimeout(clickTimer);
       if (!document.fullscreenElement) {
         tile.requestFullscreen().catch(() => {});
       } else {
@@ -1900,9 +1946,22 @@ function removeScreenStream(userId) {
     const remaining = Array.from(appState.activeStreams.keys());
     appState.focusedStreamUserId = remaining.length > 0 ? remaining[0] : null;
   }
+  if (appState.expandedStreamUserId === userId) appState.expandedStreamUserId = null;
 
   updateStageLayout();
   updateVoiceLounge();
+}
+
+// Mosaico = 2+ transmissões e nenhuma aberta sozinha
+function isMosaicView() {
+  return appState.activeStreams.size > 1 && !appState.activeStreams.has(appState.expandedStreamUserId);
+}
+
+function toggleExpandedStream(userId) {
+  if (appState.activeStreams.size < 2) return; // com uma só ela já ocupa o palco
+  appState.expandedStreamUserId = appState.expandedStreamUserId === userId ? null : userId;
+  appState.focusedStreamUserId = userId;
+  updateStageLayout();
 }
 
 function updateStageLayout() {
@@ -1910,7 +1969,6 @@ function updateStageLayout() {
   const lounge = document.getElementById('voice-lounge');
   const watchingLabel = document.getElementById('watching-stream-label');
   const streamTabs = document.getElementById('stream-tabs');
-  const gridBtn = document.getElementById('btn-toggle-mosaic');
 
   const count = appState.activeStreams.size;
 
@@ -1924,10 +1982,6 @@ function updateStageLayout() {
 
   if (grid) grid.classList.remove('hidden');
   if (lounge) lounge.classList.add('hidden');
-
-  if (count > 1 && gridBtn) {
-    gridBtn.classList.remove('hidden');
-  }
 
   // Render stream tabs in topbar
   if (streamTabs) {
@@ -1943,26 +1997,18 @@ function updateStageLayout() {
     }
   }
 
-  if (appState.isMosaicMode && count > 1) {
-    if (grid) grid.className = 'videos-grid mosaic-grid';
-    if (gridBtn) {
-      gridBtn.textContent = '🎬 Palco Único';
-      gridBtn.classList.add('active');
-    }
-  } else {
-    if (grid) grid.className = 'videos-grid single-stage';
-    if (gridBtn) {
-      gridBtn.textContent = '🔲 Mosaico';
-      gridBtn.classList.remove('active');
-    }
-  }
+  const mosaic = isMosaicView();
+  // Uma transmissão sozinha ocupa o palco; com várias, a aberta é a "expandida"
+  const shownAlone = count === 1 ? appState.activeStreams.keys().next().value : appState.expandedStreamUserId;
+  if (grid) grid.className = `videos-grid ${mosaic ? 'mosaic-grid' : 'single-stage'}${count > 1 ? ' multi' : ''}`;
 
   for (const [uid, info] of appState.activeStreams.entries()) {
     const tile = document.getElementById(`video-tile-${uid}`);
     const videoEl = document.getElementById(`video-el-${uid}`);
     if (!tile || !videoEl) continue;
 
-    if (appState.isMosaicMode || uid === appState.focusedStreamUserId) {
+    tile.title = count > 1 ? (mosaic ? 'Clique pra ver só essa · duplo clique: tela cheia' : 'Clique pra voltar pro mosaico · duplo clique: tela cheia') : 'Duplo clique: tela cheia';
+    if (mosaic || uid === shownAlone) {
       tile.classList.remove('hidden-tile');
       tile.classList.remove('hidden');
     } else {
@@ -1973,7 +2019,7 @@ function updateStageLayout() {
     if (!info.isLocal) {
       const volInput = document.getElementById('input-stream-volume');
       const vol = volInput ? parseFloat(volInput.value) : 1.0;
-      const audible = appState.isMosaicMode || uid === appState.focusedStreamUserId;
+      const audible = mosaic || uid === shownAlone;
       appState.mixerManager?.setStreamAudible(uid, audible);
       if (appState.myUser.isDeafened) {
         videoEl.muted = true;
