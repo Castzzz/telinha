@@ -1140,18 +1140,9 @@ function setupModals() {
   const volInput = $('#input-stream-volume');
   const volText = $('#stream-volume-text');
   volInput?.addEventListener('input', () => {
-    const val = Number(volInput.value);
-    const pct = Math.round(val * 100);
+    const pct = Math.round(Number(volInput.value) * 100);
     if (volText) volText.textContent = `${pct}%`;
-
-    if (appState.focusedStreamUserId) {
-      appState.setStreamVolume(appState.focusedStreamUserId, pct);
-      const videoEl = document.getElementById(`video-el-${appState.focusedStreamUserId}`);
-      if (videoEl && !appState.myUser.isDeafened) {
-        videoEl.volume = Math.min(1.0, val);
-        setRemoteElementMuted(videoEl, val === 0);
-      }
-    }
+    if (appState.focusedStreamUserId) setStreamVolume(appState.focusedStreamUserId, pct);
   });
 
   $('#btn-stage-fullscreen')?.addEventListener('click', toggleStageFullscreen);
@@ -1746,6 +1737,22 @@ function setupHotkeys() {
   renderHotkeys();
 }
 
+// Volume geral do Telinha (Configurações): vozes e transmissões juntas, até 200%
+function setupMasterVolume() {
+  const input = $('#input-master-volume');
+  const text = $('#master-volume-text');
+  if (!input) return;
+  const show = (pct) => { if (text) text.textContent = `${pct}%`; };
+  input.value = String(prefs.masterVolume ?? 100);
+  show(Number(input.value));
+  input.addEventListener('input', () => {
+    const pct = Number(input.value);
+    appState.mixerManager?.setMasterVolume(pct);
+    show(pct);
+  });
+  input.addEventListener('change', () => savePrefs({ masterVolume: Number(input.value) }));
+}
+
 // Barra de salas e canais: arrasta a borda direita pra mudar a largura (guardada nas preferências)
 const SIDEBAR_MIN_WIDTH = 180;
 const SIDEBAR_MAX_WIDTH = 480;
@@ -1993,6 +2000,50 @@ function routeElementThroughMixer(el, mixerEntry) {
   }
 }
 
+// Volume de cada transmissão (0–200%), salvo pelo perfil de quem transmite
+function savedStreamVolume(userId) {
+  return (prefs.streamVolumes || {})[volumeKey(findUser(userId))] ?? 100;
+}
+
+function getStreamVolume(userId) {
+  const live = appState.mixerManager?.streamMixers.get(userId)?.volumePercent;
+  return Number.isFinite(live) ? live : savedStreamVolume(userId);
+}
+
+function setStreamVolume(userId, percent, { save = true } = {}) {
+  const pct = Math.max(0, Math.min(200, Math.round(Number(percent) || 0)));
+  appState.setStreamVolume(userId, pct);
+  // Sem o mixer o som sai pelo próprio <video> (que só vai até 100%)
+  const videoEl = document.getElementById(`video-el-${userId}`);
+  if (videoEl && !appState.myUser.isDeafened && videoEl.dataset.mixerOutput !== '1') {
+    videoEl.volume = Math.min(1.0, pct / 100);
+    setRemoteElementMuted(videoEl, pct === 0);
+  }
+  const key = volumeKey(findUser(userId));
+  if (save && key) {
+    const streamVolumes = { ...(prefs.streamVolumes || {}) };
+    if (pct === 100) delete streamVolumes[key];
+    else streamVolumes[key] = pct;
+    savePrefs({ streamVolumes });
+  }
+  syncStreamVolumeUi(userId);
+}
+
+// Deixa o slider da tela e o da barra de baixo (se ela estiver aberta) com o mesmo valor
+function syncStreamVolumeUi(userId) {
+  const pct = getStreamVolume(userId);
+  const tileInput = document.getElementById(`tile-volume-${userId}`);
+  if (tileInput) tileInput.value = String(pct);
+  const tileText = document.getElementById(`tile-volume-text-${userId}`);
+  if (tileText) tileText.textContent = `${pct}%`;
+  if (userId === appState.focusedStreamUserId) {
+    const volInput = $('#input-stream-volume');
+    if (volInput) volInput.value = String(pct / 100);
+    const volText = $('#stream-volume-text');
+    if (volText) volText.textContent = `${pct}%`;
+  }
+}
+
 function registerScreenStream(userId, userName, stream, isLocal) {
   appState.activeStreams.set(userId, { stream, userName, isLocal });
 
@@ -2043,6 +2094,20 @@ function registerScreenStream(userId, userName, stream, isLocal) {
     tile.appendChild(video);
     tile.appendChild(unmuteBtn);
 
+    if (!isLocal) {
+      const volWrap = document.createElement('div');
+      volWrap.className = 'tile-volume';
+      volWrap.title = `Volume da transmissão de ${userName} (0–200%)`;
+      volWrap.innerHTML = `
+        <span aria-hidden="true">🔊</span>
+        <input type="range" id="tile-volume-${userId}" min="0" max="200" step="5" value="100" aria-label="Volume da transmissão de ${escapeHtml(userName)}" />
+        <span class="tile-volume-text" id="tile-volume-text-${userId}">100%</span>
+      `;
+      ['click', 'dblclick', 'pointerdown'].forEach((evt) => volWrap.addEventListener(evt, (e) => e.stopPropagation()));
+      volWrap.querySelector('input').addEventListener('input', (e) => setStreamVolume(userId, e.target.value));
+      tile.appendChild(volWrap);
+    }
+
     const grid = document.getElementById('videos-grid');
     if (grid) grid.appendChild(tile);
   }
@@ -2071,6 +2136,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
     }
     routeElementThroughMixer(videoEl, entry);
   }
+  if (!isLocal) setStreamVolume(userId, savedStreamVolume(userId), { save: false });
 
   if (!appState.focusedStreamUserId || (appState.focusedStreamUserId === appState.myId && userId !== appState.myId)) {
     appState.focusedStreamUserId = userId;
@@ -2181,8 +2247,7 @@ function updateStageLayout() {
     }
 
     if (!info.isLocal) {
-      const volInput = document.getElementById('input-stream-volume');
-      const vol = volInput ? parseFloat(volInput.value) : 1.0;
+      const vol = getStreamVolume(uid) / 100;
       const audible = mosaic || uid === shownAlone;
       appState.mixerManager?.setStreamAudible(uid, audible);
       if (appState.myUser.isDeafened) {
@@ -2202,6 +2267,8 @@ function updateStageLayout() {
       watchingLabel.textContent = `${count} transmissões ativas`;
     }
   }
+  // A barra de baixo mostra o volume da transmissão aberta
+  if (appState.activeStreams.has(appState.focusedStreamUserId)) syncStreamVolumeUi(appState.focusedStreamUserId);
 }
 
 function cleanupUserConnections(userId) {
@@ -3526,6 +3593,7 @@ function initAudioSystem() {
   }
 
   appState.mixerManager = new VolumeMixerManager({ audioContext: appState.audioContext });
+  appState.mixerManager.setMasterVolume(prefs.masterVolume ?? 100);
   appState.audioManager = new AudioManager({ volumeMixer: appState.mixerManager });
   appState.deafenController = new DeafenController({
     appState,
@@ -3553,6 +3621,7 @@ function initApp() {
   setupProfileModal();
   setupHotkeys();
   setupSidebarResize();
+  setupMasterVolume();
   renderChannelsTree();
   updateTopBar();
   updateVoiceLounge();

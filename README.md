@@ -114,6 +114,8 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Janela flutuante** | Botão ⧉ no canto de baixo ou tecla `P`: a transmissão fica numa janelinha por cima do jogo/outros programas |
 | **Sair da call** | Botão 📞 *Sair da call* no topo: desliga voz e transmissões sem fechar o app. Clique num canal pra voltar |
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
+| **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–200%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
+| **Volume geral** | ⚙️ → *Volume geral do Telinha*: vozes e transmissões juntas, até 200% |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |
 
 ### 🔊 O som da transmissão

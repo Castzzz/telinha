@@ -1775,3 +1775,50 @@ ul {
   opacity: 1;
   background: rgba(255, 255, 255, 0.15);
 }
+
+/* ==================== VOLUME POR TRANSMISSÃO E VOLUME GERAL ==================== */
+/* Aparece ao passar o mouse na tela da transmissão */
+.tile-volume {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.video-tile:hover .tile-volume,
+.tile-volume:focus-within {
+  opacity: 1;
+}
+
+.tile-volume input {
+  width: 90px;
+  accent-color: var(--accent-brand);
+}
+
+.tile-volume-text,
+.master-volume-text {
+  min-width: 38px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.master-volume-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.master-volume-row input {
+  flex: 1;
+  accent-color: var(--accent-brand);
+}

@@ -424,6 +424,7 @@ export class VolumeMixerManager {
       this.masterDeafenGain = null;
     }
     this.isDeafened = false;
+    this.masterVolume = 1.0; // volume geral do Telinha (0–2), multiplicado no mesmo ganho do ensurdecer
   }
 
   ensureAudioContext() {
@@ -651,10 +652,26 @@ export class VolumeMixerManager {
    */
   setDeafened(deafened) {
     this.isDeafened = Boolean(deafened);
+    this.applyMasterGain();
+  }
+
+  /**
+   * Volume geral de tudo que o Telinha toca (vozes e transmissões), 0% a 200%
+   */
+  setMasterVolume(volumePercent) {
+    const safePercent = sanitizeVolumePercent(volumePercent, 100);
+    let gain = Math.max(0.0, Math.min(2.0, safePercent / 100));
+    if (!Number.isFinite(gain)) gain = 1.0;
+    this.masterVolume = gain;
+    this.applyMasterGain();
+    return gain;
+  }
+
+  applyMasterGain() {
     if (!this.masterDeafenGain || !this.masterDeafenGain.gain) return;
 
     const now = this.audioContext?.currentTime || 0;
-    const targetGain = this.isDeafened ? 0.0 : 1.0;
+    const targetGain = this.isDeafened ? 0.0 : this.masterVolume;
     if (typeof this.masterDeafenGain.gain.cancelScheduledValues === 'function') {
       this.masterDeafenGain.gain.cancelScheduledValues(now);
       this.masterDeafenGain.gain.linearRampToValueAtTime(targetGain, now + 0.03);

@@ -327,6 +327,16 @@
           <select id="select-audio-output" class="form-select"></select>
         </div>
 
+        <!-- Volume geral -->
+        <div class="form-group">
+          <label for="input-master-volume">Volume geral do Telinha</label>
+          <div class="master-volume-row">
+            <input type="range" id="input-master-volume" min="0" max="200" step="5" value="100" />
+            <span id="master-volume-text" class="master-volume-text">100%</span>
+          </div>
+          <p class="form-help">Aumenta ou abaixa tudo que o Telinha toca (vozes e transmissões), até 200%.</p>
+        </div>
+
         <!-- Dispositivo do Som do Sistema (Linux Loopback Monitor Sink) -->
         <div class="form-group">
           <label for="select-audio-system">Áudio da Transmissão (Som do Sistema / Som do PC)</label>
