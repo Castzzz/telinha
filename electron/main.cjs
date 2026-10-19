@@ -546,9 +546,10 @@ function setupMenu() {
           }
         },
         { type: 'separator' },
-        { role: 'reload', label: 'Recarregar' },
-        { role: 'toggleDevTools', label: 'Ferramentas de desenvolvedor' },
-        { role: 'togglefullscreen', label: 'Tela cheia' },
+        // Sem barra do sistema o menu não aparece: os atalhos continuam valendo
+        { role: 'reload', label: 'Recarregar', accelerator: 'CmdOrCtrl+R' },
+        { role: 'toggleDevTools', label: 'Ferramentas de desenvolvedor', accelerator: 'CmdOrCtrl+Shift+I' },
+        { role: 'togglefullscreen', label: 'Tela cheia', accelerator: 'F11' },
         { type: 'separator' },
         { role: 'quit', label: 'Sair' }
       ]
@@ -651,6 +652,11 @@ async function createWindow() {
     title: 'Telinha — Transmissão e Voz (Discord / TeamSpeak Style)',
     backgroundColor: '#1e1f22',
     autoHideMenuBar: true,
+    // Sem a barra do sistema: minimizar/maximizar/fechar são desenhados por cima do canto
+    // direito da barra do app (alguns ambientes Linux, como os tiling, não mostram botão nenhum)
+    ...(process.platform === 'darwin'
+      ? {}
+      : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#1e1f22', symbolColor: '#dbdee1', height: 52 } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

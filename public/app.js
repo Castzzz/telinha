@@ -305,8 +305,9 @@ const handleChannelsSummary = (channelsList) => {
   updateVoiceLounge();
 };
 
+// O servidor manda cada evento com dois nomes (compatibilidade). Escutar os dois
+// rodava tudo duas vezes: avisos repetidos e ofertas de vídeo criadas em dobro.
 socket.on('channels-list', handleChannelsSummary);
-socket.on('channels-summary', handleChannelsSummary);
 
 socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages }) => {
   if (me) {
@@ -397,7 +398,6 @@ const handleUserJoined = (data) => {
 };
 
 socket.on('user-joined', handleUserJoined);
-socket.on('user-channel-joined', handleUserJoined);
 
 const handleUserLeft = (data) => {
   const channelId = data.channelId;
@@ -421,7 +421,6 @@ const handleUserLeft = (data) => {
 };
 
 socket.on('user-left', handleUserLeft);
-socket.on('user-channel-left', handleUserLeft);
 
 const handleUserStateChanged = (state) => {
   const channelId = state.channelId;
@@ -472,7 +471,6 @@ const handleUserStateChanged = (state) => {
 };
 
 socket.on('user-state-changed', handleUserStateChanged);
-socket.on('user-state-updated', handleUserStateChanged);
 
 
 socket.on('channel-created', (payload) => {
@@ -937,7 +935,6 @@ function setupDockControls() {
 
     renderChannelsTree();
     updateVoiceLounge();
-    showToast(appState.myUser.isMicOn ? 'Microfone ativado' : 'Microfone mutado');
   });
 
   // Deafen Toggle
@@ -970,13 +967,11 @@ function setupDockControls() {
       shareBtn?.classList.add('sharing');
       onStartScreenShare(appState.myUser.streamQuality);
       socket.emit('user-state-changed', { isSharing: true });
-      showToast('Transmissão de tela iniciada (Som do Sistema ativo)', 'success');
     } else {
       appState.myUser.isSharing = false;
       shareBtn?.classList.remove('sharing');
       onStopScreenShare();
       socket.emit('user-state-changed', { isSharing: false });
-      showToast('Transmissão de tela encerrada');
     }
 
     renderChannelsTree();

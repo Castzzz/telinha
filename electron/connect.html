@@ -6,6 +6,7 @@
   <title>Telinha</title>
   <style>
     * { box-sizing: border-box; }
+    .window-drag { position: fixed; top: 0; left: 0; right: 0; height: 52px; -webkit-app-region: drag; }
     body {
       margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
       background: #1e1f22; color: #f2f3f5; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
@@ -38,6 +39,8 @@
   </style>
 </head>
 <body>
+  <!-- Área pra arrastar a janela (os botões de fechar/maximizar ficam por cima, à direita) -->
+  <div class="window-drag"></div>
   <div class="card">
     <h1>📺 Telinha</h1>
     <p class="sub">Voz e transmissão de tela com o som do PC.</p>

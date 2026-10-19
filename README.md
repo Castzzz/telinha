@@ -151,7 +151,7 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 | Amigos não ouvem o som da minha transmissão (Windows) | O aviso que aparece ao começar a transmitir diz o motivo. Mande um print dele pra quem hospeda. |
 | Ninguém me ouve | Veja se o 🎙️ não está riscado e se o microfone certo está em ⚙️. Teste falando: a barra *Teste de Atividade de Voz* tem que mexer. |
 | Atalho não funciona com o jogo aberto | Use `Ctrl`/`Alt` + tecla ou `F1`–`F24`. Se aparecer *"Outro programa já usa esse atalho"*, escolha outro. |
-| Tela branca / travou | `Alt` → **Telinha → Recarregar**, ou `Ctrl+Shift+H` pra voltar ao início. |
+| Tela branca / travou | `Ctrl+R` recarrega; `Ctrl+Shift+H` volta pra tela inicial. |
 
 ---
 
