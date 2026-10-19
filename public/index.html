@@ -315,6 +315,16 @@
           <select id="select-audio-input" class="form-select"></select>
         </div>
 
+        <!-- Ganho do microfone -->
+        <div class="form-group">
+          <label for="input-mic-gain">Volume do seu microfone</label>
+          <div class="master-volume-row">
+            <input type="range" id="input-mic-gain" min="0" max="300" step="5" value="100" />
+            <span id="mic-gain-text" class="master-volume-text">100%</span>
+          </div>
+          <p class="form-help">Se os amigos te ouvem baixo (ou o Windows fica abaixando o seu mic), aumente aqui. Veja o efeito no teste de voz lá embaixo.</p>
+        </div>
+
         <!-- Cancelamento de ruído do microfone -->
         <div class="form-group">
           <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
@@ -330,6 +340,14 @@
         <div class="form-group">
           <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>
           <select id="select-audio-output" class="form-select"></select>
+        </div>
+
+        <!-- Som de entrada/saída -->
+        <div class="form-group">
+          <label class="hotkey-global">
+            <input type="checkbox" id="input-call-sounds" checked />
+            Tocar um áudio dos amigos quando alguém entra ou sai da call
+          </label>
         </div>
 
         <!-- Volume geral -->

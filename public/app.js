@@ -404,6 +404,7 @@ const handleUserJoined = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`👋 ${user.name} entrou no canal.`, channelId);
+    playCallSound();
     updateTopBar();
     updateVoiceLounge();
 
@@ -416,6 +417,42 @@ const handleUserJoined = (data) => {
 };
 
 socket.on('user-joined', handleUserJoined);
+
+// Som de quando alguém entra ou sai da call: áudios gravados pelos próprios amigos,
+// um sorteado por vez. Passa pelo volume geral e fica mudo com o ensurdecer.
+const CALL_SOUNDS = Array.from({ length: 9 }, (_, i) => `/sounds/amigo-${i + 1}.ogg`);
+const callSoundBuffers = new Map();
+let lastCallSoundAt = 0;
+
+async function playCallSound() {
+  if (prefs.callSounds === false || appState.myUser.isDeafened) return;
+  // Muita gente entrando junto (servidor reiniciou): um som só
+  const now = Date.now();
+  if (now - lastCallSoundAt < 1500) return;
+  lastCallSoundAt = now;
+  const url = CALL_SOUNDS[Math.floor(Math.random() * CALL_SOUNDS.length)];
+  const mixer = appState.mixerManager;
+  try {
+    const ctx = mixer?.audioContext;
+    if (!ctx || !mixer.masterDeafenGain) {
+      await new Audio(url).play();
+      return;
+    }
+    let buffer = callSoundBuffers.get(url);
+    if (!buffer) {
+      const res = await fetch(url);
+      if (!res.ok) return;
+      buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      callSoundBuffers.set(url, buffer);
+    }
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(mixer.masterDeafenGain);
+    source.start();
+  } catch (err) {
+    console.warn('[Som] Não tocou o som de entrada/saída:', err);
+  }
+}
 
 const handleUserLeft = (data) => {
   const channelId = data.channelId;
@@ -432,6 +469,7 @@ const handleUserLeft = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`${userName} saiu do canal.`, channelId);
+    playCallSound();
     updateTopBar();
     updateVoiceLounge();
     cleanupUserConnections(userId);
@@ -816,9 +854,9 @@ function updateVoiceLounge() {
     });
   }
 
-  // Toggle lounge vs videosGrid visibility based on active streams
-  const activeStreamsCount = ch ? Array.from(ch.users.values()).filter((u) => u.isSharing).length : 0;
-  if (activeStreamsCount > 0 && videosGrid && videosGrid.children.length > 0) {
+  // Palco x sala de espera: pelo que eu estou assistindo de verdade (o mesmo critério do
+  // updateStageLayout). Contar só quem tem tela ligada escondia a câmera sozinha: piscava e sumia.
+  if (appState.activeStreams.size > 0 && videosGrid && videosGrid.children.length > 0) {
     lounge.classList.add('hidden');
     videosGrid.classList.remove('hidden');
   } else {
@@ -1757,6 +1795,24 @@ function setupHotkeys() {
   }, true);
 
   renderHotkeys();
+}
+
+// Ganho do microfone (Configurações): muda na hora, sem reconectar ninguém
+function setupMicGain() {
+  const input = $('#input-mic-gain');
+  const text = $('#mic-gain-text');
+  if (!input) return;
+  const show = (pct) => { if (text) text.textContent = `${pct}%`; };
+  input.value = String(prefs.micGain ?? 100);
+  show(Number(input.value));
+  input.addEventListener('input', () => {
+    const pct = Number(input.value);
+    prefs.micGain = pct;
+    const gain = appState.micGainNode;
+    if (gain) gain.gain.setTargetAtTime(micGainValue(), gain.context.currentTime, 0.02);
+    show(pct);
+  });
+  input.addEventListener('change', () => savePrefs({ micGain: Number(input.value) }));
 }
 
 // Volume geral do Telinha (Configurações): vozes e transmissões juntas, até 200%
@@ -2915,21 +2971,42 @@ function noiseMode() {
 
 // Passa o microfone pelo RNNoise e devolve um stream com o som limpo.
 // Parar a faixa limpa também solta o microfone de verdade e o AudioContext.
-async function withRnnoise(raw) {
-  const { RnnoiseWorkletNode, loadRnnoise } = await import(`${RNNOISE_DIR}/index.js`);
-  rnnoiseBinary ||= await loadRnnoise({
-    url: `${RNNOISE_DIR}/rnnoise.wasm`,
-    simdUrl: `${RNNOISE_DIR}/rnnoise_simd.wasm`
-  });
+// Ganho do microfone (Configurações): 0–300%, aplicado pelo próprio Telinha. Serve pra quem
+// tem o mic baixo no sistema (ou que o Windows fica abaixando) sem mexer no PC.
+function micGainValue() {
+  const pct = Number(prefs.micGain ?? 100);
+  return Number.isFinite(pct) ? Math.max(0, Math.min(300, pct)) / 100 : 1;
+}
+
+// Passa o microfone por: [RNNoise, se ligado] → ganho → stream novo.
+// Parar a faixa nova também solta o microfone de verdade e o AudioContext.
+async function processMicrophone(raw, useRnnoise) {
+  let rnnoise = null;
+  if (useRnnoise) {
+    rnnoise = await import(`${RNNOISE_DIR}/index.js`);
+    rnnoiseBinary ||= await rnnoise.loadRnnoise({
+      url: `${RNNOISE_DIR}/rnnoise.wasm`,
+      simdUrl: `${RNNOISE_DIR}/rnnoise_simd.wasm`
+    });
+  }
   // O RNNoise só funciona em 48 kHz
   const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
+  let node = null;
   try {
-    await ctx.audioWorklet.addModule(`${RNNOISE_DIR}/rnnoise/workletProcessor.js`);
     const source = ctx.createMediaStreamSource(raw);
-    const node = new RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseBinary });
+    const gain = ctx.createGain();
+    gain.gain.value = micGainValue();
+    if (rnnoise) {
+      await ctx.audioWorklet.addModule(`${RNNOISE_DIR}/rnnoise/workletProcessor.js`);
+      node = new rnnoise.RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseBinary });
+      source.connect(node).connect(gain);
+    } else {
+      source.connect(gain);
+    }
     const dest = ctx.createMediaStreamDestination();
-    source.connect(node).connect(dest);
+    gain.connect(dest);
     await ctx.resume().catch(() => {});
+    appState.micGainNode = gain;
 
     const track = dest.stream.getAudioTracks()[0];
     track.contentHint = 'speech';
@@ -2937,11 +3014,13 @@ async function withRnnoise(raw) {
     track.stop = () => {
       stopTrack();
       raw.getTracks().forEach((t) => t.stop());
-      node.destroy();
+      node?.destroy();
+      if (appState.micGainNode === gain) appState.micGainNode = null;
       ctx.close().catch(() => {});
     };
     return dest.stream;
   } catch (err) {
+    node?.destroy();
     ctx.close().catch(() => {});
     throw err;
   }
@@ -2953,15 +3032,22 @@ async function openMicrophone(deviceId) {
   const raw = await manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, {
     noiseSuppression: mode === 'basico'
   });
-  if (mode !== 'ia') return raw;
-  try {
-    return await withRnnoise(raw);
-  } catch (err) {
-    console.warn('[Mic] RNNoise indisponível, usando o filtro básico:', err);
-    showToast('⚠️ Cancelamento de ruído com IA indisponível; usando o básico.', 'error');
-    raw.getTracks().forEach((t) => t.stop());
-    return manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, { noiseSuppression: true });
+  if (mode === 'ia') {
+    try {
+      return await processMicrophone(raw, true);
+    } catch (err) {
+      console.warn('[Mic] RNNoise indisponível, usando o filtro básico:', err);
+      showToast('⚠️ Cancelamento de ruído com IA indisponível; usando o básico.', 'error');
+      raw.getTracks().forEach((t) => t.stop());
+      const basic = await manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, { noiseSuppression: true });
+      return processMicrophone(basic, false).catch(() => basic);
+    }
   }
+  // Sem IA: só o ganho (se o Web Audio falhar, vai o microfone cru)
+  return processMicrophone(raw, false).catch((err) => {
+    console.warn('[Mic] Ganho indisponível, usando o microfone direto:', err);
+    return raw;
+  });
 }
 
 // Troca o microfone em uso (outro dispositivo ou outro filtro) sem derrubar as chamadas
@@ -3905,6 +3991,12 @@ function initApp() {
   setupHotkeys();
   setupSidebarResize();
   setupMasterVolume();
+  setupMicGain();
+  const callSoundsInput = $('#input-call-sounds');
+  if (callSoundsInput) {
+    callSoundsInput.checked = prefs.callSounds !== false;
+    callSoundsInput.addEventListener('change', () => savePrefs({ callSounds: callSoundsInput.checked }));
+  }
   renderChannelsTree();
   updateTopBar();
   updateVoiceLounge();
