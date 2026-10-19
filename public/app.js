@@ -170,6 +170,8 @@ const appState = {
   sfuEnabled: false,
   sfuPublisher: null, // SfuSession da minha transmissão
   sfuViewers: new Map(), // userId -> SfuSession de quem estou assistindo
+  sfuVoicePublisher: null, // SfuSession do meu microfone (sala com SFU)
+  sfuVoiceListeners: new Map(), // userId -> SfuSession da voz de cada um do canal
 
   // Audio Context, VAD & Volume Mixers
   audioContext: null,
@@ -320,6 +322,7 @@ const handleChannelsSummary = (channelsList) => {
   renderChannelsTree();
   updateTopBar();
   updateVoiceLounge();
+  syncSfuVoice();
 };
 
 // O servidor manda cada evento com dois nomes (compatibilidade). Escutar os dois
@@ -363,11 +366,12 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages 
   // conexão da segunda e um não ouvia o outro até reiniciar o app.
   // Transmissão: só quando a pessoa clica no "AO VIVO".
   // Eu entrei com o mic ligado: quem está mutado não vai me oferecer nada, então eu ofereço
-  if (Array.isArray(users) && appState.myUser.isMicOn && appState.localMicStream) {
+  if (Array.isArray(users) && appState.myUser.isMicOn && appState.localMicStream && !appState.sfuEnabled) {
     users.forEach((u) => {
       if (u.id !== appState.myId && !u.isMicOn) createVoiceOfferForUser(u.id);
     });
   }
+  syncSfuVoice();
 
   renderChannelsTree();
   updateTopBar();
@@ -400,10 +404,11 @@ const handleUserJoined = (data) => {
     updateTopBar();
     updateVoiceLounge();
 
-    // If my microphone is on, create WebRTC voice offer for newly joined user
-    if (appState.myUser.isMicOn && appState.localMicStream) {
+    // If my microphone is on, create WebRTC voice offer for newly joined user (só P2P)
+    if (appState.myUser.isMicOn && appState.localMicStream && !appState.sfuEnabled) {
       createVoiceOfferForUser(user.id);
     }
+    syncSfuVoice();
   }
 };
 
@@ -2321,6 +2326,8 @@ function cleanupUserConnections(userId) {
     try { appState.voicePeers.get(userId).close(); } catch (_) {}
     appState.voicePeers.delete(userId);
   }
+  appState.sfuVoiceListeners.get(userId)?.close();
+  appState.sfuVoiceListeners.delete(userId);
 
   const audioEl = document.getElementById(`voice-audio-${userId}`);
   if (audioEl) audioEl.remove();
@@ -2341,9 +2348,11 @@ function cleanupUserConnections(userId) {
 // Sinalização num WebSocket próprio (/sfu/ws), com senha temporária do server.js.
 // -----------------------------------------------------------------------------
 class SfuSession {
-  constructor({ ownerId, role, stream = null, onStream = null, onClose = null }) {
+  constructor({ ownerId, role, kind = 'screen', stream = null, onStream = null, onClose = null }) {
     this.ownerId = ownerId;
     this.role = role; // 'host' (eu transmito) ou 'viewer'
+    this.kind = kind; // 'screen' (tela/câmera) ou 'voice' (microfone)
+    this.channelId = appState.currentChannelId;
     this.stream = stream;
     this.onStream = onStream;
     this.onClose = onClose;
@@ -2355,7 +2364,7 @@ class SfuSession {
 
   async start() {
     if (this.closed) return;
-    const auth = await socket.timeout(5000).emitWithAck('sfu-token', { ownerId: this.ownerId, role: this.role }).catch(() => null);
+    const auth = await socket.timeout(5000).emitWithAck('sfu-token', { ownerId: this.ownerId, role: this.role, kind: this.kind }).catch(() => null);
     if (this.closed) return;
     if (!auth?.ok) {
       this.retryLater();
@@ -2426,10 +2435,16 @@ class SfuSession {
     const pc = this.newPeer(this.iceServers);
     this.stream.getTracks().forEach((track) => pc.addTrack(track, this.stream));
     const offer = await pc.createOffer();
-    offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
-    await pc.setLocalDescription(offer);
-    const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
-    await applySenderBitrates(pc, preset.maxBitrate, 256000);
+    if (this.kind === 'voice') {
+      offer.sdp = enhanceOpusVoiceSdp(offer.sdp);
+      await pc.setLocalDescription(offer);
+      await applySenderBitrates(pc, 0, VOICE_BITRATE);
+    } else {
+      offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
+      await pc.setLocalDescription(offer);
+      const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
+      await applySenderBitrates(pc, preset.maxBitrate, 256000);
+    }
     this.send({ sdp: pc.localDescription });
   }
 
@@ -2443,7 +2458,7 @@ class SfuSession {
     };
     await pc.setRemoteDescription(offer);
     const answer = await pc.createAnswer();
-    answer.sdp = enhanceOpusStereoSdp(answer.sdp, 256000);
+    answer.sdp = this.kind === 'voice' ? enhanceOpusVoiceSdp(answer.sdp) : enhanceOpusStereoSdp(answer.sdp, 256000);
     await pc.setLocalDescription(answer);
     this.send({ sdp: pc.localDescription });
   }
@@ -2462,6 +2477,66 @@ class SfuSession {
     this.resetPeer();
     this.onClose?.();
   }
+}
+
+// -----------------------------------------------------------------------------
+// VOZ PELO SFU (sala na nuvem): cada um manda a voz UMA vez pro servidor, que repassa
+// pra todo mundo do canal. Não depende da internet/roteador de cada amigo se acharem
+// (o P2P falhava em alguns NATs) e o upload não cresce com o tamanho da call.
+// Sem SFU (sala hospedada no PC), a voz continua P2P.
+// -----------------------------------------------------------------------------
+
+// Deixa as conexões de voz com o servidor batendo com o canal atual. Pode chamar à vontade:
+// só abre o que falta e fecha o que sobrou.
+function syncSfuVoice() {
+  if (!appState.sfuEnabled) return;
+  const channelId = socket.connected ? appState.currentChannelId : null;
+
+  // Meu mic: publicado enquanto estiver aberto (mutar só desliga a faixa, então desmutar é na hora)
+  const micLive = appState.localMicStream?.getAudioTracks().some((t) => t.readyState === 'live');
+  const pub = appState.sfuVoicePublisher;
+  const pubStale = pub && (pub.closed || pub.ownerId !== appState.myId || pub.channelId !== channelId || pub.stream !== appState.localMicStream);
+  if (pub && (pubStale || !micLive || !channelId)) {
+    pub.close();
+    appState.sfuVoicePublisher = null;
+  }
+  if (micLive && channelId && !appState.sfuVoicePublisher) {
+    const session = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'voice', stream: appState.localMicStream });
+    appState.sfuVoicePublisher = session;
+    session.start();
+  }
+
+  // Voz dos outros: uma conexão por pessoa do canal. Ela fica aberta mesmo com a pessoa
+  // mutada; quando ela liga o mic, o servidor já manda o som.
+  const ch = channelId ? appState.channels.get(channelId) : null;
+  const others = new Set(ch ? [...ch.users.keys()].filter((id) => id !== appState.myId) : []);
+  for (const [userId, session] of appState.sfuVoiceListeners) {
+    if (session.closed || !others.has(userId) || session.channelId !== channelId) {
+      session.close();
+      appState.sfuVoiceListeners.delete(userId);
+    }
+  }
+  for (const userId of others) {
+    if (appState.sfuVoiceListeners.has(userId)) continue;
+    const session = new SfuSession({
+      ownerId: userId,
+      role: 'viewer',
+      kind: 'voice',
+      onStream: (stream) => attachVoiceStream(userId, stream),
+      onClose: () => {
+        if (appState.sfuVoiceListeners.get(userId) === session) appState.sfuVoiceListeners.delete(userId);
+      }
+    });
+    appState.sfuVoiceListeners.set(userId, session);
+    session.start();
+  }
+}
+
+function stopSfuVoice() {
+  appState.sfuVoicePublisher?.close();
+  appState.sfuVoicePublisher = null;
+  for (const session of appState.sfuVoiceListeners.values()) session.close();
+  appState.sfuVoiceListeners.clear();
 }
 
 // Começa a assistir alguém: pelo SFU quando a sala tem, senão pede a oferta P2P
@@ -2601,6 +2676,12 @@ function watchVoiceConnection(peerId, pc) {
 
 // Refaz a conexão de voz com alguém: oferece o meu mic, ou pede o dela se eu estou mutado
 function reconnectVoice(peerId) {
+  if (appState.sfuEnabled) {
+    appState.sfuVoiceListeners.get(peerId)?.close();
+    appState.sfuVoiceListeners.delete(peerId);
+    syncSfuVoice();
+    return;
+  }
   const pc = appState.voicePeers.get(peerId);
   if (pc) {
     try { pc.close(); } catch (_) {}
@@ -2746,6 +2827,8 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
   }
 
   // Close all voice connections
+  stopSfuVoice();
+  document.querySelectorAll('#voice-streams-container audio').forEach((el) => el.remove());
   for (const [peerId, pc] of appState.voicePeers.entries()) {
     try { pc.close(); } catch (_) {}
     const audioEl = document.getElementById(`voice-audio-${peerId}`);
@@ -2836,7 +2919,14 @@ async function restartMicrophone(deviceId) {
     appState.localMicStream = await openMicrophone(deviceId);
     const newTrack = appState.localMicStream.getAudioTracks()[0];
     if (newTrack) newTrack.enabled = wasEnabled;
-    for (const [, pc] of appState.voicePeers.entries()) {
+    const voicePcs = [...appState.voicePeers.values()];
+    // Voz pelo SFU: troca a faixa na mesma conexão (sem reconectar)
+    const pub = appState.sfuVoicePublisher;
+    if (pub) {
+      pub.stream = appState.localMicStream;
+      if (pub.pc) voicePcs.push(pub.pc);
+    }
+    for (const pc of voicePcs) {
       const sender = pc.getSenders?.().find((s) => s.track && s.track.kind === 'audio');
       if (sender && newTrack) {
         sender.replaceTrack(newTrack).catch(() => {});
@@ -2885,8 +2975,9 @@ async function onMicrophoneToggle(isMicOn) {
         appState.vadDetector.setEnabled(true);
       }
 
-      // Initiate voice offers to channel peers
-      const ch = appState.channels.get(appState.currentChannelId);
+      // Sala com SFU: publica no servidor; sem SFU, oferece a voz pra cada um (P2P)
+      syncSfuVoice();
+      const ch = appState.sfuEnabled ? null : appState.channels.get(appState.currentChannelId);
       if (ch) {
         for (const [userId] of ch.users.entries()) {
           if (userId !== appState.myId) {

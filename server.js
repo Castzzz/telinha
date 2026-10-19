@@ -605,7 +605,8 @@ io.on('connection', (socket) => {
     const owner = io.sockets.sockets.get(ownerId)?.data?.user;
     if (!owner || owner.channelId !== user.channelId) return callback({ ok: false });
     if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
-    const sala = `${user.channelId}__${ownerId}`;
+    // Voz também passa pelo SFU: cada um que fala tem a sua sala de voz no canal
+    const sala = payload.kind === 'voice' ? `${user.channelId}__${ownerId}__voz` : `${user.channelId}__${ownerId}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
     const token = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}`).digest('hex');
     callback({ ok: true, path: SFU_PATH, sala, role, exp, token });

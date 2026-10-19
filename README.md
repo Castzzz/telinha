@@ -204,6 +204,7 @@ Os links de download deste README apontam sempre pra versão mais nova, então n
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)
+- `sfu/main.go`: repassador (SFU) da sala na nuvem: tela, câmera e voz passam por ele (cada um manda uma vez só); sala hospedada no PC continua P2P
 - `public/`: interface da sala (servida por quem hospeda)
 - `electron/main.cjs`: app desktop (hospedar, túnel, captura de tela, atualização, atalhos globais)
 - `electron/connect.html`: tela inicial
