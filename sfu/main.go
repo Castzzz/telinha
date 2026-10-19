@@ -2,11 +2,15 @@
 // os pacotes pra todo mundo que está assistindo. Assim seu upload não depende de
 // quantas pessoas estão vendo, e o atraso continua baixo (o servidor não re-codifica nada).
 //
-// Usa o mesmo protocolo de sinalização do server.js (WebSocket), então a página é a mesma.
+// Cada transmissão é uma "sala" do SFU (canal + quem transmite). O server.js (Node)
+// cuida de canais, chat e voz, e entrega uma senha temporária (HMAC) pra quem pode
+// transmitir ou assistir; sem SFU_SECRET (teste local) qualquer um entra.
 package main
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -32,14 +36,14 @@ import (
 const sfuID = "sfu"
 
 var (
-	roomRe     = regexp.MustCompile(`^[\w-]{1,64}$`)
+	roomRe     = regexp.MustCompile(`^[\w-]{1,160}$`)
 	api        *webrtc.API
 	pcConfig   webrtc.Configuration
 	iceForWeb  any // repassado pros navegadores no "hello"
 	roomsMu    sync.Mutex
 	rooms      = map[string]*Room{}
-	publicDir  = env("PUBLIC_DIR", "public")
-	httpPort   = env("PORT", "8080")
+	httpPort   = env("PORT", "8081")
+	sfuSecret  = os.Getenv("SFU_SECRET")
 	mediaPort  = env("MEDIA_PORT", "50000")
 	publicIP   = os.Getenv("PUBLIC_IP")
 	defaultICE = `[{"urls":["stun:stun.l.google.com:19302","stun:stun.cloudflare.com:3478"]}]`
@@ -108,6 +112,21 @@ func (r *Room) ready() bool {
 
 // ---------- WebSocket ----------
 
+// Senha = HMAC-SHA256(SFU_SECRET, "sala|papel|validade"), gerada pelo server.js
+func authorized(name, role, exp, token string) bool {
+	if sfuSecret == "" {
+		return true
+	}
+	expires, err := strconv.ParseInt(exp, 10, 64)
+	if err != nil || time.Now().Unix() > expires {
+		return false
+	}
+	mac := hmac.New(sha256.New, []byte(sfuSecret))
+	mac.Write([]byte(name + "|" + role + "|" + exp))
+	want := hex.EncodeToString(mac.Sum(nil))
+	return hmac.Equal([]byte(want), []byte(token))
+}
+
 func handleSocket(ws *websocket.Conn) {
 	q := ws.Request().URL.Query()
 	name := q.Get("sala")
@@ -116,6 +135,10 @@ func handleSocket(ws *websocket.Conn) {
 		role = "host"
 	}
 	if !roomRe.MatchString(name) {
+		return
+	}
+	if !authorized(name, role, q.Get("exp"), q.Get("token")) {
+		websocket.Message.Send(ws, `{"type":"error","message":"Sem permissão (senha do SFU inválida ou vencida)."}`)
 		return
 	}
 
@@ -492,11 +515,20 @@ func must(err error) {
 func main() {
 	setupWebRTC()
 	mux := http.NewServeMux()
-	mux.Handle("GET /ws", websocket.Server{Handler: handleSocket})
-	mux.Handle("GET /", http.FileServer(http.Dir(publicDir)))
+	// Quem pode entrar é decidido pela senha, não pela origem (o app vem de telinha://)
+	mux.Handle("GET /ws", websocket.Server{Handler: handleSocket, Handshake: func(*websocket.Config, *http.Request) error { return nil }})
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
+		roomsMu.Lock()
+		n := len(rooms)
+		roomsMu.Unlock()
+		fmt.Fprintf(w, `{"status":"ok","rooms":%d}`, n)
+	})
 
-	fmt.Printf("📺 Telinha (modo servidor/SFU) rodando!\n\n")
-	fmt.Printf("  Página:  http://localhost:%s\n", httpPort)
+	fmt.Printf("📺 Telinha SFU rodando!\n\n")
+	fmt.Printf("  Sinalização: ws://localhost:%s/ws\n", httpPort)
+	if sfuSecret == "" {
+		fmt.Printf("  ⚠️  SFU_SECRET vazio: qualquer um pode usar este SFU (só pra teste local)\n")
+	}
 	fmt.Printf("  Mídia:   porta %s (UDP e TCP) — libere no firewall\n", mediaPort)
 	if publicIP != "" {
 		fmt.Printf("  IP público anunciado: %s\n", publicIP)

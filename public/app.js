@@ -166,6 +166,11 @@ const appState = {
   // ICE Candidate Buffers
   iceCandidatesQueue: new Map(), // `${type}:${peerId}` -> Array<RTCIceCandidateInit>
 
+  // Transmissões pelo servidor (SFU), quando a sala tem
+  sfuEnabled: false,
+  sfuPublisher: null, // SfuSession da minha transmissão
+  sfuViewers: new Map(), // userId -> SfuSession de quem estou assistindo
+
   // Audio Context, VAD & Volume Mixers
   audioContext: null,
   audioManager: null,
@@ -273,8 +278,10 @@ socket.on('reconnect', () => {
 });
 
 // Nome e cor vêm do nosso perfil; o servidor só sugere um aleatório antes do join
-socket.on('me', ({ id }) => {
+socket.on('me', ({ id, sfu }) => {
   appState.myId = id;
+  // Sala com SFU (servidor na nuvem): transmissões passam pelo servidor, não P2P
+  appState.sfuEnabled = Boolean(sfu);
   updateUserDockProfile();
 });
 
@@ -354,7 +361,7 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages 
     users.forEach((u) => {
       if (u.id !== appState.myId) {
         if (u.isSharing) {
-          socket.emit('request-stream', { targetId: u.id, type: 'screen' });
+          watchScreen(u.id);
         }
         if (u.isMicOn && appState.myUser.isMicOn) {
           socket.emit('request-stream', { targetId: u.id, type: 'voice' });
@@ -395,7 +402,7 @@ const handleUserJoined = (data) => {
     updateVoiceLounge();
 
     // If I am sharing screen, create WebRTC offer for newly joined user
-    if (appState.myUser.isSharing && appState.localScreenStream) {
+    if (appState.myUser.isSharing && appState.localScreenStream && !appState.sfuEnabled) {
       createScreenOfferForUser(user.id);
     }
     // If my microphone is on, create WebRTC voice offer for newly joined user
@@ -442,8 +449,9 @@ const handleUserStateChanged = (state) => {
       u.isSharing = state.isSharing;
       if (channelId === appState.currentChannelId && userId !== appState.myId) {
         if (!wasSharing && state.isSharing) {
-          socket.emit('request-stream', { targetId: userId, type: 'screen' });
+          watchScreen(userId);
         } else if (wasSharing && !state.isSharing) {
+          stopWatchingScreen(userId);
           removeScreenStream(userId);
           if (appState.screenPeersIn.has(userId)) {
             try { appState.screenPeersIn.get(userId).close(); } catch (_) {}
@@ -2041,6 +2049,7 @@ function updateStageLayout() {
 }
 
 function cleanupUserConnections(userId) {
+  stopWatchingScreen(userId);
   if (appState.screenPeersOut.has(userId)) {
     try { appState.screenPeersOut.get(userId).close(); } catch (_) {}
     appState.screenPeersOut.delete(userId);
@@ -2065,6 +2074,160 @@ function cleanupUserConnections(userId) {
   appState.streamMixers.delete(userId);
 
   removeScreenStream(userId);
+}
+
+// -----------------------------------------------------------------------------
+// TRANSMISSÃO PELO SERVIDOR (SFU)
+// Quem transmite manda o vídeo uma vez pro SFU; cada um que assiste recebe de lá.
+// Sinalização num WebSocket próprio (/sfu/ws), com senha temporária do server.js.
+// -----------------------------------------------------------------------------
+class SfuSession {
+  constructor({ ownerId, role, stream = null, onStream = null, onClose = null }) {
+    this.ownerId = ownerId;
+    this.role = role; // 'host' (eu transmito) ou 'viewer'
+    this.stream = stream;
+    this.onStream = onStream;
+    this.onClose = onClose;
+    this.pc = null;
+    this.ws = null;
+    this.closed = false;
+    this.retries = 0;
+  }
+
+  async start() {
+    if (this.closed) return;
+    const auth = await socket.timeout(5000).emitWithAck('sfu-token', { ownerId: this.ownerId, role: this.role }).catch(() => null);
+    if (this.closed) return;
+    if (!auth?.ok) {
+      this.retryLater();
+      return;
+    }
+    // Normalmente /sfu/ws no mesmo endereço da sala; SFU_PATH também aceita ws(s)://… completo
+    const base = /^wss?:\/\//.test(auth.path) ? auth.path : `${SERVER_URL.replace(/^http/, 'ws')}${auth.path}`;
+    const query = new URLSearchParams({ sala: auth.sala, role: auth.role, exp: auth.exp, token: auth.token });
+    const ws = new WebSocket(`${base}?${query}`);
+    this.ws = ws;
+    ws.onmessage = (e) => this.handle(e.data).catch((err) => console.warn('[SFU]', err));
+    ws.onclose = () => {
+      if (this.ws === ws) this.retryLater();
+    };
+  }
+
+  // Caiu (internet piscou, servidor reiniciou): tenta de novo algumas vezes
+  retryLater() {
+    if (this.closed) return;
+    this.resetPeer();
+    if (++this.retries > 5) {
+      console.warn(`[SFU] Desisti de conectar (${this.role} de ${this.ownerId})`);
+      this.close();
+      return;
+    }
+    setTimeout(() => this.start(), 1500 * this.retries);
+  }
+
+  send(data) {
+    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ to: 'sfu', data }));
+  }
+
+  newPeer(iceServers) {
+    this.resetPeer();
+    const PeerConnection = window.RTCPeerConnection || globalThis.RTCPeerConnection;
+    const pc = new PeerConnection({ ...RTC_CONFIG, iceServers: iceServers || RTC_CONFIG.iceServers });
+    this.pc = pc;
+    pc.onicecandidate = (e) => {
+      if (e.candidate) this.send({ candidate: e.candidate.toJSON() });
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') this.retries = 0;
+      if (pc.connectionState === 'failed' && this.pc === pc) this.ws?.close();
+    };
+    return pc;
+  }
+
+  async handle(raw) {
+    const msg = JSON.parse(raw);
+    if (msg.type === 'hello') {
+      this.iceServers = msg.iceServers;
+      if (this.role === 'host') await this.publish();
+    } else if (msg.type === 'signal' && msg.data?.sdp) {
+      const sdp = msg.data.sdp;
+      if (sdp.type === 'answer' && this.pc) {
+        await this.pc.setRemoteDescription(sdp);
+      } else if (sdp.type === 'offer' && this.role === 'viewer') {
+        await this.watch(sdp);
+      }
+    } else if (msg.type === 'host-left') {
+      this.resetPeer();
+    } else if (msg.type === 'error') {
+      console.warn('[SFU] Servidor recusou:', msg.message);
+    }
+  }
+
+  async publish() {
+    const pc = this.newPeer(this.iceServers);
+    this.stream.getTracks().forEach((track) => pc.addTrack(track, this.stream));
+    const offer = await pc.createOffer();
+    offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
+    await pc.setLocalDescription(offer);
+    const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
+    await applySenderBitrates(pc, preset.maxBitrate, 256000);
+    this.send({ sdp: pc.localDescription });
+  }
+
+  async watch(offer) {
+    const pc = this.newPeer(this.iceServers);
+    const MediaStreamClass = window.MediaStream || globalThis.MediaStream;
+    const remote = new MediaStreamClass();
+    pc.ontrack = (e) => {
+      if (!remote.getTracks().includes(e.track)) remote.addTrack(e.track);
+      this.onStream?.(remote);
+    };
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    answer.sdp = enhanceOpusStereoSdp(answer.sdp, 256000);
+    await pc.setLocalDescription(answer);
+    this.send({ sdp: pc.localDescription });
+  }
+
+  resetPeer() {
+    try { this.pc?.close(); } catch (_) {}
+    this.pc = null;
+  }
+
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    const ws = this.ws;
+    this.ws = null;
+    try { ws?.close(); } catch (_) {}
+    this.resetPeer();
+    this.onClose?.();
+  }
+}
+
+// Começa a assistir alguém: pelo SFU quando a sala tem, senão pede a oferta P2P
+function watchScreen(userId) {
+  if (!appState.sfuEnabled) {
+    socket.emit('request-stream', { targetId: userId, type: 'screen' });
+    return;
+  }
+  if (appState.sfuViewers.has(userId)) return;
+  const session = new SfuSession({
+    ownerId: userId,
+    role: 'viewer',
+    onStream: (stream) => {
+      const user = findUser(userId);
+      registerScreenStream(userId, user?.name || 'Amigo', stream, false);
+    },
+    onClose: () => appState.sfuViewers.delete(userId)
+  });
+  appState.sfuViewers.set(userId, session);
+  session.start();
+}
+
+function stopWatchingScreen(userId) {
+  appState.sfuViewers.get(userId)?.close();
+  appState.sfuViewers.delete(userId);
 }
 
 async function createScreenOfferForUser(targetId) {
@@ -2277,6 +2440,11 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
     try { pc.close(); } catch (_) {}
   }
   appState.screenPeersOut.clear();
+
+  for (const userId of [...appState.sfuViewers.keys()]) {
+    stopWatchingScreen(userId);
+    removeScreenStream(userId);
+  }
 
   // Close all voice connections
   for (const [peerId, pc] of appState.voicePeers.entries()) {
@@ -3008,11 +3176,17 @@ async function onStartScreenShare() {
     // Notify peers in channel
     socket.emit('user-state-changed', { isSharing: true, streamQuality: presetKey });
 
-    const ch = appState.channels.get(appState.currentChannelId);
-    if (ch) {
-      for (const [userId] of ch.users.entries()) {
-        if (userId !== appState.myId) {
-          createScreenOfferForUser(userId);
+    if (appState.sfuEnabled) {
+      // Manda uma vez pro servidor, que repassa pra todo mundo do canal
+      appState.sfuPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', stream });
+      appState.sfuPublisher.start();
+    } else {
+      const ch = appState.channels.get(appState.currentChannelId);
+      if (ch) {
+        for (const [userId] of ch.users.entries()) {
+          if (userId !== appState.myId) {
+            createScreenOfferForUser(userId);
+          }
         }
       }
     }
@@ -3062,6 +3236,8 @@ function onStopScreenShare() {
     window.electronAPI?.unrouteAppAudio?.().catch(() => {});
   }
   stopWinProcessAudio();
+  appState.sfuPublisher?.close();
+  appState.sfuPublisher = null;
 
   for (const [, pc] of appState.screenPeersOut.entries()) {
     try { pc.close(); } catch (_) {}
@@ -3147,7 +3323,7 @@ function setupWebRTCSignaling(sock) {
   // 4. Stream Request Handler
   sock.on('request-stream', ({ requesterId, type }) => {
     console.log(`[WebRTC] Stream requested by ${requesterId} (type: ${type})`);
-    if (type === 'screen' && appState.myUser.isSharing && appState.localScreenStream) {
+    if (type === 'screen' && appState.myUser.isSharing && appState.localScreenStream && !appState.sfuEnabled) {
       createScreenOfferForUser(requesterId);
     } else if (type === 'voice' && appState.myUser.isMicOn && appState.localMicStream) {
       createVoiceOfferForUser(requesterId);

@@ -9,7 +9,7 @@ import { Server } from 'socket.io';
 import path from 'node:path';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { randomUUID, createHash } from 'node:crypto';
+import { randomUUID, createHash, createHmac } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // Process-Level Defensive Error Boundaries
@@ -22,6 +22,10 @@ process.on('unhandledRejection', (reason) => {
 });
 
 const PORT = Number(process.env.PORT) || 8080;
+// Com SFU_SECRET (servidor na nuvem), as transmissões de tela passam pelo SFU em Go
+// (atrás do mesmo endereço, em /sfu/): quem transmite manda o vídeo uma vez só.
+const SFU_SECRET = process.env.SFU_SECRET || '';
+const SFU_PATH = process.env.SFU_PATH || '/sfu/ws';
 const PUBLIC_DIR = path.join(import.meta.dirname, 'public');
 
 const app = express();
@@ -380,7 +384,7 @@ io.on('connection', (socket) => {
   const summary = getChannelsSummary();
   socket.emit('channels-list', summary);
   socket.emit('channels-summary', summary);
-  socket.emit('me', { id: user.id, name: user.name, color: user.color });
+  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET) });
 
   // Client requests channels update
   socket.on('get-channels', safeHandler(() => {
@@ -583,6 +587,23 @@ io.on('connection', (socket) => {
       io.emit('channels-summary', summaryList);
     }
   });
+
+  // Senha temporária pro SFU. Sala do SFU = "<canal>__<quem transmite>":
+  // só o próprio dono transmite nela, e só quem está no mesmo canal assiste.
+  socket.on('sfu-token', safeHandler((rawPayload, maybeCallback) => {
+    const callback = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    if (!SFU_SECRET || !user.channelId) return callback({ ok: false });
+    const ownerId = typeof payload.ownerId === 'string' ? payload.ownerId : '';
+    const role = payload.role === 'host' ? 'host' : 'viewer';
+    const owner = io.sockets.sockets.get(ownerId)?.data?.user;
+    if (!owner || owner.channelId !== user.channelId) return callback({ ok: false });
+    if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
+    const sala = `${user.channelId}__${ownerId}`;
+    const exp = String(Math.floor(Date.now() / 1000) + 60);
+    const token = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}`).digest('hex');
+    callback({ ok: true, path: SFU_PATH, sala, role, exp, token });
+  }));
 
   // Perfil (nome, cor, bio, foto): vale pra todas as salas, então avisa todo mundo
   socket.on('update-profile', safeHandler((rawPayload) => {
