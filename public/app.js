@@ -140,6 +140,7 @@ const appState = {
     name: initialUsername,
     color: initialColor,
     isSharing: false,
+    isCameraOn: false,
     isMicOn: false,
     isDeafened: false,
     isSpeaking: false,
@@ -156,6 +157,7 @@ const appState = {
 
   // MediaStreams
   localScreenStream: null,
+  localCameraStream: null,
   localMicStream: null,
 
   // WebRTC Peer Connection Collections (Segregated Dual-Mesh)
@@ -168,7 +170,8 @@ const appState = {
 
   // Transmissões pelo servidor (SFU), quando a sala tem
   sfuEnabled: false,
-  sfuPublisher: null, // SfuSession da minha transmissão
+  sfuPublisher: null, // SfuSession da minha transmissão de tela
+  sfuCameraPublisher: null, // SfuSession da minha câmera
   sfuViewers: new Map(), // userId -> SfuSession de quem estou assistindo
   sfuVoicePublisher: null, // SfuSession do meu microfone (sala com SFU)
   sfuVoiceListeners: new Map(), // userId -> SfuSession da voz de cada um do canal
@@ -444,7 +447,13 @@ const handleUserStateChanged = (state) => {
   const ch = appState.channels.get(channelId);
   if (ch && ch.users.has(userId)) {
     const u = ch.users.get(userId);
-    if (state.shareKind) u.shareKind = state.shareKind;
+    if (typeof state.isCameraOn === 'boolean') {
+      const wasOn = u.isCameraOn;
+      u.isCameraOn = state.isCameraOn;
+      if (channelId === appState.currentChannelId && userId !== appState.myId && wasOn && !state.isCameraOn) {
+        unwatchScreen(streamKey(userId, 'camera'));
+      }
+    }
     if (typeof state.isSharing === 'boolean') {
       const wasSharing = u.isSharing;
       u.isSharing = state.isSharing;
@@ -690,7 +699,7 @@ function renderChannelsTree() {
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>
         <div class="user-indicators">
-          ${u.isSharing ? liveBadgeHtml(u) : ''}
+          ${liveBadgesHtml(u)}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon user-deafened" title="Áudio Desativado">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
@@ -703,16 +712,15 @@ function renderChannelsTree() {
       });
 
       // "AO VIVO": entra na transmissão (e no canal, se for outro)
-      const liveBadge = userLi.querySelector('.badge-live-stream');
-      if (liveBadge) {
+      userLi.querySelectorAll('.badge-live-stream').forEach((liveBadge) => {
         liveBadge.addEventListener('click', (e) => {
           e.stopPropagation();
           if (chId !== appState.currentChannelId) {
             switchChannel(chId);
           }
-          openStream(u.id);
+          openStream(liveBadge.dataset.streamKey);
         });
-      }
+      });
 
       usersUl.appendChild(userLi);
     });
@@ -787,7 +795,7 @@ function updateVoiceLounge() {
         </div>
         <span class="lounge-user-name">${escapeHtml(u.name)}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
-          ${u.isSharing ? liveBadgeHtml(u) : ''}
+          ${liveBadgesHtml(u)}
           ${!u.isMicOn ? `<span class="indicator-icon">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
@@ -798,9 +806,11 @@ function updateVoiceLounge() {
         if (isMe) openProfileModal();
         else openUserPopover(u.id, e);
       });
-      card.querySelector('.badge-live-stream')?.addEventListener('click', (e) => {
-        e.stopPropagation();
-        openStream(u.id);
+      card.querySelectorAll('.badge-live-stream').forEach((liveBadge) => {
+        liveBadge.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openStream(liveBadge.dataset.streamKey);
+        });
       });
       loungeUsersGrid.appendChild(card);
     });
@@ -1010,10 +1020,6 @@ function setupDockControls() {
   const toggleScreenShare = () => {
     if (!appState.myUser.isSharing && !appState.currentChannelId) {
       showToast('Entre num canal pra transmitir a tela.');
-      return;
-    }
-    if (appState.myUser.isSharing && appState.myUser.shareKind === 'camera') {
-      showToast('Desligue a câmera (📷) antes de transmitir a tela.');
       return;
     }
     if (!appState.myUser.isSharing) {
@@ -1809,15 +1815,41 @@ function setupSidebarResize() {
   });
 }
 
-function liveBadgeHtml(u) {
-  const watching = appState.activeStreams.has(u.id);
-  const label = u.shareKind === 'camera' ? '📷 CÂMERA' : '🔴 AO VIVO';
-  return `<span class="badge-live-stream${watching ? ' watching' : ''}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">${label}</span>`;
+// Tela e câmera da mesma pessoa são transmissões diferentes: a câmera tem a chave "<id>__cam"
+const CAMERA_SUFFIX = '__cam';
+const CAMERA_BITRATE = 2500000;
+
+function streamKey(userId, kind = 'screen') {
+  return kind === 'camera' ? `${userId}${CAMERA_SUFFIX}` : userId;
+}
+
+function streamKind(key) {
+  return String(key).endsWith(CAMERA_SUFFIX) ? 'camera' : 'screen';
+}
+
+function streamOwner(key) {
+  return streamKind(key) === 'camera' ? String(key).slice(0, -CAMERA_SUFFIX.length) : key;
+}
+
+function streamLabel(key) {
+  const ownerId = streamOwner(key);
+  const name = ownerId === appState.myId ? `${appState.myUser.name} (Você)` : findUser(ownerId)?.name || 'Amigo';
+  return streamKind(key) === 'camera' ? `${name} 📷` : name;
+}
+
+// Selos da lista/cards: "AO VIVO" (tela) e "CÂMERA", cada um abre a sua transmissão
+function liveBadgesHtml(u) {
+  const badge = (kind, label) => {
+    const key = streamKey(u.id, kind);
+    const watching = appState.activeStreams.has(key);
+    return `<span class="badge-live-stream${watching ? ' watching' : ''}" data-stream-key="${escapeHtml(key)}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">${label}</span>`;
+  };
+  return `${u.isSharing ? badge('screen', '🔴 AO VIVO') : ''}${u.isCameraOn ? badge('camera', '📷 CÂMERA') : ''}`;
 }
 
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
 function openStream(userId) {
-  if (userId === appState.myId) {
+  if (streamOwner(userId) === appState.myId) {
     if (appState.activeStreams.has(userId)) focusStream(userId);
     return;
   }
@@ -2018,8 +2050,14 @@ function routeElementThroughMixer(el, mixerEntry) {
 }
 
 // Volume de cada transmissão (0–200%), salvo pelo perfil de quem transmite
+// Chave do volume salvo: perfil de quem transmite (+ "__cam" pra câmera, que tem o seu)
+function streamVolumeKey(key) {
+  const base = volumeKey(findUser(streamOwner(key)));
+  return base && streamKind(key) === 'camera' ? `${base}${CAMERA_SUFFIX}` : base;
+}
+
 function savedStreamVolume(userId) {
-  return (prefs.streamVolumes || {})[volumeKey(findUser(userId))] ?? 100;
+  return (prefs.streamVolumes || {})[streamVolumeKey(userId)] ?? 100;
 }
 
 function getStreamVolume(userId) {
@@ -2036,7 +2074,7 @@ function setStreamVolume(userId, percent, { save = true } = {}) {
     videoEl.volume = Math.min(1.0, pct / 100);
     setRemoteElementMuted(videoEl, pct === 0);
   }
-  const key = volumeKey(findUser(userId));
+  const key = streamVolumeKey(userId);
   if (save && key) {
     const streamVolumes = { ...(prefs.streamVolumes || {}) };
     if (pct === 100) delete streamVolumes[key];
@@ -2062,7 +2100,8 @@ function syncStreamVolumeUi(userId) {
 }
 
 // Fotinho de quem transmite (selo da tela e abas do topo); sem perfil, a bolinha vermelha
-function streamerAvatarHtml(userId, className) {
+function streamerAvatarHtml(key, className) {
+  const userId = streamOwner(key);
   const u = userId === appState.myId ? { ...appState.myUser, id: userId, avatarV: myProfile.avatar ? 1 : 0 } : findUser(userId);
   if (!u) return '<span class="live-dot"></span>';
   return `<span class="${className}" style="background-color: ${safeColor(u.color)};">${avatarInnerHtml(u)}</span>`;
@@ -2313,6 +2352,15 @@ function updateStageLayout() {
 }
 
 function cleanupUserConnections(userId) {
+  // A câmera da pessoa é uma transmissão à parte
+  const camKey = streamKey(userId, 'camera');
+  unwatchScreen(camKey);
+  if (appState.screenPeersOut.has(camKey)) {
+    try { appState.screenPeersOut.get(camKey).close(); } catch (_) {}
+    appState.screenPeersOut.delete(camKey);
+  }
+  appState.mixerManager?.detachScreenStream(camKey);
+
   stopWatchingScreen(userId);
   if (appState.screenPeersOut.has(userId)) {
     try { appState.screenPeersOut.get(userId).close(); } catch (_) {}
@@ -2443,7 +2491,7 @@ class SfuSession {
       offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
       await pc.setLocalDescription(offer);
       const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
-      await applySenderBitrates(pc, preset.maxBitrate, 256000);
+      await applySenderBitrates(pc, this.kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, 256000);
     }
     this.send({ sdp: pc.localDescription });
   }
@@ -2540,43 +2588,49 @@ function stopSfuVoice() {
 }
 
 // Começa a assistir alguém: pelo SFU quando a sala tem, senão pede a oferta P2P
-function watchScreen(userId) {
+// key = streamKey(pessoa, 'screen' | 'camera'): a tela e a câmera de alguém são transmissões separadas
+function watchScreen(key) {
+  const ownerId = streamOwner(key);
+  const kind = streamKind(key);
   if (!appState.sfuEnabled) {
-    socket.emit('request-stream', { targetId: userId, type: 'screen' });
+    socket.emit('request-stream', { targetId: ownerId, type: kind });
     return;
   }
-  if (appState.sfuViewers.has(userId)) return;
+  if (appState.sfuViewers.has(key)) return;
   const session = new SfuSession({
-    ownerId: userId,
+    ownerId,
     role: 'viewer',
-    onStream: (stream) => {
-      const user = findUser(userId);
-      registerScreenStream(userId, user?.name || 'Amigo', stream, false);
-    },
-    onClose: () => appState.sfuViewers.delete(userId)
+    kind,
+    onStream: (stream) => registerScreenStream(key, streamLabel(key), stream, false),
+    onClose: () => {
+      if (appState.sfuViewers.get(key) === session) appState.sfuViewers.delete(key);
+    }
   });
-  appState.sfuViewers.set(userId, session);
+  appState.sfuViewers.set(key, session);
   session.start();
 }
 
-function stopWatchingScreen(userId) {
-  appState.sfuViewers.get(userId)?.close();
-  appState.sfuViewers.delete(userId);
+function stopWatchingScreen(key) {
+  appState.sfuViewers.get(key)?.close();
+  appState.sfuViewers.delete(key);
 }
 
-async function createScreenOfferForUser(targetId) {
-  if (!appState.localScreenStream || targetId === appState.myId) return;
+// kind 'screen' (tela) ou 'camera': cada um tem a sua conexão, chave = streamKey(pessoa, kind)
+async function createScreenOfferForUser(targetId, kind = 'screen') {
+  const localStream = kind === 'camera' ? appState.localCameraStream : appState.localScreenStream;
+  if (!localStream || targetId === appState.myId) return;
+  const key = streamKey(targetId, kind);
 
-  if (appState.screenPeersOut.has(targetId)) {
-    try { appState.screenPeersOut.get(targetId).close(); } catch (_) {}
+  if (appState.screenPeersOut.has(key)) {
+    try { appState.screenPeersOut.get(key).close(); } catch (_) {}
   }
 
   const PeerConnection = window.RTCPeerConnection || globalThis.RTCPeerConnection;
   const pc = new PeerConnection(RTC_CONFIG);
-  appState.screenPeersOut.set(targetId, pc);
+  appState.screenPeersOut.set(key, pc);
 
-  appState.localScreenStream.getTracks().forEach((track) => {
-    pc.addTrack(track, appState.localScreenStream);
+  localStream.getTracks().forEach((track) => {
+    pc.addTrack(track, localStream);
   });
 
   pc.onicecandidate = (event) => {
@@ -2584,16 +2638,16 @@ async function createScreenOfferForUser(targetId) {
       socket.emit('webrtc-ice-candidate', {
         targetId,
         candidate: event.candidate,
-        type: 'screen-out'
+        type: `${kind}-out`
       });
     }
   };
 
   // O amigo parou de assistir (fechou a conexão dele): para de codificar vídeo pra ele
   pc.onconnectionstatechange = () => {
-    if (['failed', 'closed'].includes(pc.connectionState) && appState.screenPeersOut.get(targetId) === pc) {
+    if (['failed', 'closed'].includes(pc.connectionState) && appState.screenPeersOut.get(key) === pc) {
       try { pc.close(); } catch (_) {}
-      appState.screenPeersOut.delete(targetId);
+      appState.screenPeersOut.delete(key);
     }
   };
 
@@ -2603,33 +2657,34 @@ async function createScreenOfferForUser(targetId) {
     const offer = await pc.createOffer();
     offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
     await pc.setLocalDescription(offer);
-    await applySenderBitrates(pc, preset.maxBitrate, 256000);
+    await applySenderBitrates(pc, kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, 256000);
 
     socket.emit('webrtc-offer', {
       targetId,
       sdp: pc.localDescription,
-      type: 'screen'
+      type: kind
     });
   } catch (err) {
     console.error(`[WebRTC] Error creating screen offer for ${targetId}:`, err);
   }
 }
 
-async function handleIncomingScreenOffer(senderId, sdp) {
-  if (appState.screenPeersIn.has(senderId)) {
-    try { appState.screenPeersIn.get(senderId).close(); } catch (_) {}
+async function handleIncomingScreenOffer(senderId, sdp, kind = 'screen') {
+  const key = streamKey(senderId, kind);
+  if (appState.screenPeersIn.has(key)) {
+    try { appState.screenPeersIn.get(key).close(); } catch (_) {}
   }
 
   const PeerConnection = window.RTCPeerConnection || globalThis.RTCPeerConnection;
   const pc = new PeerConnection(RTC_CONFIG);
-  appState.screenPeersIn.set(senderId, pc);
+  appState.screenPeersIn.set(key, pc);
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('webrtc-ice-candidate', {
         targetId: senderId,
         candidate: event.candidate,
-        type: 'screen-in'
+        type: `${kind}-in`
       });
     }
   };
@@ -2640,16 +2695,13 @@ async function handleIncomingScreenOffer(senderId, sdp) {
     if (!remoteStream.getTracks().includes(event.track)) {
       remoteStream.addTrack(event.track);
     }
-    const ch = appState.channels.get(appState.currentChannelId);
-    const senderUser = ch ? ch.users.get(senderId) : null;
-    const senderName = senderUser ? senderUser.name : 'Amigo';
-    registerScreenStream(senderId, senderName, remoteStream, false);
+    registerScreenStream(key, streamLabel(key), remoteStream, false);
   };
 
   try {
     const SessionDescription = window.RTCSessionDescription || globalThis.RTCSessionDescription;
     await pc.setRemoteDescription(new SessionDescription(sdp));
-    await drainIceCandidates(`screen-in:${senderId}`, pc);
+    await drainIceCandidates(`screen-in:${key}`, pc);
 
     const answer = await pc.createAnswer();
     answer.sdp = enhanceOpusStereoSdp(answer.sdp, 256000);
@@ -2658,7 +2710,7 @@ async function handleIncomingScreenOffer(senderId, sdp) {
     socket.emit('webrtc-answer', {
       targetId: senderId,
       sdp: pc.localDescription,
-      type: 'screen'
+      type: kind
     });
   } catch (err) {
     console.error(`[WebRTC] Error handling screen offer from ${senderId}:`, err);
@@ -2839,10 +2891,11 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
   // Clear ICE queue
   appState.iceCandidatesQueue.clear();
 
-  // If local user was sharing, stop screen share
+  // If local user was sharing, stop screen share (e a câmera)
   if (appState.myUser.isSharing) {
     onStopScreenShare();
   }
+  stopCameraShare({ silent: true });
 
   updateStageLayout();
   updateVoiceLounge();
@@ -3564,8 +3617,7 @@ async function onStartScreenShare() {
     registerScreenStream(appState.myId, `${appState.myUser.name} (Você)`, stream, true);
 
     // Notify peers in channel
-    appState.myUser.shareKind = 'screen';
-    socket.emit('user-state-changed', { isSharing: true, shareKind: 'screen', streamQuality: presetKey });
+    socket.emit('user-state-changed', { isSharing: true, streamQuality: presetKey });
 
     if (appState.sfuEnabled) {
       // Manda uma vez pro servidor, que repassa pra todo mundo do canal
@@ -3603,12 +3655,11 @@ async function onStartScreenShare() {
   }
 }
 
-// Câmera: vai pelo mesmo caminho da transmissão de tela (selo, SFU, janela flutuante, volume),
-// então é uma coisa ou outra: tela ou câmera
+// Câmera: transmissão separada da tela (dá pra ter as duas ligadas ao mesmo tempo).
+// Os amigos veem o selo "📷 CÂMERA" e clicam pra assistir, igual ao "AO VIVO".
 async function toggleCameraShare() {
-  if (appState.myUser.isSharing) {
-    if (appState.myUser.shareKind === 'camera') onStopScreenShare();
-    else showToast('Pare a transmissão de tela antes de ligar a câmera.');
+  if (appState.myUser.isCameraOn) {
+    stopCameraShare();
     return;
   }
   if (!appState.currentChannelId) {
@@ -3628,20 +3679,40 @@ async function toggleCameraShare() {
   }
   const videoTrack = stream.getVideoTracks()[0];
   videoTrack.contentHint = 'motion';
-  videoTrack.onended = () => onStopScreenShare();
+  videoTrack.onended = () => stopCameraShare();
 
-  appState.localScreenStream = stream;
-  appState.myUser.isSharing = true;
-  appState.myUser.shareKind = 'camera';
+  appState.localCameraStream = stream;
+  appState.myUser.isCameraOn = true;
   document.getElementById('btn-share-camera')?.classList.add('sharing');
-  registerScreenStream(appState.myId, `${appState.myUser.name} (Você)`, stream, true);
-  socket.emit('user-state-changed', { isSharing: true, shareKind: 'camera', streamQuality: appState.myUser.streamQuality });
+  registerScreenStream(streamKey(appState.myId, 'camera'), streamLabel(streamKey(appState.myId, 'camera')), stream, true);
+  socket.emit('user-state-changed', { isCameraOn: true });
 
   if (appState.sfuEnabled) {
-    appState.sfuPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', stream });
-    appState.sfuPublisher.start();
+    appState.sfuCameraPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'camera', stream });
+    appState.sfuCameraPublisher.start();
   }
+  // Sem SFU, cada amigo pede a câmera (request-stream 'camera') quando clica no selo
   showToast('📷 Câmera ligada! Seus amigos veem clicando em "CÂMERA" do seu lado.', 'success');
+  renderChannelsTree();
+  updateVoiceLounge();
+}
+
+function stopCameraShare({ silent = false } = {}) {
+  if (!appState.myUser.isCameraOn && !appState.localCameraStream) return;
+  appState.myUser.isCameraOn = false;
+  appState.localCameraStream?.getTracks().forEach((track) => track.stop());
+  appState.localCameraStream = null;
+  appState.sfuCameraPublisher?.close();
+  appState.sfuCameraPublisher = null;
+  for (const [key, pc] of [...appState.screenPeersOut.entries()]) {
+    if (streamKind(key) !== 'camera') continue;
+    try { pc.close(); } catch (_) {}
+    appState.screenPeersOut.delete(key);
+  }
+  removeScreenStream(streamKey(appState.myId, 'camera'));
+  socket.emit('user-state-changed', { isCameraOn: false });
+  document.getElementById('btn-share-camera')?.classList.remove('sharing');
+  if (!silent) showToast('Câmera desligada.');
   renderChannelsTree();
   updateVoiceLounge();
 }
@@ -3665,10 +3736,12 @@ function onStopScreenShare() {
   appState.sfuPublisher?.close();
   appState.sfuPublisher = null;
 
-  for (const [, pc] of appState.screenPeersOut.entries()) {
+  // Só as conexões da tela; as da câmera continuam
+  for (const [key, pc] of [...appState.screenPeersOut.entries()]) {
+    if (streamKind(key) !== 'screen') continue;
     try { pc.close(); } catch (_) {}
+    appState.screenPeersOut.delete(key);
   }
-  appState.screenPeersOut.clear();
 
   removeScreenStream(appState.myId);
 
@@ -3676,10 +3749,8 @@ function onStopScreenShare() {
 
   const shareBtn = document.getElementById('btn-share-screen');
   if (shareBtn) shareBtn.classList.remove('sharing');
-  document.getElementById('btn-share-camera')?.classList.remove('sharing');
 
-  showToast(appState.myUser.shareKind === 'camera' ? 'Câmera desligada.' : 'Transmissão de tela encerrada.');
-  appState.myUser.shareKind = null;
+  showToast('Transmissão de tela encerrada.');
   updateStageLayout();
   updateVoiceLounge();
 }
@@ -3690,8 +3761,8 @@ function setupWebRTCSignaling(sock) {
   // 1. Incoming WebRTC Offer
   sock.on('webrtc-offer', async ({ senderId, sdp, type }) => {
     console.log(`[WebRTC] Received ${type} offer from ${senderId}`);
-    if (type === 'screen') {
-      await handleIncomingScreenOffer(senderId, sdp);
+    if (type === 'screen' || type === 'camera') {
+      await handleIncomingScreenOffer(senderId, sdp, type);
     } else if (type === 'voice') {
       await handleIncomingVoiceOffer(senderId, sdp);
     }
@@ -3701,11 +3772,12 @@ function setupWebRTCSignaling(sock) {
   sock.on('webrtc-answer', async ({ senderId, sdp, type }) => {
     console.log(`[WebRTC] Received ${type} answer from ${senderId}`);
     const SessionDescription = window.RTCSessionDescription || globalThis.RTCSessionDescription;
-    if (type === 'screen') {
-      const pc = appState.screenPeersOut.get(senderId);
+    if (type === 'screen' || type === 'camera') {
+      const key = streamKey(senderId, type);
+      const pc = appState.screenPeersOut.get(key);
       if (pc && pc.signalingState !== 'stable') {
         await pc.setRemoteDescription(new SessionDescription(sdp));
-        await drainIceCandidates(`screen-out:${senderId}`, pc);
+        await drainIceCandidates(`screen-out:${key}`, pc);
       }
     } else if (type === 'voice') {
       const pc = appState.voicePeers.get(senderId);
@@ -3721,19 +3793,23 @@ function setupWebRTCSignaling(sock) {
     if (!candidate) return;
     const IceCandidate = window.RTCIceCandidate || globalThis.RTCIceCandidate;
     try {
-      if (type === 'screen-out') {
-        const pc = appState.screenPeersIn.get(senderId);
+      // "<kind>-out" vem de quem transmite (vai pra minha conexão de assistir) e "<kind>-in" de quem assiste
+      const [kind, dir] = String(type).split('-');
+      if ((kind === 'screen' || kind === 'camera') && dir === 'out') {
+        const key = streamKey(senderId, kind);
+        const pc = appState.screenPeersIn.get(key);
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           await pc.addIceCandidate(new IceCandidate(candidate));
         } else {
-          enqueueIceCandidate(`screen-in:${senderId}`, candidate);
+          enqueueIceCandidate(`screen-in:${key}`, candidate);
         }
-      } else if (type === 'screen-in') {
-        const pc = appState.screenPeersOut.get(senderId);
+      } else if ((kind === 'screen' || kind === 'camera') && dir === 'in') {
+        const key = streamKey(senderId, kind);
+        const pc = appState.screenPeersOut.get(key);
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
           await pc.addIceCandidate(new IceCandidate(candidate));
         } else {
-          enqueueIceCandidate(`screen-out:${senderId}`, candidate);
+          enqueueIceCandidate(`screen-out:${key}`, candidate);
         }
       } else if (type === 'voice') {
         const pc = appState.voicePeers.get(senderId);
@@ -3753,6 +3829,8 @@ function setupWebRTCSignaling(sock) {
     console.log(`[WebRTC] Stream requested by ${requesterId} (type: ${type})`);
     if (type === 'screen' && appState.myUser.isSharing && appState.localScreenStream && !appState.sfuEnabled) {
       createScreenOfferForUser(requesterId);
+    } else if (type === 'camera' && appState.myUser.isCameraOn && appState.localCameraStream && !appState.sfuEnabled) {
+      createScreenOfferForUser(requesterId, 'camera');
     } else if (type === 'voice' && appState.myUser.isMicOn && appState.localMicStream) {
       createVoiceOfferForUser(requesterId);
     }

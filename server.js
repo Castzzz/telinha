@@ -193,7 +193,7 @@ function publicUser(u) {
     avatarV: u.avatar ? u.avatarV : 0,
     channelId: u.channelId,
     isSharing: u.isSharing,
-    shareKind: u.shareKind,
+    isCameraOn: u.isCameraOn,
     isMicOn: u.isMicOn,
     isDeafened: u.isDeafened,
     isSpeaking: u.isSpeaking,
@@ -372,6 +372,7 @@ io.on('connection', (socket) => {
     avatarV: 0,
     channelId: null,
     isSharing: false,
+    isCameraOn: false,
     isMicOn: false,
     isDeafened: false,
     isSpeaking: false,
@@ -552,9 +553,10 @@ io.on('connection', (socket) => {
       user.isSharing = rawPayload.isSharing;
       presenceChanged = true;
     }
-    // O que está sendo transmitido: tela ou câmera (muda o selo "AO VIVO" dos outros)
-    if (rawPayload.shareKind === 'screen' || rawPayload.shareKind === 'camera') {
-      user.shareKind = rawPayload.shareKind;
+    // Câmera é uma transmissão separada da tela (dá pra ter as duas ao mesmo tempo)
+    if (typeof rawPayload.isCameraOn === 'boolean' && user.isCameraOn !== rawPayload.isCameraOn) {
+      user.isCameraOn = rawPayload.isCameraOn;
+      presenceChanged = true;
     }
     if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn) {
       user.isMicOn = rawPayload.isMicOn;
@@ -575,7 +577,7 @@ io.on('connection', (socket) => {
       userId: socket.id,
       channelId,
       isSharing: user.isSharing,
-      shareKind: user.shareKind,
+      isCameraOn: user.isCameraOn,
       isMicOn: user.isMicOn,
       isDeafened: user.isDeafened,
       isSpeaking: user.isSpeaking,
@@ -606,7 +608,9 @@ io.on('connection', (socket) => {
     if (!owner || owner.channelId !== user.channelId) return callback({ ok: false });
     if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
     // Voz também passa pelo SFU: cada um que fala tem a sua sala de voz no canal
-    const sala = payload.kind === 'voice' ? `${user.channelId}__${ownerId}__voz` : `${user.channelId}__${ownerId}`;
+    // Voz e câmera também passam pelo SFU, cada uma na sua sala (separada da tela)
+    const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : '';
+    const sala = `${user.channelId}__${ownerId}${suffix}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
     const token = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}`).digest('hex');
     callback({ ok: true, path: SFU_PATH, sala, role, exp, token });
@@ -789,6 +793,7 @@ function leaveCurrentChannel(socket) {
 
   user.channelId = null;
   user.isSharing = false;
+  user.isCameraOn = false;
   user.isSpeaking = false;
 
   const summaryList = getChannelsSummary();
