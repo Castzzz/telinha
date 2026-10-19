@@ -21,6 +21,8 @@ let publicUrl = null;
 let launcherError = null;
 const PORT = Number(process.env.PORT) || 8080;
 const CONNECT_PAGE = path.join(__dirname, 'connect.html');
+// Sala fixa na VM da Oracle (sempre ligada, transmissão pelo repassador)
+const SERVER_ROOM_URL = 'https://colheitafartus.duckdns.org';
 
 function configPath() {
   return path.join(app.getPath('userData'), 'config.json');
@@ -485,7 +487,7 @@ function fromLauncher(event) {
 function setupLauncherIpc() {
   ipcMain.handle('launcher-state', (event) => {
     if (!fromLauncher(event)) return {};
-    const state = { lastServerUrl: loadConfig().lastServerUrl || '', error: launcherError };
+    const state = { lastServerUrl: loadConfig().lastServerUrl || '', serverRoomUrl: SERVER_ROOM_URL, error: launcherError };
     launcherError = null;
     return state;
   });
@@ -511,6 +513,7 @@ function setupLauncherIpc() {
     const origin = normalizeServerUrl(raw);
     if (!origin) return { ok: false, error: 'Link inválido.' };
     if (!(await isTelinhaServer(origin))) {
+      if (origin === SERVER_ROOM_URL) return { ok: false, error: 'A sala do servidor não respondeu. Tente de novo daqui a pouco.' };
       return { ok: false, error: 'Não encontrei uma sala do Telinha nesse link. Confira se seu amigo está hospedando.' };
     }
     saveConfig({ lastServerUrl: origin });

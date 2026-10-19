@@ -36,6 +36,7 @@
     .link-box .row { margin-top: 8px; }
     .link-box .row button { flex: 1; }
     small { color: #949ba4; }
+    small.hint { display: block; margin-top: 8px; }
   </style>
 </head>
 <body>
@@ -44,6 +45,10 @@
   <div class="card">
     <h1>📺 Telinha</h1>
     <p class="sub">Voz e transmissão de tela com o som do PC.</p>
+
+    <h2>Sala do servidor</h2>
+    <button id="btn-server-room">🌐 Entrar na sala do servidor</button>
+    <small class="hint">Sempre ligada: não precisa ninguém hospedar.</small>
 
     <h2>Hospedar a sala</h2>
     <button id="btn-host">🏠 Hospedar no meu PC</button>
@@ -74,9 +79,11 @@
     };
 
     let hostLocalUrl = null;
+    let serverRoomUrl = null;
 
     api.getState().then((state) => {
-      if (state.lastServerUrl) $('server-url').value = state.lastServerUrl;
+      if (state.lastServerUrl && state.lastServerUrl !== state.serverRoomUrl) $('server-url').value = state.lastServerUrl;
+      serverRoomUrl = state.serverRoomUrl;
       if (state.error) msg(state.error, true);
     });
 
@@ -107,17 +114,21 @@
 
     $('btn-enter-host').addEventListener('click', () => api.open(hostLocalUrl));
 
-    const join = async () => {
-      const url = $('server-url').value.trim();
-      if (!url) return msg('Cole o link que seu amigo mandou.', true);
-      $('btn-join').disabled = true;
+    const join = async (url, btn) => {
+      btn.disabled = true;
       msg('Conectando…');
       const res = await api.join(url);
-      $('btn-join').disabled = false;
+      btn.disabled = false;
       if (!res.ok) msg(res.error, true);
     };
-    $('btn-join').addEventListener('click', join);
-    $('server-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') join(); });
+    const joinFriend = () => {
+      const url = $('server-url').value.trim();
+      if (!url) return msg('Cole o link que seu amigo mandou.', true);
+      join(url, $('btn-join'));
+    };
+    $('btn-join').addEventListener('click', joinFriend);
+    $('btn-server-room').addEventListener('click', () => join(serverRoomUrl, $('btn-server-room')));
+    $('server-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinFriend(); });
   </script>
 </body>
 </html>
