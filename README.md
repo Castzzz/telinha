@@ -111,6 +111,7 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Trocar os atalhos** | ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
 | **Tela cheia** | Botão ⛶ no canto de baixo, tecla `F` ou duplo clique na transmissão |
+| **Janela flutuante** | Botão ⧉ no canto de baixo ou tecla `P`: a transmissão fica numa janelinha por cima do jogo/outros programas |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |
 
 ### 🔊 O som da transmissão
@@ -132,6 +133,14 @@ Só afeta a sua voz, nunca o som da transmissão.
 
 ### ⌨️ Atalhos com o jogo aberto
 Os atalhos funcionam mesmo com o Telinha minimizado, se forem uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Telinha na frente, senão você não conseguiria digitar essa letra no jogo.
+
+No **Linux com Wayland** (Hyprland, Sway…) quem segura a tecla no meio do jogo é o sistema: crie o atalho na config dele chamando o Telinha. No Hyprland:
+
+```
+bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute
+```
+
+(`/deafen` no lugar de `/mute` pra ensurdecer; `bindn` deixa o jogo receber a tecla também.)
 
 ---
 

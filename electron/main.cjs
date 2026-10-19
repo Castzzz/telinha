@@ -8,6 +8,9 @@ const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
 
 registerAppScheme();
+// No Wayland o portal só aceita atalho global de app com .desktop: sem isso, rodando
+// com "npm run app", o Chromium se registra como "electron" e o portal recusa
+app.setDesktopName('telinha.desktop');
 
 // Habilita suporte nativo a PipeWire e loopback de áudio de tela no Linux/Wayland/X11
 // GlobalShortcutsPortal: atalhos globais (mutar com o app em segundo plano) no Wayland
@@ -90,6 +93,36 @@ function setGlobalHotkeys(sender, hotkeys) {
     }
   }
   return registered;
+}
+
+// No Wayland o atalho global de verdade é do compositor (o portal do Electron dá o mesmo
+// id pra todos os atalhos e o Hyprland nem liga a tecla sozinho). O compositor chama:
+//   curl -s --unix-socket "$XDG_RUNTIME_DIR/telinha.sock" http://telinha/mute   (ou /deafen)
+let hotkeySocketServer = null;
+
+function hotkeySocketPath() {
+  return process.env.XDG_RUNTIME_DIR ? path.join(process.env.XDG_RUNTIME_DIR, 'telinha.sock') : null;
+}
+
+function startHotkeySocket() {
+  const sock = hotkeySocketPath();
+  if (process.platform !== 'linux' || !sock) return;
+  try { fs.unlinkSync(sock); } catch {}
+  hotkeySocketServer = http.createServer((req, res) => {
+    const action = (req.url || '').replace(/^\/+/, '');
+    const ok = ['mute', 'deafen'].includes(action) && mainWindow && !mainWindow.isDestroyed();
+    if (ok) mainWindow.webContents.send('global-hotkey', action);
+    res.writeHead(ok ? 200 : 404).end(ok ? 'ok\n' : 'ação desconhecida (use /mute ou /deafen)\n');
+  });
+  hotkeySocketServer.on('error', (err) => console.warn('[Electron] Socket de atalhos:', err.message));
+  hotkeySocketServer.listen(sock);
+}
+
+function stopHotkeySocket() {
+  if (!hotkeySocketServer) return;
+  hotkeySocketServer.close();
+  hotkeySocketServer = null;
+  try { fs.unlinkSync(hotkeySocketPath()); } catch {}
 }
 
 function ensureLinuxSystemAudioSource() {
@@ -691,6 +724,7 @@ app.whenReady().then(() => {
   setupLauncherIpc();
   setupMenu();
   setupAutoUpdater();
+  startHotkeySocket();
   return createWindow();
 });
 
@@ -699,6 +733,7 @@ app.on('will-quit', () => {
   unrouteAppAudio();
   stopWinAudio();
   globalShortcut.unregisterAll();
+  stopHotkeySocket();
 });
 
 app.on('window-all-closed', () => {

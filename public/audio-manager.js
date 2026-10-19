@@ -132,7 +132,8 @@ export function generateMicrophoneConstraints(microphoneDeviceId) {
       deviceId: microphoneDeviceId ? { exact: microphoneDeviceId } : undefined,
       echoCancellation: true,
       noiseSuppression: true,
-      autoGainControl: true,
+      // Sem AGC: ele abaixava o mic sozinho quando a pessoa gritava (no Windows mexe até no volume do sistema)
+      autoGainControl: false,
       channelCount: 1,
       sampleRate: { ideal: 48000 }
     },

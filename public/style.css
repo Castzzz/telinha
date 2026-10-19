@@ -262,6 +262,7 @@ ul {
 
 /* ================= LEFT SIDEBAR (CHANNELS) ================= */
 .sidebar-channels {
+  position: relative;
   width: 250px;
   background: var(--bg-secondary);
   border-right: 1px solid var(--border-subtle);
@@ -1380,6 +1381,31 @@ ul {
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Borda arrastável que muda a largura da barra de canais */
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  transition: background var(--transition-fast);
+}
+
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible,
+.resizing-sidebar .sidebar-resizer {
+  background: var(--accent-brand);
+  outline: none;
+}
+
+/* Durante o arraste: sem selecionar texto e com o cursor de redimensionar em tudo */
+.resizing-sidebar {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* ================= RESPONSIVE ADAPTATIONS ================= */

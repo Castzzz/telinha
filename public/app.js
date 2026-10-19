@@ -1127,6 +1127,7 @@ function setupModals() {
   });
 
   $('#btn-stage-fullscreen')?.addEventListener('click', toggleStageFullscreen);
+  $('#btn-stage-pip')?.addEventListener('click', toggleStagePip);
 
   // Populate audio devices in settings modal
   const populateSettingsDevices = async () => {
@@ -1242,6 +1243,11 @@ function setupModals() {
       e.preventDefault();
       toggleStageFullscreen();
     }
+    // P = janela flutuante
+    if (!handled && !typing && accelerator === 'P') {
+      e.preventDefault();
+      toggleStagePip();
+    }
   });
 }
 
@@ -1265,6 +1271,35 @@ function toggleStageFullscreen() {
     console.warn('[Stage] Tela cheia recusada:', err);
     showToast('❌ Não consegui abrir em tela cheia.', 'error');
   });
+}
+
+// Janela flutuante (picture-in-picture): a transmissão aberta continua visível por cima
+// do jogo ou de outro programa. No mosaico vai a que está em foco.
+async function toggleStagePip() {
+  if (document.pictureInPictureElement) {
+    document.exitPictureInPicture().catch(() => {});
+    return;
+  }
+  const userId = appState.activeStreams.has(appState.expandedStreamUserId)
+    ? appState.expandedStreamUserId
+    : appState.activeStreams.has(appState.focusedStreamUserId)
+      ? appState.focusedStreamUserId
+      : appState.activeStreams.keys().next().value;
+  const video = userId && document.getElementById(`video-el-${userId}`);
+  if (!video) {
+    showToast('Nenhuma transmissão pra abrir na janela flutuante.');
+    return;
+  }
+  if (!document.pictureInPictureEnabled) {
+    showToast('❌ Janela flutuante não disponível aqui.', 'error');
+    return;
+  }
+  try {
+    await video.requestPictureInPicture();
+  } catch (err) {
+    console.warn('[Stage] Janela flutuante recusada:', err);
+    showToast('❌ Não consegui abrir a janela flutuante.', 'error');
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -1641,6 +1676,7 @@ function setupHotkeys() {
     });
     window.electronAPI.onGlobalHotkey?.((action) => triggerHotkey(action));
     applyGlobalHotkeys();
+    if (window.electronAPI.isWayland) $('#hotkey-wayland-help')?.classList.remove('hidden');
   }
 
   $$('[data-hotkey-action]').forEach((btn) => {
@@ -1673,6 +1709,46 @@ function setupHotkeys() {
   }, true);
 
   renderHotkeys();
+}
+
+// Barra de salas e canais: arrasta a borda direita pra mudar a largura (guardada nas preferências)
+const SIDEBAR_MIN_WIDTH = 180;
+const SIDEBAR_MAX_WIDTH = 480;
+
+function setupSidebarResize() {
+  const sidebar = $('#sidebar-channels');
+  const handle = $('#sidebar-resizer');
+  if (!sidebar || !handle) return;
+  const clamp = (w) => Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, w)));
+  const apply = (w) => { sidebar.style.width = w ? `${clamp(w)}px` : ''; };
+  const save = () => savePrefs({ sidebarWidth: sidebar.style.width ? parseInt(sidebar.style.width, 10) : null });
+  apply(prefs.sidebarWidth);
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = sidebar.getBoundingClientRect().width;
+    handle.setPointerCapture(e.pointerId);
+    document.body.classList.add('resizing-sidebar');
+    const onMove = (ev) => apply(startWidth + ev.clientX - startX);
+    const onUp = () => {
+      handle.removeEventListener('pointermove', onMove);
+      document.body.classList.remove('resizing-sidebar');
+      save();
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp, { once: true });
+    handle.addEventListener('pointercancel', onUp, { once: true });
+  });
+  handle.addEventListener('dblclick', () => { apply(null); save(); });
+  handle.addEventListener('keydown', (e) => {
+    const step = e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0;
+    if (!step) return;
+    e.preventDefault();
+    apply(sidebar.getBoundingClientRect().width + step);
+    save();
+  });
 }
 
 // Abas do topo e "AO VIVO" da lista: abre essa transmissão (com várias, sai do mosaico)
@@ -1943,6 +2019,9 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 function removeScreenStream(userId) {
   appState.activeStreams.delete(userId);
   const tile = document.getElementById(`video-tile-${userId}`);
+  if (document.pictureInPictureElement && tile?.contains(document.pictureInPictureElement)) {
+    document.exitPictureInPicture().catch(() => {});
+  }
   if (tile) tile.remove();
 
   if (appState.mixerManager) {
@@ -3396,6 +3475,7 @@ function initApp() {
   setupUserPopover();
   setupProfileModal();
   setupHotkeys();
+  setupSidebarResize();
   renderChannelsTree();
   updateTopBar();
   updateVoiceLounge();

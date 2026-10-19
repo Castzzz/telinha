@@ -43,6 +43,9 @@
 
     <!-- LEFT SIDEBAR: CHANNELS TREE & USER DOCK -->
     <aside id="sidebar-channels" class="sidebar-channels">
+      <div class="sidebar-resizer" id="sidebar-resizer" role="separator" aria-orientation="vertical"
+        aria-label="Largura da barra de canais" tabindex="0"
+        title="Arraste pra mudar a largura (duplo clique volta ao normal)"></div>
       <div class="sidebar-header">
         <h2 class="sidebar-title">Salas & Canais</h2>
         <button id="btn-header-add-channel" class="btn-icon-add" title="Criar novo canal de voz">+</button>
@@ -204,6 +207,7 @@
         </div>
 
         <div class="stage-controls-right">
+          <button id="btn-stage-pip" class="btn-control-icon" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
         </div>
       </footer>
@@ -347,6 +351,12 @@
             Clique no botão e aperte a tecla (Esc cancela, Backspace remove).
             Com o Telinha minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
             pra não roubar letras que você digita em outros programas.
+          </p>
+          <p class="form-help hidden" id="hotkey-wayland-help">
+            No Linux com Wayland quem segura a tecla no meio do jogo é o sistema. No Hyprland, coloque na config
+            (troque F8 pela sua tecla; <code>bindn</code> deixa o jogo receber a tecla também):<br />
+            <code>bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute</code><br />
+            Pra ensurdecer, use <code>/deafen</code> no fim.
           </p>
         </div>
 
