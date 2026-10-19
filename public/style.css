@@ -231,16 +231,6 @@ ul {
   gap: 10px;
 }
 
-.quality-select {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
-  border-radius: var(--radius-sm);
-  padding: 5px 8px;
-  font-size: 12px;
-  color: var(--text-normal);
-  cursor: pointer;
-}
-
 .btn-topbar-tool {
   background: var(--bg-secondary);
   border: 1px solid var(--border-medium);
@@ -1655,4 +1645,52 @@ ul {
    env(titlebar-area-*) diz quanto espaço eles ocupam (fora do app vale 0). */
 .app-topbar {
   padding-right: calc(16px + 100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
+
+/* ==================== QUALIDADE (escolhida ao clicar em transmitir) ==================== */
+.quality-chooser {
+  margin-bottom: 14px;
+}
+
+.quality-chooser-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.quality-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quality-option {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-normal);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.quality-option:hover {
+  background: var(--bg-hover);
+}
+
+.quality-option.selected {
+  background: var(--accent-brand);
+  border-color: var(--accent-brand);
+  color: #fff;
+}
+
+.quality-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
 }

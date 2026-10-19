@@ -143,7 +143,7 @@ const appState = {
     isMicOn: false,
     isDeafened: false,
     isSpeaking: false,
-    streamQuality: '1080p60'
+    streamQuality: QUALITY_PRESETS[prefs.streamQuality] ? prefs.streamQuality : '1080p60'
   },
   currentChannelId: initialChannel,
   channels: new Map(), // channelId -> ChannelRecord
@@ -965,8 +965,9 @@ function setupDockControls() {
     if (!appState.myUser.isSharing) {
       appState.myUser.isSharing = true;
       shareBtn?.classList.add('sharing');
-      onStartScreenShare(appState.myUser.streamQuality);
-      socket.emit('user-state-changed', { isSharing: true });
+      // Só avisa a sala quando a captura começar de verdade (onStartScreenShare emite):
+      // avisar aqui deixava "AO VIVO" pros amigos mesmo se a pessoa cancelasse
+      onStartScreenShare();
     } else {
       appState.myUser.isSharing = false;
       shareBtn?.classList.remove('sharing');
@@ -2529,6 +2530,7 @@ function promptElectronDesktopSource() {
     });
 
     renderSources();
+    renderQualityChoosers();
     modal.classList.remove('hidden');
   });
 }
@@ -2581,6 +2583,7 @@ function promptAudioSource() {
     const refresh = document.getElementById('audio-picker-refresh');
     if (refresh) refresh.onclick = render;
 
+    renderQualityChoosers();
     render().then(() => modal.classList.remove('hidden'));
   });
 }
@@ -2705,11 +2708,60 @@ async function acquireWindowsLoopbackTrack(sourceId) {
   return audioOnly.getAudioTracks()[0] || null;
 }
 
-async function onStartScreenShare(qualityPreset) {
-  const presetKey = qualityPreset || appState.myUser.streamQuality || '1080p60';
-  const preset = QUALITY_PRESETS[presetKey] || QUALITY_PRESETS['1080p60'];
-  console.log(`[WebRTC] Starting screen share with preset: ${presetKey}`);
+// Qualidade escolhida na hora de transmitir (dentro do primeiro modal do fluxo).
+// Ordem igual à do antigo seletor do topo, que nunca chegou a ser lido.
+const QUALITY_LABELS = {
+  '720p30': '720p · 30 fps',
+  '720p60': '720p · 60 fps',
+  '1080p30': '1080p · 30 fps',
+  '1080p60': '1080p · 60 fps',
+  '1440p60': '1440p · 60 fps',
+  nativa60: 'Nativa · 60 fps'
+};
 
+function renderQualityChoosers() {
+  $$('[data-quality-chooser]').forEach((box) => {
+    box.innerHTML = `
+      <span class="quality-chooser-label">Qualidade da transmissão</span>
+      <div class="quality-options">
+        ${Object.entries(QUALITY_LABELS)
+          .map(
+            ([key, label]) =>
+              `<button type="button" class="quality-option ${key === appState.myUser.streamQuality ? 'selected' : ''}" data-quality="${key}">${label}</button>`
+          )
+          .join('')}
+      </div>
+      <p class="quality-hint">Internet fraca ou amigos travando? Use 720p. 60 fps é melhor pra jogo; 30 fps pra filme.</p>
+    `;
+    box.querySelectorAll('[data-quality]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        appState.myUser.streamQuality = btn.dataset.quality;
+        savePrefs({ streamQuality: btn.dataset.quality });
+        renderQualityChoosers();
+      });
+    });
+  });
+}
+
+// Navegador: não há modal de som nem de tela antes, então pergunta a qualidade aqui
+function promptShareQuality() {
+  return new Promise((resolve) => {
+    const modal = $('#modal-share-quality');
+    if (!modal) return resolve(true);
+    const finish = (ok) => {
+      modal.classList.add('hidden');
+      resolve(ok);
+    };
+    $('#btn-share-quality-go').onclick = () => finish(true);
+    modal.querySelectorAll('[data-close-modal="modal-share-quality"]').forEach((btn) => {
+      btn.onclick = () => finish(false);
+    });
+    renderQualityChoosers();
+    modal.classList.remove('hidden');
+  });
+}
+
+async function onStartScreenShare() {
   if (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !window.electronAPI)) {
     showToast('❌ Captura de tela não suportada ou bloqueada pelo navegador.', 'error');
     appState.myUser.isSharing = false;
@@ -2719,6 +2771,12 @@ async function onStartScreenShare(qualityPreset) {
   }
 
   try {
+    if (!window.electronAPI && !(await promptShareQuality())) {
+      appState.myUser.isSharing = false;
+      document.getElementById('btn-share-screen')?.classList.remove('sharing');
+      return;
+    }
+
     let audioChoice = { mode: 'system' };
     if (window.electronAPI?.platform === 'linux') {
       audioChoice = await promptAudioSource();
@@ -2744,6 +2802,11 @@ async function onStartScreenShare(qualityPreset) {
         return;
       }
     }
+
+    // Lida só agora: a qualidade pode ter sido trocada nos modais acima
+    const presetKey = appState.myUser.streamQuality;
+    const preset = QUALITY_PRESETS[presetKey] || QUALITY_PRESETS['1080p60'];
+    console.log(`[WebRTC] Starting screen share with preset: ${presetKey}`);
 
     const isWindowsElectron = window.electronAPI?.platform === 'win32';
     let winAudioError = null;

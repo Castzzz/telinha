@@ -104,7 +104,7 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 |---|---|
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M` |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D` |
-| **Transmitir minha tela** | Botão 🖥️ → escolha a tela ou a janela |
+| **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
 | **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |

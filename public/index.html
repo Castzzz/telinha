@@ -32,18 +32,6 @@
     </div>
 
     <div class="topbar-right">
-      <div class="quality-selector-wrap">
-        <label for="quality-select" class="visually-hidden">Qualidade:</label>
-        <select id="quality-select" class="quality-select" title="Qualidade da sua transmissão de tela">
-          <option value="1080p60" selected>1080p · 60 fps</option>
-          <option value="1080p30">1080p · 30 fps</option>
-          <option value="720p60">720p · 60 fps</option>
-          <option value="720p30">720p · 30 fps</option>
-          <option value="1440p60">1440p · 60 fps</option>
-          <option value="nativa60">Nativa · 60 fps</option>
-        </select>
-      </div>
-
       <button id="btn-toggle-mosaic" class="btn-topbar-tool" title="Alternar entre Palco Único e Modo Mosaico (Grid)">
         🔲 Mosaico
       </button>
@@ -455,6 +443,7 @@
         <h3>Compartilhar sua Tela ou Janela</h3>
         <button class="modal-close-btn" data-close-modal="modal-screen-picker">✕</button>
       </div>
+      <div class="quality-chooser" data-quality-chooser></div>
       <div class="picker-tabs">
         <button class="picker-tab active" data-picker-tab="screens">Telas Inteiras</button>
         <button class="picker-tab" data-picker-tab="windows">Janelas de Aplicativos</button>
@@ -475,6 +464,7 @@
         <h3>Qual som transmitir?</h3>
         <button class="modal-close-btn" data-close-modal="modal-audio-picker">✕</button>
       </div>
+      <div class="quality-chooser" data-quality-chooser></div>
       <p style="margin:0 0 12px;color:#b5bac1;font-size:13px;">
         Escolha um app pra mandar <strong>só o som dele</strong> (sem as vozes da chamada e sem outros sons do PC).
         O app precisa estar aberto tocando algum som.
@@ -483,6 +473,21 @@
       <div class="modal-actions">
         <button type="button" class="btn-secondary" id="audio-picker-refresh">🔄 Atualizar lista</button>
         <button type="button" class="btn-secondary" data-close-modal="modal-audio-picker">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUALIDADE DA TRANSMISSÃO (navegador: não tem outro modal antes de transmitir) -->
+  <div id="modal-share-quality" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-share-quality-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-share-quality-title">Transmitir sua tela</h3>
+        <button class="modal-close-btn" data-close-modal="modal-share-quality">✕</button>
+      </div>
+      <div class="quality-chooser" data-quality-chooser></div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" data-close-modal="modal-share-quality">Cancelar</button>
+        <button type="button" class="btn-primary" id="btn-share-quality-go">🖥️ Transmitir</button>
       </div>
     </div>
   </div>
