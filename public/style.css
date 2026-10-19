@@ -169,6 +169,16 @@ ul {
   transition: background var(--transition-fast);
 }
 
+.btn-topbar-action.btn-leave-call {
+  background: rgba(242, 63, 67, 0.15);
+  color: var(--accent-red);
+}
+
+.btn-topbar-action.btn-leave-call:hover {
+  background: var(--accent-red);
+  color: #fff;
+}
+
 .btn-topbar-action:hover {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
@@ -1745,4 +1755,23 @@ ul {
 .btn-control-icon:hover {
   background: var(--bg-hover);
   color: var(--text-header);
+}
+
+/* ==================== ASSISTIR SÓ QUANDO CLICAR NO "AO VIVO" ==================== */
+.badge-live-stream.watching {
+  background: var(--accent-red);
+  border-color: var(--accent-red);
+  color: #fff;
+}
+
+.stream-tab-close {
+  margin-left: 4px;
+  padding: 0 3px;
+  border-radius: var(--radius-sm);
+  opacity: 0.6;
+}
+
+.stream-tab-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.15);
 }

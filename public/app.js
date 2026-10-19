@@ -250,7 +250,8 @@ socket.on('connect', () => {
   appState.myId = socket.id;
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
-  // Send join-channel with current user state
+  // Send join-channel with current user state (fora da call não entra em nenhum)
+  if (!appState.currentChannelId) return;
   socket.emit('join-channel', {
     channelId: appState.currentChannelId,
     userName: appState.myUser.name,
@@ -268,6 +269,7 @@ socket.on('disconnect', (reason) => {
 
 socket.on('reconnect', () => {
   showToast('Reconectado com sucesso!', 'success');
+  if (!appState.currentChannelId) return;
   socket.emit('join-channel', {
     channelId: appState.currentChannelId,
     userName: appState.myUser.name,
@@ -356,13 +358,10 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages 
     appState.channelChats.set(channelId, recentMessages);
   }
 
-  // Request active streams / voice from peers who are already broadcasting in this channel
+  // Pede a voz de quem já está falando. Transmissão só quando a pessoa clica no "AO VIVO".
   if (Array.isArray(users)) {
     users.forEach((u) => {
       if (u.id !== appState.myId) {
-        if (u.isSharing) {
-          watchScreen(u.id);
-        }
         if (u.isMicOn && appState.myUser.isMicOn) {
           socket.emit('request-stream', { targetId: u.id, type: 'voice' });
         }
@@ -401,10 +400,6 @@ const handleUserJoined = (data) => {
     updateTopBar();
     updateVoiceLounge();
 
-    // If I am sharing screen, create WebRTC offer for newly joined user
-    if (appState.myUser.isSharing && appState.localScreenStream && !appState.sfuEnabled) {
-      createScreenOfferForUser(user.id);
-    }
     // If my microphone is on, create WebRTC voice offer for newly joined user
     if (appState.myUser.isMicOn && appState.localMicStream) {
       createVoiceOfferForUser(user.id);
@@ -447,17 +442,9 @@ const handleUserStateChanged = (state) => {
     if (typeof state.isSharing === 'boolean') {
       const wasSharing = u.isSharing;
       u.isSharing = state.isSharing;
-      if (channelId === appState.currentChannelId && userId !== appState.myId) {
-        if (!wasSharing && state.isSharing) {
-          watchScreen(userId);
-        } else if (wasSharing && !state.isSharing) {
-          stopWatchingScreen(userId);
-          removeScreenStream(userId);
-          if (appState.screenPeersIn.has(userId)) {
-            try { appState.screenPeersIn.get(userId).close(); } catch (_) {}
-            appState.screenPeersIn.delete(userId);
-          }
-        }
+      // Quem começou a transmitir só ganha o "AO VIVO"; assistir é escolha de cada um
+      if (channelId === appState.currentChannelId && userId !== appState.myId && wasSharing && !state.isSharing) {
+        unwatchScreen(userId);
       }
     }
     if (typeof state.isMicOn === 'boolean') {
@@ -574,6 +561,27 @@ function switchChannel(targetChannelId) {
   showToast(`Conectado a #${targetName}`);
 }
 
+// Sair da call sem fechar o app: desliga voz e transmissões e fica fora de todos os canais.
+// Clicar num canal da lista entra de novo.
+function leaveCall() {
+  const oldChannelId = appState.currentChannelId;
+  if (!oldChannelId) return;
+  onWebRTCChannelChange(oldChannelId, null);
+  appState.currentChannelId = null;
+  appState.channels.get(oldChannelId)?.users.delete(appState.myId);
+  socket.emit('leave-channel');
+
+  const params = new URLSearchParams(window.location.search);
+  params.delete('channel');
+  window.history.replaceState({}, '', `${window.location.pathname}?${params}`);
+
+  renderChannelsTree();
+  updateTopBar();
+  renderChannelChat(null);
+  updateVoiceLounge();
+  showToast('Você saiu da call. Clique num canal pra entrar de novo.');
+}
+
 // -----------------------------------------------------------------------------
 // 6. UI RENDERING: CHANNELS & LIVE PRESENCE TREE
 // -----------------------------------------------------------------------------
@@ -678,7 +686,7 @@ function renderChannelsTree() {
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>
         <div class="user-indicators">
-          ${u.isSharing ? `<span class="badge-live-stream" title="Transmitindo Tela">🔴 AO VIVO</span>` : ''}
+          ${u.isSharing ? liveBadgeHtml(u.id) : ''}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon user-deafened" title="Áudio Desativado">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
@@ -690,7 +698,7 @@ function renderChannelsTree() {
         else openUserPopover(u.id, e);
       });
 
-      // Clicking on live badge focuses stream
+      // "AO VIVO": entra na transmissão (e no canal, se for outro)
       const liveBadge = userLi.querySelector('.badge-live-stream');
       if (liveBadge) {
         liveBadge.addEventListener('click', (e) => {
@@ -698,7 +706,7 @@ function renderChannelsTree() {
           if (chId !== appState.currentChannelId) {
             switchChannel(chId);
           }
-          focusStream(u.id);
+          openStream(u.id);
         });
       }
 
@@ -711,9 +719,12 @@ function renderChannelsTree() {
 }
 
 function updateTopBar() {
+  const inCall = Boolean(appState.currentChannelId);
   const ch = appState.channels.get(appState.currentChannelId);
-  const name = ch ? ch.name : appState.currentChannelId;
-  const count = ch ? ch.users.size : 1;
+  const name = ch ? ch.name : appState.currentChannelId || 'Fora da call';
+  const count = ch ? ch.users.size : inCall ? 1 : 0;
+
+  $('#btn-leave-call')?.classList.toggle('hidden', !inCall);
 
   const topName = $('#topbar-channel-name');
   if (topName) topName.textContent = name;
@@ -725,7 +736,10 @@ function updateTopBar() {
   if (chatLabel) chatLabel.textContent = `#${name}-chat`;
 
   const chatInput = $('#chat-input');
-  if (chatInput) chatInput.placeholder = `Conversar em #${name}...`;
+  if (chatInput) {
+    chatInput.disabled = !inCall;
+    chatInput.placeholder = inCall ? `Conversar em #${name}...` : 'Entre num canal pra conversar';
+  }
 }
 
 function updateVoiceLounge() {
@@ -737,7 +751,9 @@ function updateVoiceLounge() {
   const name = ch ? ch.name : appState.currentChannelId;
 
   const title = $('#lounge-channel-title');
-  if (title) title.textContent = `Canal de Voz: ${name}`;
+  if (title) {
+    title.textContent = appState.currentChannelId ? `Canal de Voz: ${name}` : 'Fora da call: clique num canal da lista pra entrar';
+  }
 
   const iconEl = $('#lounge-channel-icon');
   if (iconEl) {
@@ -767,7 +783,7 @@ function updateVoiceLounge() {
         </div>
         <span class="lounge-user-name">${escapeHtml(u.name)}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
-          ${u.isSharing ? `<span class="badge-live-stream">🔴 AO VIVO</span>` : ''}
+          ${u.isSharing ? liveBadgeHtml(u.id) : ''}
           ${!u.isMicOn ? `<span class="indicator-icon">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
@@ -777,6 +793,10 @@ function updateVoiceLounge() {
       card.addEventListener('click', (e) => {
         if (isMe) openProfileModal();
         else openUserPopover(u.id, e);
+      });
+      card.querySelector('.badge-live-stream')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        openStream(u.id);
       });
       loungeUsersGrid.appendChild(card);
     });
@@ -851,7 +871,10 @@ function renderChannelChat(channelId) {
   welcomeBanner.className = 'chat-welcome-banner';
   const ch = appState.channels.get(channelId);
   const name = ch ? ch.name : channelId;
-  welcomeBanner.innerHTML = `
+  welcomeBanner.innerHTML = !channelId ? `
+    <h3>Você está fora da call</h3>
+    <p>Clique num canal da lista pra entrar e ver o chat dele.</p>
+  ` : `
     <h3>Bem-vindo ao chat do canal #${escapeHtml(name)}!</h3>
     <p>As mensagens enviadas aqui são visíveis apenas para os amigos conectados neste canal.</p>
   `;
@@ -981,6 +1004,10 @@ function setupDockControls() {
 
   // Screen Share Toggle
   const toggleScreenShare = () => {
+    if (!appState.myUser.isSharing && !appState.currentChannelId) {
+      showToast('Entre num canal pra transmitir a tela.');
+      return;
+    }
     if (!appState.myUser.isSharing) {
       appState.myUser.isSharing = true;
       shareBtn?.classList.add('sharing');
@@ -1000,6 +1027,7 @@ function setupDockControls() {
 
   shareBtn?.addEventListener('click', toggleScreenShare);
   loungeShareBtn?.addEventListener('click', toggleScreenShare);
+  $('#btn-leave-call')?.addEventListener('click', leaveCall);
 
   // Settings Modal Open
   settingsBtn?.addEventListener('click', () => {
@@ -1051,7 +1079,7 @@ function setupChatAndReactions() {
 
   // Copy invite link
   $('#btn-copy-invite')?.addEventListener('click', () => {
-    const url = `${SERVER_URL}/?channel=${encodeURIComponent(appState.currentChannelId)}`;
+    const url = `${SERVER_URL}/?channel=${encodeURIComponent(appState.currentChannelId || 'geral')}`;
     navigator.clipboard?.writeText(url).then(() => {
       showToast('Link de convite copiado!', 'success');
     }).catch(() => {
@@ -1128,6 +1156,13 @@ function setupModals() {
 
   $('#btn-stage-fullscreen')?.addEventListener('click', toggleStageFullscreen);
   $('#btn-stage-pip')?.addEventListener('click', toggleStagePip);
+  $('#btn-stage-stop-watching')?.addEventListener('click', () => {
+    // Mosaico: para todas; uma aberta: só ela (a sua própria transmissão fica)
+    const ids = isMosaicView() ? [...appState.activeStreams.keys()] : [appState.focusedStreamUserId];
+    ids.forEach((id) => {
+      if (id && !appState.activeStreams.get(id)?.isLocal) unwatchScreen(id);
+    });
+  });
 
   // Populate audio devices in settings modal
   const populateSettingsDevices = async () => {
@@ -1751,7 +1786,36 @@ function setupSidebarResize() {
   });
 }
 
-// Abas do topo e "AO VIVO" da lista: abre essa transmissão (com várias, sai do mosaico)
+function liveBadgeHtml(userId) {
+  const watching = appState.activeStreams.has(userId);
+  return `<span class="badge-live-stream${watching ? ' watching' : ''}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">🔴 AO VIVO</span>`;
+}
+
+// "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
+function openStream(userId) {
+  if (userId === appState.myId) {
+    if (appState.activeStreams.has(userId)) focusStream(userId);
+    return;
+  }
+  if (!appState.activeStreams.has(userId)) {
+    watchScreen(userId);
+    // Já assistindo outra: quando essa chegar, abre ela em vez do mosaico
+    if (appState.activeStreams.size > 0) appState.expandedStreamUserId = userId;
+  }
+  focusStream(userId);
+}
+
+// Para de assistir alguém (o "AO VIVO" continua na lista pra voltar quando quiser)
+function unwatchScreen(userId) {
+  stopWatchingScreen(userId);
+  removeScreenStream(userId);
+  if (appState.screenPeersIn.has(userId)) {
+    try { appState.screenPeersIn.get(userId).close(); } catch (_) {}
+    appState.screenPeersIn.delete(userId);
+  }
+}
+
+// Abas do topo: abre essa transmissão (com várias, sai do mosaico)
 function focusStream(userId) {
   appState.focusedStreamUserId = userId;
   if (appState.activeStreams.size > 1) appState.expandedStreamUserId = userId;
@@ -2014,6 +2078,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 
   updateStageLayout();
   updateVoiceLounge();
+  renderChannelsTree(); // "AO VIVO" de quem você assiste fica destacado
 }
 
 function removeScreenStream(userId) {
@@ -2037,6 +2102,7 @@ function removeScreenStream(userId) {
 
   updateStageLayout();
   updateVoiceLounge();
+  renderChannelsTree();
 }
 
 // Mosaico = 2+ transmissões e nenhuma aberta sozinha
@@ -2080,6 +2146,17 @@ function updateStageLayout() {
       tab.addEventListener('click', () => {
         focusStream(uid);
       });
+      if (!info.isLocal) {
+        const close = document.createElement('span');
+        close.className = 'stream-tab-close';
+        close.textContent = '✕';
+        close.title = 'Parar de assistir';
+        close.addEventListener('click', (e) => {
+          e.stopPropagation();
+          unwatchScreen(uid);
+        });
+        tab.appendChild(close);
+      }
       streamTabs.appendChild(tab);
     }
   }
@@ -2331,6 +2408,14 @@ async function createScreenOfferForUser(targetId) {
         candidate: event.candidate,
         type: 'screen-out'
       });
+    }
+  };
+
+  // O amigo parou de assistir (fechou a conexão dele): para de codificar vídeo pra ele
+  pc.onconnectionstatechange = () => {
+    if (['failed', 'closed'].includes(pc.connectionState) && appState.screenPeersOut.get(targetId) === pc) {
+      try { pc.close(); } catch (_) {}
+      appState.screenPeersOut.delete(targetId);
     }
   };
 
@@ -3259,16 +3344,8 @@ async function onStartScreenShare() {
       // Manda uma vez pro servidor, que repassa pra todo mundo do canal
       appState.sfuPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', stream });
       appState.sfuPublisher.start();
-    } else {
-      const ch = appState.channels.get(appState.currentChannelId);
-      if (ch) {
-        for (const [userId] of ch.users.entries()) {
-          if (userId !== appState.myId) {
-            createScreenOfferForUser(userId);
-          }
-        }
-      }
     }
+    // Sem SFU, cada amigo pede o vídeo (request-stream) quando clica no "AO VIVO"
 
     if (stream.getAudioTracks().length > 0 && audioChoice.mode === 'app') {
       showToast(`🎬 Transmissão ao vivo iniciada com o som de ${audioChoice.name}!`, 'success');
