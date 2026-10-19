@@ -193,6 +193,7 @@ function publicUser(u) {
     avatarV: u.avatar ? u.avatarV : 0,
     channelId: u.channelId,
     isSharing: u.isSharing,
+    shareKind: u.shareKind,
     isMicOn: u.isMicOn,
     isDeafened: u.isDeafened,
     isSpeaking: u.isSpeaking,
@@ -551,6 +552,10 @@ io.on('connection', (socket) => {
       user.isSharing = rawPayload.isSharing;
       presenceChanged = true;
     }
+    // O que está sendo transmitido: tela ou câmera (muda o selo "AO VIVO" dos outros)
+    if (rawPayload.shareKind === 'screen' || rawPayload.shareKind === 'camera') {
+      user.shareKind = rawPayload.shareKind;
+    }
     if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn) {
       user.isMicOn = rawPayload.isMicOn;
       presenceChanged = true;
@@ -570,6 +575,7 @@ io.on('connection', (socket) => {
       userId: socket.id,
       channelId,
       isSharing: user.isSharing,
+      shareKind: user.shareKind,
       isMicOn: user.isMicOn,
       isDeafened: user.isDeafened,
       isSpeaking: user.isSpeaking,

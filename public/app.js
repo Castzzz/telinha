@@ -358,14 +358,14 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages 
     appState.channelChats.set(channelId, recentMessages);
   }
 
-  // Pede a voz de quem já está falando. Transmissão só quando a pessoa clica no "AO VIVO".
-  if (Array.isArray(users)) {
+  // Voz: quem já está no canal com o mic ligado manda a oferta sozinho (user-joined).
+  // Pedir aqui também gerava duas ofertas pro mesmo par: a resposta da primeira caía na
+  // conexão da segunda e um não ouvia o outro até reiniciar o app.
+  // Transmissão: só quando a pessoa clica no "AO VIVO".
+  // Eu entrei com o mic ligado: quem está mutado não vai me oferecer nada, então eu ofereço
+  if (Array.isArray(users) && appState.myUser.isMicOn && appState.localMicStream) {
     users.forEach((u) => {
-      if (u.id !== appState.myId) {
-        if (u.isMicOn && appState.myUser.isMicOn) {
-          socket.emit('request-stream', { targetId: u.id, type: 'voice' });
-        }
-      }
+      if (u.id !== appState.myId && !u.isMicOn) createVoiceOfferForUser(u.id);
     });
   }
 
@@ -439,6 +439,7 @@ const handleUserStateChanged = (state) => {
   const ch = appState.channels.get(channelId);
   if (ch && ch.users.has(userId)) {
     const u = ch.users.get(userId);
+    if (state.shareKind) u.shareKind = state.shareKind;
     if (typeof state.isSharing === 'boolean') {
       const wasSharing = u.isSharing;
       u.isSharing = state.isSharing;
@@ -454,9 +455,7 @@ const handleUserStateChanged = (state) => {
         if (audioEl) {
           setRemoteElementMuted(audioEl, !state.isMicOn || appState.myUser.isDeafened);
         }
-        if (state.isMicOn && appState.myUser.isMicOn && !appState.voicePeers.has(userId)) {
-          socket.emit('request-stream', { targetId: userId, type: 'voice' });
-        }
+        // Quem ligou o mic manda a oferta pra todo mundo; pedir aqui duplicava a conexão
       }
     }
     if (typeof state.isDeafened === 'boolean') u.isDeafened = state.isDeafened;
@@ -686,7 +685,7 @@ function renderChannelsTree() {
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>
         <div class="user-indicators">
-          ${u.isSharing ? liveBadgeHtml(u.id) : ''}
+          ${u.isSharing ? liveBadgeHtml(u) : ''}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon user-deafened" title="Áudio Desativado">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
@@ -783,7 +782,7 @@ function updateVoiceLounge() {
         </div>
         <span class="lounge-user-name">${escapeHtml(u.name)}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
-          ${u.isSharing ? liveBadgeHtml(u.id) : ''}
+          ${u.isSharing ? liveBadgeHtml(u) : ''}
           ${!u.isMicOn ? `<span class="indicator-icon">🔇</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
@@ -1008,6 +1007,10 @@ function setupDockControls() {
       showToast('Entre num canal pra transmitir a tela.');
       return;
     }
+    if (appState.myUser.isSharing && appState.myUser.shareKind === 'camera') {
+      showToast('Desligue a câmera (📷) antes de transmitir a tela.');
+      return;
+    }
     if (!appState.myUser.isSharing) {
       appState.myUser.isSharing = true;
       shareBtn?.classList.add('sharing');
@@ -1028,6 +1031,7 @@ function setupDockControls() {
   shareBtn?.addEventListener('click', toggleScreenShare);
   loungeShareBtn?.addEventListener('click', toggleScreenShare);
   $('#btn-leave-call')?.addEventListener('click', leaveCall);
+  $('#btn-share-camera')?.addEventListener('click', toggleCameraShare);
 
   // Settings Modal Open
   settingsBtn?.addEventListener('click', () => {
@@ -1434,6 +1438,13 @@ function setupUserPopover() {
     updateVoiceLounge();
   });
 
+  $('#user-popover-reconnect')?.addEventListener('click', () => {
+    if (!popoverUserId) return;
+    reconnectVoice(popoverUserId);
+    showToast('🔄 Reconectando a voz...');
+    closeUserPopover();
+  });
+
   document.addEventListener('mousedown', (e) => {
     if (popoverUserId && !pop.contains(e.target)) closeUserPopover();
   }, true);
@@ -1754,7 +1765,7 @@ function setupMasterVolume() {
 }
 
 // Barra de salas e canais: arrasta a borda direita pra mudar a largura (guardada nas preferências)
-const SIDEBAR_MIN_WIDTH = 180;
+const SIDEBAR_MIN_WIDTH = 220; // cabe o dock com os 5 botões
 const SIDEBAR_MAX_WIDTH = 480;
 
 function setupSidebarResize() {
@@ -1793,9 +1804,10 @@ function setupSidebarResize() {
   });
 }
 
-function liveBadgeHtml(userId) {
-  const watching = appState.activeStreams.has(userId);
-  return `<span class="badge-live-stream${watching ? ' watching' : ''}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">🔴 AO VIVO</span>`;
+function liveBadgeHtml(u) {
+  const watching = appState.activeStreams.has(u.id);
+  const label = u.shareKind === 'camera' ? '📷 CÂMERA' : '🔴 AO VIVO';
+  return `<span class="badge-live-stream${watching ? ' watching' : ''}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">${label}</span>`;
 }
 
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
@@ -2044,6 +2056,29 @@ function syncStreamVolumeUi(userId) {
   }
 }
 
+// Fotinho de quem transmite (selo da tela e abas do topo); sem perfil, a bolinha vermelha
+function streamerAvatarHtml(userId, className) {
+  const u = userId === appState.myId ? { ...appState.myUser, id: userId, avatarV: myProfile.avatar ? 1 : 0 } : findUser(userId);
+  if (!u) return '<span class="live-dot"></span>';
+  return `<span class="${className}" style="background-color: ${safeColor(u.color)};">${avatarInnerHtml(u)}</span>`;
+}
+
+// Mouse parado 2,5 s em cima da transmissão: esconde o cursor e o que fica por cima do vídeo
+function setupTileIdleCursor(tile) {
+  let timer = null;
+  const wake = () => {
+    tile.classList.remove('idle');
+    clearTimeout(timer);
+    timer = setTimeout(() => tile.classList.add('idle'), 2500);
+  };
+  tile.addEventListener('mousemove', wake);
+  tile.addEventListener('mouseenter', wake);
+  tile.addEventListener('mouseleave', () => {
+    clearTimeout(timer);
+    tile.classList.remove('idle');
+  });
+}
+
 function registerScreenStream(userId, userName, stream, isLocal) {
   appState.activeStreams.set(userId, { stream, userName, isLocal });
 
@@ -2055,7 +2090,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 
     const badge = document.createElement('div');
     badge.className = 'tile-badge';
-    badge.innerHTML = `<span class="live-dot"></span> <span>${escapeHtml(userName)}</span>`;
+    badge.innerHTML = `${streamerAvatarHtml(userId, 'tile-badge-avatar')} <span>${escapeHtml(userName)}</span>`;
 
     const video = document.createElement('video');
     video.id = `video-el-${userId}`;
@@ -2093,6 +2128,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
     tile.appendChild(badge);
     tile.appendChild(video);
     tile.appendChild(unmuteBtn);
+    setupTileIdleCursor(tile);
 
     if (!isLocal) {
       const volWrap = document.createElement('div');
@@ -2208,7 +2244,7 @@ function updateStageLayout() {
     for (const [uid, info] of appState.activeStreams.entries()) {
       const tab = document.createElement('button');
       tab.className = `stream-tab-chip ${uid === appState.focusedStreamUserId ? 'active' : ''}`;
-      tab.innerHTML = `<span class="live-dot"></span> <span>${escapeHtml(info.userName)}</span>`;
+      tab.innerHTML = `${streamerAvatarHtml(uid, 'stream-tab-avatar')} <span>${escapeHtml(info.userName)}</span>`;
       tab.addEventListener('click', () => {
         focusStream(uid);
       });
@@ -2554,6 +2590,27 @@ async function handleIncomingScreenOffer(senderId, sdp) {
   }
 }
 
+// Conexão de voz caiu (rede trocou, Wi-Fi piscou): refaz sozinho em vez de ficar mudo
+function watchVoiceConnection(peerId, pc) {
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState !== 'failed' || appState.voicePeers.get(peerId) !== pc) return;
+    console.warn(`[WebRTC] Voz com ${peerId} caiu, reconectando...`);
+    reconnectVoice(peerId);
+  };
+}
+
+// Refaz a conexão de voz com alguém: oferece o meu mic, ou pede o dela se eu estou mutado
+function reconnectVoice(peerId) {
+  const pc = appState.voicePeers.get(peerId);
+  if (pc) {
+    try { pc.close(); } catch (_) {}
+    appState.voicePeers.delete(peerId);
+  }
+  appState.iceCandidatesQueue.delete(`voice:${peerId}`);
+  if (appState.myUser.isMicOn && appState.localMicStream) createVoiceOfferForUser(peerId);
+  else socket.emit('request-stream', { targetId: peerId, type: 'voice' });
+}
+
 async function createVoiceOfferForUser(targetId) {
   if (!appState.localMicStream || targetId === appState.myId) return;
 
@@ -2564,6 +2621,7 @@ async function createVoiceOfferForUser(targetId) {
   const PeerConnection = window.RTCPeerConnection || globalThis.RTCPeerConnection;
   const pc = new PeerConnection(RTC_CONFIG);
   appState.voicePeers.set(targetId, pc);
+  watchVoiceConnection(targetId, pc);
 
   appState.localMicStream.getTracks().forEach((track) => {
     pc.addTrack(track, appState.localMicStream);
@@ -2602,6 +2660,15 @@ async function createVoiceOfferForUser(targetId) {
 }
 
 async function handleIncomingVoiceOffer(senderId, sdp) {
+  // As duas pontas mandaram oferta juntas (ligaram o mic ou entraram ao mesmo tempo): antes cada
+  // uma fechava a sua e respondia a da outra, e ninguém se ouvia até reiniciar o app.
+  // Agora quem tem o id "maior" mantém a própria oferta e ignora a outra; a outra ponta responde.
+  const existing = appState.voicePeers.get(senderId);
+  if (existing && existing.signalingState === 'have-local-offer' && appState.myId > senderId) {
+    console.log(`[WebRTC] Colisão de ofertas de voz com ${senderId}: mantendo a minha`);
+    return;
+  }
+
   if (appState.voicePeers.has(senderId)) {
     try { appState.voicePeers.get(senderId).close(); } catch (_) {}
   }
@@ -2609,6 +2676,7 @@ async function handleIncomingVoiceOffer(senderId, sdp) {
   const PeerConnection = window.RTCPeerConnection || globalThis.RTCPeerConnection;
   const pc = new PeerConnection(RTC_CONFIG);
   appState.voicePeers.set(senderId, pc);
+  watchVoiceConnection(senderId, pc);
 
   if (appState.myUser.isMicOn && appState.localMicStream) {
     appState.localMicStream.getTracks().forEach((track) => {
@@ -3405,7 +3473,8 @@ async function onStartScreenShare() {
     registerScreenStream(appState.myId, `${appState.myUser.name} (Você)`, stream, true);
 
     // Notify peers in channel
-    socket.emit('user-state-changed', { isSharing: true, streamQuality: presetKey });
+    appState.myUser.shareKind = 'screen';
+    socket.emit('user-state-changed', { isSharing: true, shareKind: 'screen', streamQuality: presetKey });
 
     if (appState.sfuEnabled) {
       // Manda uma vez pro servidor, que repassa pra todo mundo do canal
@@ -3443,6 +3512,49 @@ async function onStartScreenShare() {
   }
 }
 
+// Câmera: vai pelo mesmo caminho da transmissão de tela (selo, SFU, janela flutuante, volume),
+// então é uma coisa ou outra: tela ou câmera
+async function toggleCameraShare() {
+  if (appState.myUser.isSharing) {
+    if (appState.myUser.shareKind === 'camera') onStopScreenShare();
+    else showToast('Pare a transmissão de tela antes de ligar a câmera.');
+    return;
+  }
+  if (!appState.currentChannelId) {
+    showToast('Entre num canal pra ligar a câmera.');
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
+      audio: false
+    });
+  } catch (err) {
+    console.warn('[Câmera] Não abriu:', err);
+    showToast(err.name === 'NotFoundError' ? '❌ Nenhuma câmera encontrada.' : '❌ Não consegui abrir a câmera.', 'error');
+    return;
+  }
+  const videoTrack = stream.getVideoTracks()[0];
+  videoTrack.contentHint = 'motion';
+  videoTrack.onended = () => onStopScreenShare();
+
+  appState.localScreenStream = stream;
+  appState.myUser.isSharing = true;
+  appState.myUser.shareKind = 'camera';
+  document.getElementById('btn-share-camera')?.classList.add('sharing');
+  registerScreenStream(appState.myId, `${appState.myUser.name} (Você)`, stream, true);
+  socket.emit('user-state-changed', { isSharing: true, shareKind: 'camera', streamQuality: appState.myUser.streamQuality });
+
+  if (appState.sfuEnabled) {
+    appState.sfuPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', stream });
+    appState.sfuPublisher.start();
+  }
+  showToast('📷 Câmera ligada! Seus amigos veem clicando em "CÂMERA" do seu lado.', 'success');
+  renderChannelsTree();
+  updateVoiceLounge();
+}
+
 function onStopScreenShare() {
   if (!appState.myUser.isSharing && !appState.localScreenStream) return;
   console.log('[WebRTC] Stopping screen share...');
@@ -3473,8 +3585,10 @@ function onStopScreenShare() {
 
   const shareBtn = document.getElementById('btn-share-screen');
   if (shareBtn) shareBtn.classList.remove('sharing');
+  document.getElementById('btn-share-camera')?.classList.remove('sharing');
 
-  showToast('Transmissão de tela encerrada.');
+  showToast(appState.myUser.shareKind === 'camera' ? 'Câmera desligada.' : 'Transmissão de tela encerrada.');
+  appState.myUser.shareKind = null;
   updateStageLayout();
   updateVoiceLounge();
 }

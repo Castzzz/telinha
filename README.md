@@ -116,6 +116,8 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–200%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Telinha*: vozes e transmissões juntas, até 200% |
+| **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. É tela **ou** câmera, não as duas juntas |
+| **Parou de ouvir alguém** | Clique na pessoa → *🔄 Reconectar a voz* (a conexão também se refaz sozinha se cair) |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |
 
 ### 🔊 O som da transmissão

@@ -1210,6 +1210,19 @@ ul {
   max-width: 520px;
 }
 
+/* Tela pequena: o cartão cabe na janela e o meio rola (título e botões ficam fixos) */
+.modal-card {
+  max-height: calc(100vh - 32px);
+}
+
+.modal-card > .modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-right: -12px;
+  padding-right: 12px;
+}
+
 .modal-screen-picker-card {
   max-width: 680px;
 }
@@ -1821,4 +1834,53 @@ ul {
 .master-volume-row input {
   flex: 1;
   accent-color: var(--accent-brand);
+}
+
+/* ==================== FOTO DE QUEM TRANSMITE ==================== */
+.tile-badge-avatar,
+.stream-tab-avatar {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.tile-badge-avatar img,
+.stream-tab-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* Mouse parado em cima da transmissão: some o cursor e os controles por cima do vídeo */
+.video-tile.idle,
+.video-tile.idle video {
+  cursor: none;
+}
+
+.video-tile.idle .tile-badge,
+.video-tile.idle .tile-volume {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.user-popover-reconnect {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* Cabe o botão da câmera no dock mesmo com a barra estreita */
+.dock-controls {
+  flex-shrink: 0;
+}
+
+.user-profile {
+  min-width: 0;
 }
