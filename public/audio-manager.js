@@ -401,8 +401,11 @@ export function sanitizeVolumePercent(volumePercent, defaultPercent = 100) {
   return num;
 }
 
+// Transmissão vai até 300% (filme baixinho); voz de cada pessoa até 200%
+const MAX_STREAM_VOLUME_PERCENT = 300;
+
 /**
- * VolumeMixerManager - Manages 0–200% Web Audio GainNodes for users and streams
+ * VolumeMixerManager - Manages Web Audio GainNodes: 0–200% for users, 0–300% for streams
  */
 export class VolumeMixerManager {
   constructor(options = {}) {
@@ -587,20 +590,20 @@ export class VolumeMixerManager {
   }
 
   /**
-   * Set stream volume (0% to 200%)
-   * Clamps strictly to [0.0, 2.0]. Guarantees finite AudioParam values.
+   * Set stream volume (0% to 300%)
+   * Clamps strictly to [0.0, 3.0]. Guarantees finite AudioParam values.
    */
   setStreamVolume(streamId, volumePercent) {
     const safePercent = sanitizeVolumePercent(volumePercent, 100);
-    let clampedGain = Math.max(0.0, Math.min(2.0, safePercent / 100));
+    let clampedGain = Math.max(0.0, Math.min(MAX_STREAM_VOLUME_PERCENT / 100, safePercent / 100));
     if (!Number.isFinite(clampedGain)) {
       clampedGain = 1.0;
     }
     const safeVolumePercent = safePercent === Infinity
-      ? 200
+      ? MAX_STREAM_VOLUME_PERCENT
       : safePercent === -Infinity
         ? 0
-        : Math.max(0, Math.min(200, safePercent));
+        : Math.max(0, Math.min(MAX_STREAM_VOLUME_PERCENT, safePercent));
 
     let entry = this.streamMixers.get(streamId);
 
@@ -743,7 +746,7 @@ export class VolumeMixerManager {
     try {
       if (typeof localStorage !== 'undefined') {
         const num = Number(percent);
-        const safe = Number.isFinite(num) ? Math.max(0, Math.min(200, num)) : 100;
+        const safe = Number.isFinite(num) ? Math.max(0, Math.min(MAX_STREAM_VOLUME_PERCENT, num)) : 100;
         localStorage.setItem(`telinha_stream_vol_${streamId}`, String(safe));
       }
     } catch (_) {}
@@ -756,7 +759,7 @@ export class VolumeMixerManager {
         if (val !== null && val !== '') {
           const num = Number(val);
           if (Number.isFinite(num)) {
-            return Math.max(0, Math.min(200, num));
+            return Math.max(0, Math.min(MAX_STREAM_VOLUME_PERCENT, num));
           }
         }
       }

@@ -406,7 +406,7 @@ test('STRESS 2.2: Extreme Monte Carlo Fuzzing (5,000 Random Interleaved Operatio
       case 7: { // Fuzz stream volume
         const val = rand() < 0.2 ? 'corrupt' : (rand() * 300);
         const gain = mixer.setStreamVolume('fuzz-stream', val);
-        assert.ok(gain >= 0.0 && gain <= 2.0, `Stream gain ${gain} out of bounds at step ${step}`);
+        assert.ok(gain >= 0.0 && gain <= 3.0, `Stream gain ${gain} out of bounds at step ${step}`);
         break;
       }
     }

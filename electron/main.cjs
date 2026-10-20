@@ -676,7 +676,11 @@ function setupPermissionsAndCapture() {
   });
 
   ipcMain.handle('prefs-get', () => loadPrefs());
-  ipcMain.handle('prefs-set', (_event, patch) => savePrefs(patch));
+  ipcMain.handle('prefs-set', (_event, patch) => {
+    const saved = savePrefs(patch);
+    if (saved && typeof patch?.theme === 'string') applyThemeToWindow(patch.theme);
+    return saved;
+  });
   ipcMain.handle('set-global-hotkeys', (event, hotkeys) => setGlobalHotkeys(event.sender, hotkeys));
 
   ipcMain.handle('select-desktop-source', (_event, sourceId) => {
@@ -685,7 +689,32 @@ function setupPermissionsAndCapture() {
   });
 }
 
+// Botões de minimizar/maximizar/fechar com a cor da barra de cima de cada tema (--bg-tertiary)
+const THEME_TITLEBAR = {
+  escuro: { color: '#1e1f22', symbolColor: '#dbdee1' },
+  preto: { color: '#000000', symbolColor: '#dbdee1' },
+  claro: { color: '#e3e5e8', symbolColor: '#313338' }
+};
+
+function titleBarColors(theme) {
+  return THEME_TITLEBAR[theme] || THEME_TITLEBAR.escuro;
+}
+
+function applyThemeToWindow(theme) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  const colors = titleBarColors(theme);
+  mainWindow.setBackgroundColor(colors.color);
+  if (process.platform === 'darwin') return;
+  try {
+    mainWindow.setTitleBarOverlay({ ...colors, height: 52 });
+  } catch (err) {
+    console.warn('[Electron] Não deu pra mudar a cor da barra:', err.message);
+  }
+}
+
 async function createWindow() {
+  const initialColors = titleBarColors(loadPrefs().theme);
+
   ensureLinuxSystemAudioSource();
 
   mainWindow = new BrowserWindow({
@@ -694,13 +723,13 @@ async function createWindow() {
     minWidth: 940,
     minHeight: 600,
     title: 'Teletela',
-    backgroundColor: '#1e1f22',
+    backgroundColor: initialColors.color,
     autoHideMenuBar: true,
     // Sem a barra do sistema: minimizar/maximizar/fechar são desenhados por cima do canto
     // direito da barra do app (alguns ambientes Linux, como os tiling, não mostram botão nenhum)
     ...(process.platform === 'darwin'
       ? {}
-      : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#1e1f22', symbolColor: '#dbdee1', height: 52 } }),
+      : { titleBarStyle: 'hidden', titleBarOverlay: { ...initialColors, height: 52 } }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

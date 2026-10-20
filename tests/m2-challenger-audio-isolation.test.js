@@ -648,7 +648,7 @@ test('Challenger 3.4: High-Stress Adversarial Concurrency & Volume Mixer Fuzzing
       case 4: { // Fuzz stream volume [-50% to +300%]
         const fuzzedVol = (pseudoRandom() * 350) - 50;
         const gain = mixer.setStreamVolume('fuzz-stream-1', fuzzedVol);
-        assert.ok(gain >= 0.0 && gain <= 2.0, `Stream gain ${gain} must be strictly within [0.0, 2.0]`);
+        assert.ok(gain >= 0.0 && gain <= 3.0, `Stream gain ${gain} must be strictly within [0.0, 2.0]`);
         break;
       }
 

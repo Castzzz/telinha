@@ -105,9 +105,10 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. Ao entrar na call o microfone já abre |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D` |
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
+| **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
 | **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (todo mundo vê) e bio |
-| **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca) |
+| **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
 | **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
 | **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
@@ -118,7 +119,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Janela flutuante** | Botão ⧉ no canto de baixo ou tecla `P`: a transmissão fica numa janelinha por cima do jogo/outros programas |
 | **Sair da call** | Botão 📞 *Sair da call* no topo: desliga voz e transmissões sem fechar o app. Clique num canal pra voltar |
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
-| **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–200%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
+| **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–300%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
 | **Volume do seu microfone** | ⚙️ → *Volume do seu microfone* (0–300%): sobe se os amigos te ouvem baixo, vale na hora |
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |

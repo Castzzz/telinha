@@ -39,6 +39,8 @@
   --font-family: 'gg sans', 'Noto Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
+  /* Dock, barra do palco e campo do chat têm a mesma altura: a linha de cima fica reta */
+  --bottom-bar-height: 58px;
   color-scheme: dark;
 }
 
@@ -533,8 +535,8 @@ ul {
   font-size: 12px;
 }
 
-/* Ícone de microfone (desenhado, no lugar do emoji) */
-.mic-svg {
+/* Ícones desenhados (microfone, fone, tela, câmera, engrenagem), no lugar dos emojis */
+.icon-svg {
   width: 1.15em;
   height: 1.15em;
   display: block;
@@ -573,7 +575,7 @@ ul {
 
 /* ================= BOTTOM USER DOCK ================= */
 .user-dock {
-  height: 58px;
+  height: var(--bottom-bar-height);
   background: var(--bg-tertiary);
   border-top: 1px solid var(--border-subtle);
   padding: 0 10px;
@@ -670,15 +672,6 @@ ul {
   color: var(--accent-red);
 }
 
-.dock-btn.btn-dock-share {
-  background: rgba(88, 101, 242, 0.15);
-  color: var(--accent-brand);
-}
-
-.dock-btn.btn-dock-share:hover {
-  background: var(--accent-brand);
-  color: #fff;
-}
 
 .dock-btn.btn-dock-share.sharing, .dock-btn.active-sharing {
   background: var(--accent-red);
@@ -932,7 +925,8 @@ ul {
 
 /* ================= STAGE BOTTOM CONTROLS ================= */
 .stage-controls-bar {
-  height: 52px;
+  height: var(--bottom-bar-height);
+  flex-shrink: 0;
   background: var(--bg-secondary);
   border-top: 1px solid var(--border-subtle);
   display: flex;
@@ -1226,7 +1220,10 @@ ul {
 }
 
 .chat-form {
-  padding: 12px 16px;
+  height: var(--bottom-bar-height);
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0 16px;
   border-top: 1px solid var(--border-subtle);
   display: flex;
   gap: 8px;
@@ -1239,7 +1236,8 @@ ul {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
-  padding: 9px 12px;
+  height: 38px;
+  padding: 0 12px;
   color: var(--text-normal);
   font-size: 13.5px;
   transition: border-color var(--transition-fast);
@@ -1250,6 +1248,7 @@ ul {
 }
 
 .btn-chat-send {
+  height: 38px;
   background: var(--accent-brand);
   color: #fff;
   font-weight: 600;
@@ -2064,4 +2063,63 @@ ul {
 /* Cabe as duas fileiras de cores sem quebrar linha */
 .modal-profile-card {
   max-width: 500px;
+}
+
+.dock-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.quick-reactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==================== VÁRIAS TELAS ==================== */
+.share-menu {
+  position: fixed;
+  z-index: 300;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--bg-floating);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.share-menu-item {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.share-menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-header);
+}
+
+.share-menu-item.danger {
+  color: var(--accent-red);
+}
+
+.share-menu-item.danger:hover {
+  background: rgba(242, 63, 67, 0.15);
+}
+
+.whats-new-older {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-medium);
+}
+
+.whats-new-older h4 {
+  color: var(--text-header);
+  margin-bottom: 10px;
 }

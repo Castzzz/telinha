@@ -271,26 +271,28 @@ test('ADVERSARIAL 2.2: setStreamVolume with adversarial inputs never calls Audio
 
     assert.equal(typeof gain, 'number', `Returned stream gain for ${item.label} must be number`);
     assert.equal(Number.isFinite(gain), true, `Returned stream gain for ${item.label} must be finite`);
-    assert.ok(gain >= 0.0 && gain <= 2.0, `Stream gain for ${item.label} (${gain}) must be in [0.0, 2.0]`);
+    assert.ok(gain >= 0.0 && gain <= 3.0, `Stream gain for ${item.label} (${gain}) must be in [0.0, 3.0]`);
 
-    if (item.expectedGain !== undefined) {
+    // Transmissão vai até 300%: onde a voz trava em 2.0, a transmissão trava em 3.0
+    const expectedGain = item.expectedGain === 2.0 ? 3.0 : item.expectedGain;
+    if (expectedGain !== undefined) {
       assert.ok(
-        Math.abs(gain - item.expectedGain) < 1e-4,
-        `Expected stream gain ~${item.expectedGain} for ${item.label}, got ${gain}`
+        Math.abs(gain - expectedGain) < 1e-4,
+        `Expected stream gain ~${expectedGain} for ${item.label}, got ${gain}`
       );
     }
 
     const entry = mixer.streamMixers.get(streamId);
     assert.ok(entry, `Mixer must record stream entry for ${streamId}`);
     assert.equal(Number.isFinite(entry.volumePercent), true);
-    assert.ok(entry.volumePercent >= 0 && entry.volumePercent <= 200);
+    assert.ok(entry.volumePercent >= 0 && entry.volumePercent <= 300);
 
     const nodeGainParam = entry.gainNode.gain;
     assert.ok(nodeGainParam.history.length > 0);
     for (const record of nodeGainParam.history) {
       if (record.value !== undefined) {
         assert.equal(Number.isFinite(record.value), true);
-        assert.ok(record.value >= 0.0 && record.value <= 2.0);
+        assert.ok(record.value >= 0.0 && record.value <= 3.0);
       }
     }
   }
@@ -388,7 +390,7 @@ test('ADVERSARIAL 4.1: High-throughput fuzzing harness (10,000 pseudo-random adv
     const streamGain = mixer.setStreamVolume('fuzz_stream', fuzzInput);
     assert.equal(typeof streamGain, 'number');
     assert.equal(Number.isFinite(streamGain), true);
-    assert.ok(streamGain >= 0.0 && streamGain <= 2.0);
+    assert.ok(streamGain >= 0.0 && streamGain <= 3.0);
   }
 });
 

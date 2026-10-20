@@ -118,14 +118,26 @@ function randomId() {
 
 // Microfone desenhado (o emoji 🔇 é um alto-falante, não um microfone)
 const MIC_PATHS = '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/>';
-const MIC_ON_SVG = `<svg class="mic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}</svg>`;
-const MIC_OFF_SVG = `<svg class="mic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}<path d="M3 3l18 18"/></svg>`;
+const MIC_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}</svg>`;
+const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}<path d="M3 3l18 18"/></svg>`;
+// Fone (ensurdecer), no mesmo traço do microfone
+const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
+const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
+const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
 
 function updateMicButton() {
   const on = appState.myUser.isMicOn;
   $('#btn-toggle-mic')?.classList.toggle('active-muted', !on);
   const micIcon = $('#dock-mic-icon');
   if (micIcon) micIcon.innerHTML = on ? MIC_ON_SVG : MIC_OFF_SVG;
+  updateDeafenButton();
+}
+
+function updateDeafenButton() {
+  const deafened = appState.myUser.isDeafened;
+  $('#btn-toggle-deafen')?.classList.toggle('active-danger', deafened);
+  const deafIcon = $('#dock-deafen-icon');
+  if (deafIcon) deafIcon.innerHTML = deafened ? HEADPHONES_OFF_SVG : HEADPHONES_ON_SVG;
 }
 
 // Cores prontas pro nome (além do seletor livre)
@@ -181,6 +193,7 @@ const appState = {
   // MediaStreams
   localScreenStream: null,
   localCameraStream: null,
+  extraScreens: new Map(), // número (2, 3) -> { stream, publisher }: telas a mais, só imagem
   localMicStream: null,
 
   // WebRTC Peer Connection Collections (Segregated Dual-Mesh)
@@ -585,6 +598,15 @@ const handleUserStateChanged = (state) => {
         unwatchScreen(streamKey(userId, 'camera'));
       }
     }
+    if (Array.isArray(state.extraScreens)) {
+      const before = Array.isArray(u.extraScreens) ? u.extraScreens : [];
+      u.extraScreens = state.extraScreens;
+      if (channelId === appState.currentChannelId && userId !== appState.myId) {
+        for (const n of before) {
+          if (!state.extraScreens.includes(n)) unwatchScreen(streamKey(userId, `screen${n}`));
+        }
+      }
+    }
     if (typeof state.isSharing === 'boolean') {
       const wasSharing = u.isSharing;
       u.isSharing = state.isSharing;
@@ -883,9 +905,9 @@ function renderChannelsTree() {
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>
         <div class="user-indicators">
-          ${liveBadgesHtml(u)}
+          ${liveBadgesHtml(u, { compact: true })}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
-          ${u.isDeafened ? `<span class="indicator-icon user-deafened" title="Áudio Desativado">🎧🚫</span>` : ''}
+          ${u.isDeafened ? `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
         </div>
       `;
@@ -981,7 +1003,7 @@ function updateVoiceLounge() {
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
-          ${u.isDeafened ? `<span class="indicator-icon">🎧🚫</span>` : ''}
+          ${u.isDeafened ? `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
         </div>
       `;
@@ -1165,9 +1187,6 @@ function setupDockControls() {
     appState.myUser.isMicOn = !appState.myUser.isMicOn;
     if (appState.myUser.isMicOn && appState.myUser.isDeafened) {
       appState.myUser.isDeafened = false;
-      deafenBtn?.classList.remove('active-danger');
-      const deafIcon = $('#dock-deafen-icon');
-      if (deafIcon) deafIcon.textContent = '🎧';
     }
 
     updateMicButton();
@@ -1188,10 +1207,6 @@ function setupDockControls() {
     const nextDeafened = !appState.myUser.isDeafened;
     onDeafenToggle(nextDeafened);
 
-    deafenBtn.classList.toggle('active-danger', appState.myUser.isDeafened);
-    const deafIcon = $('#dock-deafen-icon');
-    if (deafIcon) deafIcon.textContent = appState.myUser.isDeafened ? '🎧🚫' : '🎧';
-
     updateMicButton();
 
     socket.emit('user-state-changed', {
@@ -1205,23 +1220,21 @@ function setupDockControls() {
   });
 
   // Screen Share Toggle
-  const toggleScreenShare = () => {
+  const toggleScreenShare = (e) => {
     if (!appState.myUser.isSharing && !appState.currentChannelId) {
       showToast('Entre num canal pra transmitir a tela.');
       return;
     }
-    if (!appState.myUser.isSharing) {
-      appState.myUser.isSharing = true;
-      shareBtn?.classList.add('sharing');
-      // Só avisa a sala quando a captura começar de verdade (onStartScreenShare emite):
-      // avisar aqui deixava "AO VIVO" pros amigos mesmo se a pessoa cancelasse
-      onStartScreenShare();
-    } else {
-      appState.myUser.isSharing = false;
-      shareBtn?.classList.remove('sharing');
-      onStopScreenShare();
-      socket.emit('user-state-changed', { isSharing: false });
+    // Já transmitindo: menu pra pôr outra tela ou parar uma delas
+    if (appState.myUser.isSharing || appState.extraScreens.size > 0) {
+      openShareMenu(e?.currentTarget || shareBtn);
+      return;
     }
+    appState.myUser.isSharing = true;
+    shareBtn?.classList.add('sharing');
+    // Só avisa a sala quando a captura começar de verdade (onStartScreenShare emite):
+    // avisar aqui deixava "AO VIVO" pros amigos mesmo se a pessoa cancelasse
+    onStartScreenShare();
 
     renderChannelsTree();
     updateVoiceLounge();
@@ -1273,13 +1286,13 @@ function setupChatAndReactions() {
   const sendReaction = (emoji) => {
     socket.emit('reaction', { emoji });
     spawnFloatingReaction(appState.myUser.name, emoji);
+    countReactionUse(emoji);
   };
-  $$('.reaction-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const emoji = btn.getAttribute('data-emoji');
-      if (emoji) sendReaction(emoji);
-    });
+  $('#quick-reactions')?.addEventListener('click', (e) => {
+    const emoji = e.target.closest('[data-emoji]')?.getAttribute('data-emoji');
+    if (emoji) sendReaction(emoji);
   });
+  renderQuickReactions();
   setupEmojiPicker(sendReaction);
 
   // Copy invite link
@@ -1291,6 +1304,52 @@ function setupChatAndReactions() {
       showToast('Link: ' + url);
     });
   });
+}
+
+// Barra de reações rápidas: começa com estes e vai virando os emojis que você mais usa.
+// Cada lugar só troca quando outro emoji passa o menos usado da barra (os botões não ficam
+// pulando de posição enquanto você clica).
+const DEFAULT_QUICK_REACTIONS = ['🔥', '😂', '😱', '⚽', '🎮', '👏', '❤️'];
+const MAX_TRACKED_EMOJIS = 100;
+
+function quickReactions() {
+  const saved = Array.isArray(prefs.quickReactions) ? prefs.quickReactions.filter((e) => typeof e === 'string') : [];
+  return saved.length === DEFAULT_QUICK_REACTIONS.length ? saved : [...DEFAULT_QUICK_REACTIONS];
+}
+
+function renderQuickReactions() {
+  const bar = $('#quick-reactions');
+  if (!bar) return;
+  bar.innerHTML = quickReactions()
+    .map((e) => `<button type="button" class="reaction-btn" data-emoji="${escapeHtml(e)}" title="Reagir com ${escapeHtml(e)}">${escapeHtml(e)}</button>`)
+    .join('');
+}
+
+function countReactionUse(emoji) {
+  const usage = { ...(prefs.emojiUsage || {}) };
+  usage[emoji] = (usage[emoji] || 0) + 1;
+  // Guarda só os mais usados
+  const entries = Object.entries(usage);
+  if (entries.length > MAX_TRACKED_EMOJIS) {
+    entries.sort((a, b) => b[1] - a[1]);
+    for (const [e] of entries.slice(MAX_TRACKED_EMOJIS)) delete usage[e];
+  }
+
+  const bar = quickReactions();
+  let changed = false;
+  if (!bar.includes(emoji)) {
+    // Troca o menos usado da barra (empate: o mais à direita)
+    let slot = bar.length - 1;
+    for (let i = bar.length - 1; i >= 0; i--) {
+      if ((usage[bar[i]] || 0) < (usage[bar[slot]] || 0)) slot = i;
+    }
+    if (usage[emoji] > (usage[bar[slot]] || 0)) {
+      bar[slot] = emoji;
+      changed = true;
+    }
+  }
+  savePrefs(changed ? { emojiUsage: usage, quickReactions: bar } : { emojiUsage: usage });
+  if (changed) renderQuickReactions();
 }
 
 // Botão "+" das reações: seletor com todos os emojis e busca em português.
@@ -1398,7 +1457,7 @@ function setupModals() {
     $('#modal-create-channel')?.classList.add('hidden');
   });
 
-  // Stream volume slider (0-200% GainNode boost)
+  // Stream volume slider (0-300% GainNode boost)
   const volInput = $('#input-stream-volume');
   const volText = $('#stream-volume-text');
   volInput?.addEventListener('input', () => {
@@ -2155,11 +2214,15 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '2.0';
+const WHATS_NEW_VERSION = '2.1';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
+  // Veio direto de antes da 2.0 (nunca viu novidade nenhuma): mostra o que chegou nela também
+  const skippedTwoZero = !prefs.seenWhatsNew;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
-  if (!isFirstRun) $('#modal-whats-new')?.classList.remove('hidden');
+  if (isFirstRun) return;
+  $('#whats-new-2-0')?.classList.toggle('hidden', !skippedTwoZero);
+  $('#modal-whats-new')?.classList.remove('hidden');
 }
 
 // Barra de salas e canais (borda direita) e chat (borda esquerda): arrasta a borda pra mudar
@@ -2218,32 +2281,74 @@ function setupPanelResize(sidebar, handle, { min, max, prefKey, edge }) {
 const CAMERA_SUFFIX = '__cam';
 const CAMERA_BITRATE = 2500000;
 
+// Telas a mais da mesma pessoa: tipo "screen2"/"screen3", chave "<id>__s2"/"<id>__s3".
+// A tela 1 continua com o tipo "screen" e a chave = id (compatível com quem tem só uma).
+const EXTRA_SCREEN_NUMBERS = [2, 3];
+const EXTRA_SCREEN_RE = /__s(\d)$/;
+
 function streamKey(userId, kind = 'screen') {
-  return kind === 'camera' ? `${userId}${CAMERA_SUFFIX}` : userId;
+  if (kind === 'camera') return `${userId}${CAMERA_SUFFIX}`;
+  const extra = /^screen(\d)$/.exec(kind);
+  return extra ? `${userId}__s${extra[1]}` : userId;
 }
 
 function streamKind(key) {
-  return String(key).endsWith(CAMERA_SUFFIX) ? 'camera' : 'screen';
+  const k = String(key);
+  if (k.endsWith(CAMERA_SUFFIX)) return 'camera';
+  const extra = EXTRA_SCREEN_RE.exec(k);
+  return extra ? `screen${extra[1]}` : 'screen';
 }
 
 function streamOwner(key) {
-  return streamKind(key) === 'camera' ? String(key).slice(0, -CAMERA_SUFFIX.length) : key;
+  return String(key).replace(/__(cam|s\d)$/, '');
+}
+
+// Tipos de transmissão (tela 1, telas extras, câmera); voz é outra coisa
+function isStreamKind(kind) {
+  return kind === 'screen' || kind === 'camera' || /^screen[23]$/.test(String(kind));
+}
+
+function extraScreenNumber(kind) {
+  const extra = /^screen(\d)$/.exec(String(kind));
+  return extra ? Number(extra[1]) : null;
+}
+
+// Todas as chaves de transmissão que uma pessoa pode ter
+function allStreamKeys(userId) {
+  return [userId, streamKey(userId, 'camera'), ...EXTRA_SCREEN_NUMBERS.map((n) => streamKey(userId, `screen${n}`))];
 }
 
 function streamLabel(key) {
   const ownerId = streamOwner(key);
   const name = ownerId === appState.myId ? `${appState.myUser.name} (Você)` : findUser(ownerId)?.name || 'Amigo';
-  return streamKind(key) === 'camera' ? `${name} 📷` : name;
+  const kind = streamKind(key);
+  if (kind === 'camera') return `${name} 📷`;
+  const n = extraScreenNumber(kind);
+  return n ? `${name} · tela ${n}` : name;
+}
+
+// Minha transmissão local de cada tipo (tela 1, extras, câmera)
+function localStreamFor(kind) {
+  if (kind === 'camera') return appState.localCameraStream;
+  if (kind === 'screen') return appState.localScreenStream;
+  return appState.extraScreens.get(extraScreenNumber(kind))?.stream || null;
 }
 
 // Selos da lista/cards: "AO VIVO" (tela) e "CÂMERA", cada um abre a sua transmissão
-function liveBadgesHtml(u) {
+// compact (lista lateral): com várias telas, "🔴 1"/"🔴 2" pra não espremer o nome
+function liveBadgesHtml(u, { compact = false } = {}) {
   const badge = (kind, label) => {
     const key = streamKey(u.id, kind);
     const watching = appState.activeStreams.has(key);
-    return `<span class="badge-live-stream${watching ? ' watching' : ''}" data-stream-key="${escapeHtml(key)}" title="${watching ? 'Você está assistindo' : 'Clique pra assistir'}">${label}</span>`;
+    const n = kind === 'screen' ? 1 : extraScreenNumber(kind);
+    const what = kind === 'camera' ? 'Câmera' : `Tela ${n}`;
+    return `<span class="badge-live-stream${watching ? ' watching' : ''}" data-stream-key="${escapeHtml(key)}" title="${what}: ${watching ? 'você está assistindo' : 'clique pra assistir'}">${label}</span>`;
   };
-  return `${u.isSharing ? badge('screen', '🔴 AO VIVO') : ''}${u.isCameraOn ? badge('camera', '📷 CÂMERA') : ''}`;
+  const extras = Array.isArray(u.extraScreens) ? u.extraScreens.filter((n) => EXTRA_SCREEN_NUMBERS.includes(n)) : [];
+  // Com mais de uma tela, cada selo diz qual é
+  const many = extras.length > 0;
+  const screenLabel = (n) => (compact ? `🔴 ${n}` : `🔴 TELA ${n}`);
+  return `${u.isSharing ? badge('screen', many ? screenLabel(1) : '🔴 AO VIVO') : ''}${extras.map((n) => badge(`screen${n}`, screenLabel(n))).join('')}${u.isCameraOn ? badge('camera', compact && many ? '📷' : '📷 CÂMERA') : ''}`;
 }
 
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
@@ -2448,11 +2553,13 @@ function routeElementThroughMixer(el, mixerEntry) {
   }
 }
 
-// Volume de cada transmissão (0–200%), salvo pelo perfil de quem transmite
+// Volume de cada transmissão (0–300%), salvo pelo perfil de quem transmite
 // Chave do volume salvo: perfil de quem transmite (+ "__cam" pra câmera, que tem o seu)
 function streamVolumeKey(key) {
-  const base = volumeKey(findUser(streamOwner(key)));
-  return base && streamKind(key) === 'camera' ? `${base}${CAMERA_SUFFIX}` : base;
+  const owner = streamOwner(key);
+  const base = volumeKey(findUser(owner));
+  // Câmera e telas extras têm o volume delas ("__cam", "__s2"...)
+  return base ? `${base}${String(key).slice(owner.length)}` : base;
 }
 
 function savedStreamVolume(userId) {
@@ -2465,7 +2572,7 @@ function getStreamVolume(userId) {
 }
 
 function setStreamVolume(userId, percent, { save = true } = {}) {
-  const pct = Math.max(0, Math.min(200, Math.round(Number(percent) || 0)));
+  const pct = Math.max(0, Math.min(300, Math.round(Number(percent) || 0)));
   appState.setStreamVolume(userId, pct);
   // Sem o mixer o som sai pelo próprio <video> (que só vai até 100%)
   const videoEl = document.getElementById(`video-el-${userId}`);
@@ -2576,10 +2683,10 @@ function registerScreenStream(userId, userName, stream, isLocal) {
     if (!isLocal) {
       const volWrap = document.createElement('div');
       volWrap.className = 'tile-volume';
-      volWrap.title = `Volume da transmissão de ${userName} (0–200%)`;
+      volWrap.title = `Volume da transmissão de ${userName} (0–300%)`;
       volWrap.innerHTML = `
         <span aria-hidden="true">🔊</span>
-        <input type="range" id="tile-volume-${userId}" min="0" max="200" step="5" value="100" aria-label="Volume da transmissão de ${escapeHtml(userName)}" />
+        <input type="range" id="tile-volume-${userId}" min="0" max="300" step="5" value="100" aria-label="Volume da transmissão de ${escapeHtml(userName)}" />
         <span class="tile-volume-text" id="tile-volume-text-${userId}">100%</span>
       `;
       ['click', 'dblclick', 'pointerdown'].forEach((evt) => volWrap.addEventListener(evt, (e) => e.stopPropagation()));
@@ -2675,6 +2782,7 @@ function updateStageLayout() {
     if (lounge) lounge.classList.remove('hidden');
     if (watchingLabel) watchingLabel.textContent = 'Nenhuma transmissão';
     if (streamTabs) streamTabs.innerHTML = '';
+    $('#stream-volume-control')?.classList.add('hidden');
     return;
   }
 
@@ -2748,17 +2856,21 @@ function updateStageLayout() {
   }
   // A barra de baixo mostra o volume da transmissão aberta
   if (appState.activeStreams.has(appState.focusedStreamUserId)) syncStreamVolumeUi(appState.focusedStreamUserId);
+  // Volume da barra de baixo só com uma transmissão de outra pessoa aberta (a sua não toca som pra você)
+  const focused = appState.activeStreams.get(appState.focusedStreamUserId);
+  $('#stream-volume-control')?.classList.toggle('hidden', !focused || focused.isLocal);
 }
 
 function cleanupUserConnections(userId) {
-  // A câmera da pessoa é uma transmissão à parte
-  const camKey = streamKey(userId, 'camera');
-  unwatchScreen(camKey);
-  if (appState.screenPeersOut.has(camKey)) {
-    try { appState.screenPeersOut.get(camKey).close(); } catch (_) {}
-    appState.screenPeersOut.delete(camKey);
+  // A câmera e as telas extras da pessoa são transmissões à parte
+  for (const key of allStreamKeys(userId).slice(1)) {
+    unwatchScreen(key);
+    if (appState.screenPeersOut.has(key)) {
+      try { appState.screenPeersOut.get(key).close(); } catch (_) {}
+      appState.screenPeersOut.delete(key);
+    }
+    appState.mixerManager?.detachScreenStream(key);
   }
-  appState.mixerManager?.detachScreenStream(camKey);
 
   stopWatchingScreen(userId);
   if (appState.screenPeersOut.has(userId)) {
@@ -3016,7 +3128,7 @@ function stopWatchingScreen(key) {
 
 // kind 'screen' (tela) ou 'camera': cada um tem a sua conexão, chave = streamKey(pessoa, kind)
 async function createScreenOfferForUser(targetId, kind = 'screen') {
-  const localStream = kind === 'camera' ? appState.localCameraStream : appState.localScreenStream;
+  const localStream = localStreamFor(kind);
   if (!localStream || targetId === appState.myId) return;
   const key = streamKey(targetId, kind);
 
@@ -3295,6 +3407,7 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
     onStopScreenShare();
   }
   stopCameraShare({ silent: true });
+  stopAllExtraScreens();
 
   updateStageLayout();
   updateVoiceLounge();
@@ -3587,9 +3700,9 @@ function promptElectronDesktopSource() {
         const card = document.createElement('button');
         card.type = 'button';
         card.className = 'screen-picker-item';
-        card.style.cssText = 'display:flex;flex-direction:column;gap:8px;background:#2b2d31;border:1px solid #3f4147;border-radius:8px;padding:10px;color:#f2f3f5;cursor:pointer;text-align:left;';
+        card.style.cssText = 'display:flex;flex-direction:column;gap:8px;background:var(--bg-secondary);border:1px solid var(--border-medium);border-radius:8px;padding:10px;color:var(--text-header);cursor:pointer;text-align:left;';
         card.innerHTML = `
-          <img src="${src.thumbnail || ''}" alt="${escapeHtml(src.name)}" style="width:100%;height:130px;object-fit:contain;background:#111214;border-radius:6px;" />
+          <img src="${src.thumbnail || ''}" alt="${escapeHtml(src.name)}" style="width:100%;height:130px;object-fit:contain;background:var(--bg-tertiary);border-radius:6px;" />
           <span style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(src.name)}</span>
         `;
         card.addEventListener('click', async () => {
@@ -3640,7 +3753,7 @@ function promptAudioSource() {
     const option = (label, hint, result) => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;background:#2b2d31;border:1px solid #3f4147;border-radius:8px;padding:10px 12px;color:#f2f3f5;cursor:pointer;text-align:left;font-size:14px;';
+      btn.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg-secondary);border:1px solid var(--border-medium);border-radius:8px;padding:10px 12px;color:var(--text-header);cursor:pointer;text-align:left;font-size:14px;';
       btn.innerHTML = `<span>${label}</span><span style="font-size:12px;color:#949ba4;">${hint}</span>`;
       btn.addEventListener('click', () => cleanup(result));
       list.appendChild(btn);
@@ -3851,15 +3964,14 @@ async function onStartScreenShare() {
   if (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !window.electronAPI)) {
     showToast('❌ Captura de tela não suportada ou bloqueada pelo navegador.', 'error');
     appState.myUser.isSharing = false;
-    const shareBtn = document.getElementById('btn-share-screen');
-    if (shareBtn) shareBtn.classList.remove('sharing');
+    updateShareButton();
     return;
   }
 
   try {
     if (!window.electronAPI && !(await promptShareQuality())) {
       appState.myUser.isSharing = false;
-      document.getElementById('btn-share-screen')?.classList.remove('sharing');
+      updateShareButton();
       return;
     }
 
@@ -3868,7 +3980,7 @@ async function onStartScreenShare() {
       audioChoice = await promptAudioSource();
       if (audioChoice === false) {
         appState.myUser.isSharing = false;
-        document.getElementById('btn-share-screen')?.classList.remove('sharing');
+        updateShareButton();
         return;
       }
     }
@@ -3883,8 +3995,7 @@ async function onStartScreenShare() {
       if (selectedElectronSourceId === false) {
         // Usuário cancelou no modal
         appState.myUser.isSharing = false;
-        const shareBtn = document.getElementById('btn-share-screen');
-        if (shareBtn) shareBtn.classList.remove('sharing');
+        updateShareButton();
         return;
       }
     }
@@ -4079,8 +4190,7 @@ async function onStartScreenShare() {
     }
     stopWinProcessAudio();
     appState.myUser.isSharing = false;
-    const shareBtn = document.getElementById('btn-share-screen');
-    if (shareBtn) shareBtn.classList.remove('sharing');
+    updateShareButton();
   }
 }
 
@@ -4146,6 +4256,159 @@ function stopCameraShare({ silent = false } = {}) {
   updateVoiceLounge();
 }
 
+// Botão de transmitir aceso enquanto qualquer tela minha estiver no ar
+function updateShareButton() {
+  document.getElementById('btn-share-screen')?.classList.toggle('sharing', appState.myUser.isSharing || appState.extraScreens.size > 0);
+}
+
+function extraScreensState() {
+  return [...appState.extraScreens.keys()].sort();
+}
+
+// Tela a mais (2 ou 3): só a imagem. O som do PC/app vai na tela 1, senão sairia repetido.
+async function startExtraScreen() {
+  const n = EXTRA_SCREEN_NUMBERS.find((num) => !appState.extraScreens.has(num));
+  if (!n) {
+    showToast(`Dá pra transmitir até ${EXTRA_SCREEN_NUMBERS.length + 1} telas ao mesmo tempo.`);
+    return;
+  }
+  if (!appState.currentChannelId) return;
+  const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
+  let stream;
+  try {
+    if (window.electronAPI && !window.electronAPI.isWayland && typeof window.electronAPI.getDesktopSources === 'function') {
+      const sourceId = await promptElectronDesktopSource();
+      if (sourceId === false) return;
+    }
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: { ideal: preset.width }, height: { ideal: preset.height }, frameRate: { ideal: preset.frameRate } },
+      audio: false,
+      selfBrowserSurface: 'exclude'
+    });
+  } catch (err) {
+    if (err.name !== 'NotAllowedError') {
+      console.error('[WebRTC] Tela extra não abriu:', err);
+      showToast(`❌ Não consegui abrir a outra tela: ${err.message || err.name}`, 'error');
+    }
+    return;
+  }
+  // Escolheu enquanto outra tela ocupava esse número, ou saiu do canal no meio
+  if (appState.extraScreens.has(n) || !appState.currentChannelId) {
+    stream.getTracks().forEach((track) => track.stop());
+    return;
+  }
+  const videoTrack = stream.getVideoTracks()[0];
+  if (videoTrack) {
+    videoTrack.contentHint = preset.frameRate >= 60 ? 'motion' : 'detail';
+    videoTrack.onended = () => stopExtraScreen(n);
+  }
+  const kind = `screen${n}`;
+  const entry = { stream, publisher: null };
+  appState.extraScreens.set(n, entry);
+  registerScreenStream(streamKey(appState.myId, kind), streamLabel(streamKey(appState.myId, kind)), stream, true);
+  socket.emit('user-state-changed', { extraScreens: extraScreensState() });
+  if (appState.sfuEnabled) {
+    entry.publisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind, stream });
+    entry.publisher.start();
+  }
+  // Sem SFU, cada amigo pede essa tela (request-stream "screenN") quando clica no selo
+  updateShareButton();
+  showToast(`🖥️ Tela ${n} no ar (só imagem; o som vai na tela 1).`, 'success');
+  renderChannelsTree();
+  updateVoiceLounge();
+}
+
+function stopExtraScreen(n, { silent = false } = {}) {
+  const entry = appState.extraScreens.get(n);
+  if (!entry) return;
+  appState.extraScreens.delete(n);
+  entry.stream.getTracks().forEach((track) => track.stop());
+  entry.publisher?.close();
+  const key = streamKey(appState.myId, `screen${n}`);
+  if (appState.screenPeersOut.has(key)) {
+    try { appState.screenPeersOut.get(key).close(); } catch (_) {}
+    appState.screenPeersOut.delete(key);
+  }
+  removeScreenStream(key);
+  socket.emit('user-state-changed', { extraScreens: extraScreensState() });
+  updateShareButton();
+  if (!silent) showToast(`Tela ${n} encerrada.`);
+  updateStageLayout();
+  renderChannelsTree();
+  updateVoiceLounge();
+}
+
+function stopAllExtraScreens() {
+  for (const n of [...appState.extraScreens.keys()]) stopExtraScreen(n, { silent: true });
+}
+
+// Menu do botão de transmitir quando já tem tela no ar: pôr outra ou parar uma delas
+function openShareMenu(anchor) {
+  const menu = $('#share-menu');
+  if (!menu) return;
+  if (!menu.classList.contains('hidden')) {
+    closeShareMenu();
+    return;
+  }
+  const item = (label, action, danger = false) =>
+    `<button type="button" class="share-menu-item${danger ? ' danger' : ''}" data-share-action="${action}">${label}</button>`;
+  const rows = [];
+  const total = (appState.myUser.isSharing ? 1 : 0) + appState.extraScreens.size;
+  if (total < EXTRA_SCREEN_NUMBERS.length + 1) {
+    rows.push(item(appState.myUser.isSharing ? '➕ Transmitir outra tela' : '➕ Transmitir a tela 1 (com som)', 'add'));
+  }
+  if (appState.myUser.isSharing) rows.push(item(appState.extraScreens.size ? '⏹ Parar a tela 1' : '⏹ Parar a transmissão', 'stop-1', true));
+  for (const n of extraScreensState()) rows.push(item(`⏹ Parar a tela ${n}`, `stop-${n}`, true));
+  if (total > 1) rows.push(item('⏹ Parar todas', 'stop-all', true));
+  menu.innerHTML = rows.join('');
+
+  menu.classList.remove('hidden');
+  const rect = anchor.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuRect.width - 8))}px`;
+  menu.style.top = `${Math.max(8, rect.top - menuRect.height - 8)}px`;
+}
+
+function closeShareMenu() {
+  $('#share-menu')?.classList.add('hidden');
+}
+
+function setupShareMenu() {
+  const menu = $('#share-menu');
+  if (!menu) return;
+  menu.addEventListener('click', (e) => {
+    const action = e.target.closest('[data-share-action]')?.getAttribute('data-share-action');
+    if (!action) return;
+    closeShareMenu();
+    if (action === 'add') {
+      if (appState.myUser.isSharing) {
+        startExtraScreen();
+      } else {
+        appState.myUser.isSharing = true;
+        updateShareButton();
+        onStartScreenShare();
+      }
+    } else if (action === 'stop-1') {
+      onStopScreenShare();
+    } else if (action === 'stop-all') {
+      stopAllExtraScreens();
+      onStopScreenShare();
+    } else if (action.startsWith('stop-')) {
+      stopExtraScreen(Number(action.slice(5)));
+    }
+    renderChannelsTree();
+    updateVoiceLounge();
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (menu.classList.contains('hidden') || menu.contains(e.target)) return;
+    if (e.target.closest('#btn-share-screen, #btn-lounge-start-share')) return;
+    closeShareMenu();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeShareMenu();
+  });
+}
+
 function onStopScreenShare() {
   if (!appState.myUser.isSharing && !appState.localScreenStream) return;
   console.log('[WebRTC] Stopping screen share...');
@@ -4176,8 +4439,7 @@ function onStopScreenShare() {
 
   socket.emit('user-state-changed', { isSharing: false });
 
-  const shareBtn = document.getElementById('btn-share-screen');
-  if (shareBtn) shareBtn.classList.remove('sharing');
+  updateShareButton();
 
   showToast('Transmissão de tela encerrada.');
   updateStageLayout();
@@ -4190,7 +4452,7 @@ function setupWebRTCSignaling(sock) {
   // 1. Incoming WebRTC Offer
   sock.on('webrtc-offer', async ({ senderId, sdp, type }) => {
     console.log(`[WebRTC] Received ${type} offer from ${senderId}`);
-    if (type === 'screen' || type === 'camera') {
+    if (isStreamKind(type)) {
       await handleIncomingScreenOffer(senderId, sdp, type);
     } else if (type === 'voice') {
       await handleIncomingVoiceOffer(senderId, sdp);
@@ -4201,7 +4463,7 @@ function setupWebRTCSignaling(sock) {
   sock.on('webrtc-answer', async ({ senderId, sdp, type }) => {
     console.log(`[WebRTC] Received ${type} answer from ${senderId}`);
     const SessionDescription = window.RTCSessionDescription || globalThis.RTCSessionDescription;
-    if (type === 'screen' || type === 'camera') {
+    if (isStreamKind(type)) {
       const key = streamKey(senderId, type);
       const pc = appState.screenPeersOut.get(key);
       if (pc && pc.signalingState !== 'stable') {
@@ -4224,7 +4486,7 @@ function setupWebRTCSignaling(sock) {
     try {
       // "<kind>-out" vem de quem transmite (vai pra minha conexão de assistir) e "<kind>-in" de quem assiste
       const [kind, dir] = String(type).split('-');
-      if ((kind === 'screen' || kind === 'camera') && dir === 'out') {
+      if (isStreamKind(kind) && dir === 'out') {
         const key = streamKey(senderId, kind);
         const pc = appState.screenPeersIn.get(key);
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
@@ -4232,7 +4494,7 @@ function setupWebRTCSignaling(sock) {
         } else {
           enqueueIceCandidate(`screen-in:${key}`, candidate);
         }
-      } else if ((kind === 'screen' || kind === 'camera') && dir === 'in') {
+      } else if (isStreamKind(kind) && dir === 'in') {
         const key = streamKey(senderId, kind);
         const pc = appState.screenPeersOut.get(key);
         if (pc && pc.remoteDescription && pc.remoteDescription.type) {
@@ -4258,8 +4520,9 @@ function setupWebRTCSignaling(sock) {
     console.log(`[WebRTC] Stream requested by ${requesterId} (type: ${type})`);
     if (type === 'screen' && appState.myUser.isSharing && appState.localScreenStream && !appState.sfuEnabled) {
       createScreenOfferForUser(requesterId);
-    } else if (type === 'camera' && appState.myUser.isCameraOn && appState.localCameraStream && !appState.sfuEnabled) {
-      createScreenOfferForUser(requesterId, 'camera');
+    } else if (type !== 'screen' && isStreamKind(type) && localStreamFor(type) && !appState.sfuEnabled) {
+      // Câmera ou tela extra
+      createScreenOfferForUser(requesterId, type);
     } else if (type === 'voice' && appState.myUser.isMicOn && appState.localMicStream) {
       createVoiceOfferForUser(requesterId);
     }
@@ -4337,6 +4600,7 @@ function initApp() {
   setupMicGain();
   setupThemeSelect();
   setupAdminSettings();
+  setupShareMenu();
   updateMicButton();
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {

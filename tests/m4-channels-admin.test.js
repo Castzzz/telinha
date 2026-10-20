@@ -41,7 +41,7 @@ async function join(client, channelId, profileId) {
 async function startServer() {
   const proc = spawn('node', ['server.js'], {
     cwd: ROOT_DIR,
-    env: { ...process.env, PORT: String(TEST_PORT), ADMIN_KEY, TELINHA_DATA_DIR: DATA_DIR },
+    env: { ...process.env, PORT: String(TEST_PORT), ADMIN_KEY, TELINHA_DATA_DIR: DATA_DIR, SFU_SECRET: 'sfu-teste' },
     stdio: 'ignore'
   });
   for (let i = 0; i < 50; i++) {
@@ -156,6 +156,22 @@ async function runTests() {
     const stillOld = await fetch(`${URL_BASE}/api/avatar/${bob.id}`);
     assert.equal(Buffer.from(await stillOld.arrayBuffer()).length, gif.length, 'GIF acima de 1 MB é recusado');
     console.log('  ✓ Cor do nome chega pros outros; GIF até 1 MB aceito, acima recusado');
+
+    // 8. Várias telas: extras 2 e 3 chegam pros outros (lixo é ignorado) e cada uma tem sala no SFU
+    const screensSeen = new Promise((resolve) => {
+      alice2.on('user-state-changed', (st) => { if (st.userId === bob.id && st.extraScreens?.length) resolve(st); });
+    });
+    bob.emit('user-state-changed', { isSharing: true, extraScreens: [3, 2, 2, 7, 'x', 1] });
+    assert.deepEqual((await screensSeen).extraScreens, [2, 3]);
+    const geralNow = (await channelsList()).find((c) => c.id === 'geral');
+    assert.deepEqual(geralNow.users.find((u) => u.id === bob.id).extraScreens, [2, 3]);
+    const hostToken = await emit(bob, 'sfu-token', { ownerId: bob.id, role: 'host', kind: 'screen2' });
+    assert.equal(hostToken.sala, `geral__${bob.id}__s2`);
+    const viewerToken = await emit(alice2, 'sfu-token', { ownerId: bob.id, role: 'viewer', kind: 'screen3' });
+    assert.equal(viewerToken.sala, `geral__${bob.id}__s3`);
+    const firstScreen = await emit(alice2, 'sfu-token', { ownerId: bob.id, role: 'viewer', kind: 'screen' });
+    assert.equal(firstScreen.sala, `geral__${bob.id}`, 'tela 1 continua com a sala de sempre');
+    console.log('  ✓ Várias telas: estado chega pros outros e cada tela tem a sua sala no SFU');
 
     console.log('\n✅ TODOS OS TESTES DE CANAIS E ADMIN PASSARAM\n');
   } finally {

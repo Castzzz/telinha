@@ -189,6 +189,8 @@ for (const def of DEFAULT_CHANNELS) {
 }
 
 const CHANNEL_ID_RE = /^[a-z0-9_-]{1,64}$/;
+// Cada pessoa transmite até 3 telas: a 1 (isSharing) e as extras 2 e 3
+const EXTRA_SCREEN_NUMBERS = [2, 3];
 
 function loadSavedChannels() {
   if (!CHANNELS_FILE) return;
@@ -251,6 +253,7 @@ function publicUser(u) {
     channelId: u.channelId,
     isSharing: u.isSharing,
     isCameraOn: u.isCameraOn,
+    extraScreens: u.extraScreens,
     isMicOn: u.isMicOn,
     isDeafened: u.isDeafened,
     isSpeaking: u.isSpeaking,
@@ -442,6 +445,7 @@ io.on('connection', (socket) => {
     channelId: null,
     isSharing: false,
     isCameraOn: false,
+    extraScreens: [],
     isMicOn: false,
     isDeafened: false,
     isSpeaking: false,
@@ -673,6 +677,14 @@ io.on('connection', (socket) => {
       user.isCameraOn = rawPayload.isCameraOn;
       presenceChanged = true;
     }
+    // Telas a mais da mesma pessoa: números 2 e 3 (a tela 1 é o isSharing)
+    if (Array.isArray(rawPayload.extraScreens)) {
+      const next = [...new Set(rawPayload.extraScreens.filter((n) => EXTRA_SCREEN_NUMBERS.includes(n)))].sort();
+      if (next.join() !== user.extraScreens.join()) {
+        user.extraScreens = next;
+        presenceChanged = true;
+      }
+    }
     if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn) {
       user.isMicOn = rawPayload.isMicOn;
       presenceChanged = true;
@@ -693,6 +705,7 @@ io.on('connection', (socket) => {
       channelId,
       isSharing: user.isSharing,
       isCameraOn: user.isCameraOn,
+      extraScreens: user.extraScreens,
       isMicOn: user.isMicOn,
       isDeafened: user.isDeafened,
       isSpeaking: user.isSpeaking,
@@ -724,7 +737,9 @@ io.on('connection', (socket) => {
     if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
     // Voz também passa pelo SFU: cada um que fala tem a sua sala de voz no canal
     // Voz e câmera também passam pelo SFU, cada uma na sua sala (separada da tela)
-    const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : '';
+    // Telas a mais: "screen2" → "__s2"
+    const extra = typeof payload.kind === 'string' && /^screen([23])$/.exec(payload.kind);
+    const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : extra ? `__s${extra[1]}` : '';
     const sala = `${user.channelId}__${ownerId}${suffix}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
     const token = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}`).digest('hex');
@@ -920,6 +935,7 @@ function leaveCurrentChannel(socket) {
   user.channelId = null;
   user.isSharing = false;
   user.isCameraOn = false;
+  user.extraScreens = [];
   user.isSpeaking = false;
 
   const summaryList = getChannelsSummary();

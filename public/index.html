@@ -134,27 +134,27 @@
         <div class="dock-controls">
           <!-- Mic Toggle -->
           <button id="btn-toggle-mic" class="dock-btn" title="Mutar Microfone">
-            <span class="dock-icon" id="dock-mic-icon">🎙️</span>
+            <span class="dock-icon" id="dock-mic-icon"></span>
           </button>
 
           <!-- Deafen Toggle -->
           <button id="btn-toggle-deafen" class="dock-btn" title="Ensurdecer (Desativar Áudio)">
-            <span class="dock-icon" id="dock-deafen-icon">🎧</span>
+            <span class="dock-icon" id="dock-deafen-icon"></span>
           </button>
 
           <!-- Screen Share Toggle -->
           <button id="btn-share-screen" class="dock-btn btn-dock-share" title="Transmitir Tela com Som do Sistema">
-            <span class="dock-icon" id="dock-share-icon">🖥️</span>
+            <span class="dock-icon" id="dock-share-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span>
           </button>
 
           <!-- Câmera (vai como transmissão, com AO VIVO) -->
           <button id="btn-share-camera" class="dock-btn btn-dock-share" title="Ligar câmera">
-            <span class="dock-icon">📷</span>
+            <span class="dock-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></span>
           </button>
 
           <!-- Settings Modal -->
-          <button id="btn-open-settings" class="dock-btn" title="Configurações de Áudio e Vídeo">
-            <span class="dock-icon">⚙️</span>
+          <button id="btn-open-settings" class="dock-btn" title="Configurações">
+            <span class="dock-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
           </button>
         </div>
       </footer>
@@ -197,21 +197,16 @@
       <footer id="stage-controls-bar" class="stage-controls-bar">
         <div class="stage-controls-left">
           <span id="watching-stream-label" class="watching-stream-label">Nenhuma transmissão</span>
-          <div class="stream-volume-control" id="stream-volume-control" title="Volume da transmissão (0-200%)">
+          <div class="stream-volume-control hidden" id="stream-volume-control" title="Volume da transmissão (0-300%)">
             <span id="stream-volume-icon">🔊</span>
-            <input type="range" id="input-stream-volume" min="0" max="2" step="0.05" value="1" />
+            <input type="range" id="input-stream-volume" min="0" max="3" step="0.05" value="1" />
             <span id="stream-volume-text">100%</span>
           </div>
         </div>
 
         <div class="reactions-bar" aria-label="Reações rápidas">
-          <button class="reaction-btn" data-emoji="🔥" title="Fogo!">🔥</button>
-          <button class="reaction-btn" data-emoji="😂" title="Rindo">😂</button>
-          <button class="reaction-btn" data-emoji="😱" title="Chocado">😱</button>
-          <button class="reaction-btn" data-emoji="⚽" title="Golaço">⚽</button>
-          <button class="reaction-btn" data-emoji="🎮" title="GG / Gameplay">🎮</button>
-          <button class="reaction-btn" data-emoji="👏" title="Aplausos">👏</button>
-          <button class="reaction-btn" data-emoji="❤️" title="Amei">❤️</button>
+          <!-- Os rápidos vêm do app: começam com estes e vão virando os que você mais usa -->
+          <span id="quick-reactions" class="quick-reactions"></span>
           <button id="btn-more-reactions" class="reaction-btn reaction-btn-more" title="Qualquer emoji" aria-label="Escolher outro emoji" aria-expanded="false">＋</button>
         </div>
         <!-- Seletor com todos os emojis (carregado só na primeira vez que abre) -->
@@ -310,12 +305,21 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Bem-vindo ao Teletela 2.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 2.1</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Várias telas ao mesmo tempo:</strong> já transmitindo, clique de novo em transmitir → <em>Transmitir outra tela</em> (até 3). O som vai na tela 1.</li>
+          <li><strong>Volume da transmissão até 300%.</strong> E a barra de volume lá embaixo só aparece quando você está vendo alguém.</li>
+          <li><strong>Reações que aprendem:</strong> os emojis que você mais usa vão tomando o lugar na barra.</li>
+          <li><strong>Visual:</strong> ícones novos lá embaixo, barra de baixo alinhada e os botões da janela com a cor do tema.</li>
+        </ul>
+        <!-- Só pra quem veio direto de antes da 2.0 -->
+        <div id="whats-new-2-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 2.0</h4>
+          <ul class="whats-new-list">
           <li><strong>Nome novo:</strong> o Telinha agora é Teletela.</li>
           <li><strong>Já entra falando:</strong> ao entrar num canal o microfone abre sozinho.</li>
           <li><strong>Qualquer emoji:</strong> o <strong>＋</strong> na barra de reações abre todos os emojis, com busca.</li>
@@ -326,6 +330,7 @@
           <li><strong>Chat com largura ajustável:</strong> arraste a borda esquerda dele, igual à barra de canais.</li>
           <li><strong>Configurações mais largas</strong> e ícone de microfone de verdade quando alguém tá mutado.</li>
         </ul>
+        </div>
       </div>
 
       <div class="modal-actions">
@@ -516,6 +521,9 @@
       </form>
     </div>
   </div>
+
+  <!-- MENU DO BOTÃO DE TRANSMITIR (com tela no ar): pôr outra tela ou parar uma -->
+  <div id="share-menu" class="share-menu hidden" role="menu"></div>
 
   <!-- POPUP DE UM AMIGO: PERFIL + VOLUME SÓ PRA VOCÊ -->
   <div id="user-popover" class="user-popover hidden" role="dialog" aria-label="Perfil do amigo">

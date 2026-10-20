@@ -374,6 +374,7 @@ test('CHALLENGE 2.1: VolumeMixerManager Nominal Clamping [0, 50, 100, 150, 200]'
   assert.equal(mixer.setStreamVolume('s1', 0), 0.0);
   assert.equal(mixer.setStreamVolume('s1', 100), 1.0);
   assert.equal(mixer.setStreamVolume('s1', 200), 2.0);
+  assert.equal(mixer.setStreamVolume('s1', 300), 3.0);
 });
 
 test('CHALLENGE 2.2: VolumeMixerManager Extreme Boundaries (-10, -500, 500, Infinity)', () => {
@@ -389,7 +390,7 @@ test('CHALLENGE 2.2: VolumeMixerManager Extreme Boundaries (-10, -500, 500, Infi
   assert.equal(mixer.setUserVolume('u1', Infinity), 2.0, '+Infinity clamped to 2.0');
 
   assert.equal(mixer.setStreamVolume('s1', -100), 0.0);
-  assert.equal(mixer.setStreamVolume('s1', 1000), 2.0);
+  assert.equal(mixer.setStreamVolume('s1', 1000), 3.0);
 });
 
 test('CHALLENGE 2.3: VolumeMixerManager Non-Numeric, NaN and Corrupted Inputs Clamping Oracle', () => {
