@@ -26,16 +26,15 @@ async function runM1SmokeTests() {
     assert.equal(healthRes.status, 200);
     const healthData = await healthRes.json();
     assert.equal(healthData.status, 'ok');
-    assert.ok(healthData.channelsCount >= 4);
+    assert.ok(healthData.channelsCount >= 1);
 
     const channelsRes = await fetch(`${serverUrl}/api/channels`);
     assert.equal(channelsRes.status, 200);
     const channelsData = await channelsRes.json();
     const defaultIds = channelsData.map((c) => c.id);
     assert.ok(defaultIds.includes('geral'));
-    assert.ok(defaultIds.includes('cinema'));
-    assert.ok(defaultIds.includes('futebol'));
-    assert.ok(defaultIds.includes('gameplay'));
+    // Só o Geral é fixo desde a 2.0
+    assert.ok(!defaultIds.includes('cinema'));
     console.log('  ✓ REST API endpoints passed');
 
     // 2. Connect Client 1 (Alice) to Geral

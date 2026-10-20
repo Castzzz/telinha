@@ -406,6 +406,8 @@ async function ensureLocalServer() {
   if (isRunning) return `http://localhost:${PORT}`;
 
   try {
+    // Sala hospedada no PC: os canais criados ficam salvos na pasta do app
+    process.env.TELINHA_DATA_DIR ||= path.join(app.getPath('userData'), 'sala');
     const serverModule = await import(pathToFileURL(path.join(__dirname, '..', 'server.js')).href);
     if (serverModule && typeof serverModule.startServer === 'function') {
       await serverModule.startServer(PORT);

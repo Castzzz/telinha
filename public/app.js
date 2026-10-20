@@ -128,6 +128,8 @@ function updateMicButton() {
   if (micIcon) micIcon.innerHTML = on ? MIC_ON_SVG : MIC_OFF_SVG;
 }
 
+// Cores prontas pro nome (além do seletor livre)
+const NAME_COLORS = ['#FF5C5C', '#FF9F43', '#FEE75C', '#57F287', '#1ABC9C', '#00A8FC', '#9B84EC', '#EB459E'];
 const PROFILE_COLORS = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#ED4245', '#F47B67', '#9B84EC', '#00A8FC'];
 const isFirstRun = !prefs.profile;
 const myProfile = {
@@ -135,7 +137,8 @@ const myProfile = {
   name: prefs.profile?.name || localStorage.getItem('telinha_username') || `Amigo-${Math.floor(1000 + Math.random() * 9000)}`,
   color: prefs.profile?.color || localStorage.getItem('telinha_user_color') || PROFILE_COLORS[0],
   bio: prefs.profile?.bio || '',
-  avatar: prefs.profile?.avatar || ''
+  avatar: prefs.profile?.avatar || '',
+  nameColor: prefs.profile?.nameColor || ''
 };
 if (isFirstRun) savePrefs({ profile: { ...myProfile } });
 
@@ -145,7 +148,8 @@ function profilePayload() {
     name: myProfile.name,
     color: myProfile.color,
     bio: myProfile.bio,
-    avatar: myProfile.avatar
+    avatar: myProfile.avatar,
+    nameColor: myProfile.nameColor
   };
 }
 
@@ -287,9 +291,43 @@ function openMicAfterJoin() {
   updateVoiceLounge();
 }
 
+// Admin: a senha fica salva por sala (cada servidor tem a sua) e vai sozinha ao conectar
+appState.isAdmin = false;
+appState.serverHasAdmin = false;
+
+function savedAdminKey() {
+  return prefs.adminKeys?.[SERVER_URL] || '';
+}
+
+function saveAdminKey(key) {
+  const adminKeys = { ...(prefs.adminKeys || {}) };
+  if (key) adminKeys[SERVER_URL] = key;
+  else delete adminKeys[SERVER_URL];
+  savePrefs({ adminKeys });
+}
+
+function adminLogin(key, onDone) {
+  socket.emit('admin-login', { key }, (res) => {
+    appState.isAdmin = Boolean(res?.success);
+    renderAdminSettings();
+    renderChannelsTree();
+    updateVoiceLounge();
+    onDone?.(res || {});
+  });
+}
+
 socket.on('connect', () => {
   appState.myId = socket.id;
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
+
+  appState.isAdmin = false;
+  const adminKey = savedAdminKey();
+  if (adminKey) {
+    adminLogin(adminKey, (res) => {
+      // Senha trocada no servidor: esquece a velha
+      if (!res.success) saveAdminKey('');
+    });
+  }
 
   // Send join-channel with current user state (fora da call não entra em nenhum)
   if (!appState.currentChannelId) return;
@@ -323,10 +361,12 @@ socket.on('reconnect', () => {
 });
 
 // Nome e cor vêm do nosso perfil; o servidor só sugere um aleatório antes do join
-socket.on('me', ({ id, sfu }) => {
+socket.on('me', ({ id, sfu, admin }) => {
   appState.myId = id;
   // Sala com SFU (servidor na nuvem): transmissões passam pelo servidor, não P2P
   appState.sfuEnabled = Boolean(sfu);
+  appState.serverHasAdmin = Boolean(admin);
+  renderAdminSettings();
   updateUserDockProfile();
 });
 
@@ -344,6 +384,13 @@ socket.on('user-profile-updated', ({ userId, user }) => {
 const handleChannelsSummary = (channelsList) => {
   if (!Array.isArray(channelsList)) return;
 
+  // Canal que sumiu do servidor sai da lista. Antes ele ficava com a última pessoa que
+  // esteve lá, como um fantasma, mesmo ela já estando em outro canal.
+  const alive = new Set(channelsList.map((ch) => ch.id));
+  for (const id of [...appState.channels.keys()]) {
+    if (!alive.has(id) && id !== appState.currentChannelId) appState.channels.delete(id);
+  }
+
   channelsList.forEach((ch) => {
     const userMap = new Map();
     if (Array.isArray(ch.users)) {
@@ -354,6 +401,7 @@ const handleChannelsSummary = (channelsList) => {
       id: ch.id,
       name: ch.name,
       isDefault: ch.isDefault,
+      createdBy: ch.createdBy || null,
       userCount: ch.userCount ?? userMap.size,
       activeStreams: ch.activeStreams ?? 0,
       users: userMap
@@ -663,13 +711,20 @@ function switchChannel(targetChannelId) {
 // Sair da call sem fechar o app: desliga voz e transmissões e fica fora de todos os canais.
 // Clicar num canal da lista entra de novo.
 function leaveCall() {
+  if (!appState.currentChannelId) return;
+  // Eu saí: o servidor responde com o áudio que tocou pros outros
+  socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed));
+  leaveCallLocally();
+  showToast('Você saiu da call. Clique num canal pra entrar de novo.');
+}
+
+// Desliga voz e transmissões e fica fora dos canais (o servidor já sabe ou vai saber à parte)
+function leaveCallLocally() {
   const oldChannelId = appState.currentChannelId;
   if (!oldChannelId) return;
   onWebRTCChannelChange(oldChannelId, null);
   appState.currentChannelId = null;
   appState.channels.get(oldChannelId)?.users.delete(appState.myId);
-  // Eu saí: o servidor responde com o áudio que tocou pros outros
-  socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed));
 
   const params = new URLSearchParams(window.location.search);
   params.delete('channel');
@@ -679,7 +734,43 @@ function leaveCall() {
   updateTopBar();
   renderChannelChat(null);
   updateVoiceLounge();
-  showToast('Você saiu da call. Clique num canal pra entrar de novo.');
+}
+
+// Admin me tirou da call: o servidor já me tirou do canal
+socket.on('kicked', ({ by } = {}) => {
+  leaveCallLocally();
+  playCallSound();
+  showToast(`🚪 ${by || 'Um admin'} tirou você da call. Clique num canal pra entrar de novo.`, 'error');
+});
+
+socket.on('channel-deleted', ({ channelId, channelName, by } = {}) => {
+  if (!channelId) return;
+  if (channelId === appState.currentChannelId) {
+    leaveCallLocally();
+    showToast(`🗑️ ${by || 'Alguém'} apagou o canal #${channelName || channelId}. Clique num canal pra entrar.`, 'error');
+  }
+  appState.channels.delete(channelId);
+  appState.unreadChannels.delete(channelId);
+  appState.channelChats?.delete(channelId);
+  if (localStorage.getItem('telinha_last_channel') === channelId) localStorage.removeItem('telinha_last_channel');
+  renderChannelsTree();
+});
+
+function canDeleteChannel(ch) {
+  if (!ch || ch.isDefault) return false;
+  return appState.isAdmin || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
+}
+
+function deleteChannel(chId) {
+  const ch = appState.channels.get(chId);
+  if (!ch) return;
+  const inside = ch.users.size;
+  const warn = inside > 0 ? `\n\n${inside === 1 ? '1 pessoa está' : `${inside} pessoas estão`} nele e vai sair da call.` : '';
+  if (!window.confirm(`Apagar o canal #${ch.name}? Não dá pra desfazer.${warn}`)) return;
+  socket.emit('delete-channel', { channelId: chId }, (res) => {
+    if (res?.success) showToast(`🗑️ Canal #${ch.name} apagado.`, 'success');
+    else showToast(`❌ ${res?.error || 'Não deu pra apagar o canal.'}`, 'error');
+  });
 }
 
 // -----------------------------------------------------------------------------
@@ -690,7 +781,7 @@ function renderChannelsTree() {
   if (!treeContainer) return;
 
   // Render each channel in state
-  const defaultOrder = ['geral', 'cinema', 'futebol', 'gameplay'];
+  const defaultOrder = ['geral'];
   const channelIds = Array.from(appState.channels.keys());
 
   // Sort channels: default first in standard order, then custom by creation
@@ -749,8 +840,13 @@ function renderChannelsTree() {
       <span class="channel-speaker-icon">${icon}</span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
       ${userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
+      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
     `;
 
+    row.querySelector('.channel-delete-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      deleteChannel(chId);
+    });
     row.addEventListener('click', () => switchChannel(chId));
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -782,7 +878,8 @@ function renderChannelsTree() {
           <span class="speaking-halo"></span>
         </div>
         <span class="channel-user-name">
-          ${escapeHtml(u.name)}
+          <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
+          ${u.isAdmin ? '<span class="badge-admin" title="Admin">👑</span>' : ''}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>
         <div class="user-indicators">
@@ -880,7 +977,7 @@ function updateVoiceLounge() {
           </div>
           <span class="speaking-halo"></span>
         </div>
-        <span class="lounge-user-name">${escapeHtml(u.name)}${isMe ? ' (Você)' : ''}</span>
+        <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
           ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
@@ -916,7 +1013,10 @@ function updateVoiceLounge() {
 
 function updateUserDockProfile() {
   const nameEl = $('#dock-user-name');
-  if (nameEl) nameEl.textContent = appState.myUser.name;
+  if (nameEl) {
+    nameEl.textContent = appState.myUser.name;
+    nameEl.style.color = nameStyle(myProfile) ? myProfile.nameColor : '';
+  }
 
   const avatar = $('#dock-user-avatar');
   if (avatar) {
@@ -956,6 +1056,11 @@ document.addEventListener('error', (e) => {
 // Cores entram em style="": só aceita hex pra ninguém injetar CSS pelo perfil
 function safeColor(color) {
   return /^#[0-9a-f]{6}$/i.test(color || '') ? color : '#5865f2';
+}
+
+// Cor do nome escolhida no perfil (sem ela, a cor normal do tema)
+function nameStyle(u) {
+  return /^#[0-9a-f]{6}$/i.test(u?.nameColor || '') ? ` style="color: ${u.nameColor};"` : '';
 }
 
 // -----------------------------------------------------------------------------
@@ -1002,7 +1107,7 @@ function appendChatMessage(msg, autoScroll = true) {
     </div>
     <div class="chat-msg-body">
       <div class="chat-msg-header">
-        <span class="chat-author" style="color: ${color};">${escapeHtml(msg.userName || msg.senderName)}</span>
+        <span class="chat-author" style="color: ${msg.userNameColor ? safeColor(msg.userNameColor) : color};">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
       </div>
       <div class="chat-text">${escapeHtml(msg.text)}</div>
@@ -1283,7 +1388,7 @@ function setupModals() {
     const name = input?.value?.trim();
     if (!name) return;
 
-    socket.emit('create-channel', { name }, (response) => {
+    socket.emit('create-channel', { name, profileId: myProfile.id }, (response) => {
       if (response && response.channelId) {
         switchChannel(response.channelId);
       }
@@ -1538,8 +1643,10 @@ function openUserPopover(userId, anchorEvent) {
   avatar.style.backgroundColor = safeColor(u.color);
   avatar.innerHTML = avatarInnerHtml(u);
   $('#user-popover-name').textContent = u.name;
+  $('#user-popover-name').style.color = nameStyle(u) ? u.nameColor : '';
   $('#user-popover-bio').textContent = u.bio || '';
   renderUserPopoverVolume();
+  $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
 
   pop.classList.remove('hidden');
   // Abre ao lado do clique, sem sair da janela
@@ -1589,6 +1696,17 @@ function setupUserPopover() {
     renderUserPopoverVolume();
     renderChannelsTree();
     updateVoiceLounge();
+  });
+
+  $('#user-popover-kick')?.addEventListener('click', () => {
+    const u = findUser(popoverUserId);
+    if (!u) return;
+    closeUserPopover();
+    if (!window.confirm(`Tirar ${u.name} da call?`)) return;
+    socket.emit('kick-user', { userId: u.id }, (res) => {
+      if (res?.success) showToast(`🚪 ${u.name} saiu da call.`, 'success');
+      else showToast(`❌ ${res?.error || 'Não deu pra tirar da call.'}`, 'error');
+    });
   });
 
   $('#user-popover-reconnect')?.addEventListener('click', () => {
@@ -1653,10 +1771,65 @@ function renderProfileDraft() {
     renderProfileDraft();
   });
   colors.appendChild(custom);
+
+  // Cor do nome: aparece pra todo mundo na lista, na call e no chat
+  const nameColors = $('#profile-name-colors');
+  if (nameColors) {
+    nameColors.innerHTML = '';
+    const current = (profileDraft.nameColor || '').toLowerCase();
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = `btn-secondary profile-name-color-reset ${current ? '' : 'selected'}`;
+    reset.textContent = 'Normal';
+    reset.addEventListener('click', () => {
+      profileDraft.nameColor = '';
+      renderProfileDraft();
+    });
+    nameColors.appendChild(reset);
+    for (const color of NAME_COLORS) {
+      const swatch = document.createElement('button');
+      swatch.type = 'button';
+      swatch.className = `profile-color-swatch ${color.toLowerCase() === current ? 'selected' : ''}`;
+      swatch.style.backgroundColor = color;
+      swatch.title = color;
+      swatch.addEventListener('click', () => {
+        profileDraft.nameColor = color;
+        renderProfileDraft();
+      });
+      nameColors.appendChild(swatch);
+    }
+    const customName = document.createElement('input');
+    customName.type = 'color';
+    customName.className = 'profile-color-custom';
+    customName.title = 'Outra cor';
+    customName.value = safeColor(profileDraft.nameColor);
+    customName.addEventListener('change', () => {
+      profileDraft.nameColor = customName.value;
+      renderProfileDraft();
+    });
+    nameColors.appendChild(customName);
+  }
+  const namePreview = $('#profile-name-preview');
+  if (namePreview) {
+    namePreview.textContent = $('#input-profile-name').value || profileDraft.name;
+    namePreview.style.color = profileDraft.nameColor || '';
+  }
 }
 
 // Corta no meio e reduz pra 128×128: a foto fica leve (~10 KB) pra mandar pra sala
+// GIF vai do jeito que está (redimensionar no canvas congela a animação), até 1 MB
+const MAX_GIF_AVATAR_BYTES = 1024 * 1024;
+
 async function resizeAvatar(file) {
+  if (file.type === 'image/gif') {
+    if (file.size > MAX_GIF_AVATAR_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true });
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+  }
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise((resolve, reject) => {
@@ -1698,7 +1871,7 @@ function setupProfileModal() {
   });
 
   $('#input-profile-name')?.addEventListener('input', () => {
-    if (profileDraft && !profileDraft.avatar) renderProfileDraft();
+    if (profileDraft) renderProfileDraft();
   });
 
   $('#input-profile-avatar')?.addEventListener('change', async (e) => {
@@ -1710,7 +1883,7 @@ function setupProfileModal() {
       renderProfileDraft();
     } catch (err) {
       console.warn('[Perfil] Não consegui ler a imagem:', err);
-      showToast('❌ Não consegui abrir essa imagem.', 'error');
+      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo é 1 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
     }
   });
 
@@ -1933,6 +2106,42 @@ function setupMasterVolume() {
     show(pct);
   });
   input.addEventListener('change', () => savePrefs({ masterVolume: Number(input.value) }));
+}
+
+// Configurações > Admin: só aparece em sala com senha de admin (a da nuvem)
+function renderAdminSettings() {
+  const group = $('#admin-settings');
+  if (!group) return;
+  group.classList.toggle('hidden', !appState.serverHasAdmin);
+  $('#admin-login-row')?.classList.toggle('hidden', appState.isAdmin);
+  $('#admin-logged-row')?.classList.toggle('hidden', !appState.isAdmin);
+}
+
+function setupAdminSettings() {
+  const input = $('#input-admin-key');
+  const loginBtn = $('#btn-admin-login');
+  const login = () => {
+    const key = input?.value.trim();
+    if (!key) return;
+    loginBtn.disabled = true;
+    adminLogin(key, (res) => {
+      loginBtn.disabled = false;
+      if (res.success) {
+        saveAdminKey(key);
+        input.value = '';
+        showToast('👑 Agora você é admin nessa sala.', 'success');
+      } else {
+        showToast(`❌ ${res.error || 'Senha errada.'}`, 'error');
+      }
+    });
+  };
+  loginBtn?.addEventListener('click', login);
+  input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+  $('#btn-admin-logout')?.addEventListener('click', () => {
+    saveAdminKey('');
+    adminLogin('', () => showToast('Você não é mais admin nessa sala.'));
+  });
+  renderAdminSettings();
 }
 
 function setupThemeSelect() {
@@ -4127,6 +4336,7 @@ function initApp() {
   setupMasterVolume();
   setupMicGain();
   setupThemeSelect();
+  setupAdminSettings();
   updateMicButton();
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {

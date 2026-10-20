@@ -110,7 +110,7 @@ async function runTests() {
     // -------------------------------------------------------------------------
     // TEST 4: Join, activity and pruning lifecycle in collided rooms
     // -------------------------------------------------------------------------
-    console.log('\n[Test 4] Testing join, presence and pruning on collided room "geral-2"...');
+    console.log('\n[Test 4] Testing join, presence and persistence on collided room "geral-2"...');
     const client2 = createSocket('User2');
     await new Promise((r) => client2.on('connect', r));
 
@@ -128,10 +128,10 @@ async function runTests() {
     assert.equal(state.channelId, 'geral-2');
     assert.equal(channels.get('geral-2').users.size, 1);
 
-    // Leave geral-2 -> should prune
+    // Leave geral-2 -> criado pelo "Criar Canal", fica salvo mesmo vazio
     client2.emit('leave-channel');
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal(channels.has('geral-2'), false, 'geral-2 must be pruned when empty');
+    assert.equal(channels.has('geral-2'), true, 'geral-2 (created channel) must persist when empty');
 
     // Default "geral" must STILL exist and NEVER prune
     assert.equal(channels.has('geral'), true, 'Default room "geral" must never be pruned');
@@ -139,14 +139,14 @@ async function runTests() {
     // -------------------------------------------------------------------------
     // TEST 5: Creating "Geral" again after "geral-2" was pruned
     // -------------------------------------------------------------------------
-    console.log('\n[Test 5] Creating "Geral" again after "geral-2" was pruned...');
+    console.log('\n[Test 5] Creating "Geral" again while "geral-2" still exists...');
     const resReclaimed = await new Promise((resolve) => {
       client1.emit('create-channel', { name: 'Geral' }, resolve);
     });
     console.log('  Result Reclaimed:', resReclaimed);
     assert.equal(resReclaimed.success, true);
-    // Since geral-2 was pruned and is no longer in channels, the counter finds geral-2 free
-    assert.equal(resReclaimed.channelId, 'geral-2', 'Re-creating "Geral" reclaims free slug "geral-2"');
+    assert.notEqual(resReclaimed.channelId, 'geral-2', 'geral-2 is still taken');
+    assert.match(resReclaimed.channelId, /^geral-\d+$/);
 
     // Cleanup sockets
     client1.disconnect();

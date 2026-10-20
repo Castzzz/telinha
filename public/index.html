@@ -320,6 +320,9 @@
           <li><strong>Já entra falando:</strong> ao entrar num canal o microfone abre sozinho.</li>
           <li><strong>Qualquer emoji:</strong> o <strong>＋</strong> na barra de reações abre todos os emojis, com busca.</li>
           <li><strong>Temas:</strong> escuro, mais escuro (preto) e claro, em ⚙️ Configurações.</li>
+          <li><strong>Canais salvos:</strong> os canais que vocês criarem ficam lá até alguém apagar (🗑️ ao passar o mouse). Só o Geral é fixo.</li>
+          <li><strong>Admin 👑:</strong> com a senha da sala (⚙️ Configurações) dá pra tirar alguém da call e apagar qualquer canal.</li>
+          <li><strong>Seu nome colorido e foto em GIF:</strong> clique no seu nome lá embaixo pra escolher a cor do nome (todo mundo vê) e pôr um GIF animado de foto.</li>
           <li><strong>Chat com largura ajustável:</strong> arraste a borda esquerda dele, igual à barra de canais.</li>
           <li><strong>Configurações mais largas</strong> e ícone de microfone de verdade quando alguém tá mutado.</li>
         </ul>
@@ -348,6 +351,20 @@
             <option value="preto">Mais escuro (preto)</option>
             <option value="claro">Claro</option>
           </select>
+        </div>
+
+        <!-- Admin (só em sala com senha de admin) -->
+        <div class="form-group hidden" id="admin-settings">
+          <label for="input-admin-key">Admin 👑</label>
+          <div class="admin-row" id="admin-login-row">
+            <input type="password" id="input-admin-key" class="form-input" placeholder="Senha de admin da sala" autocomplete="off" />
+            <button type="button" class="btn-primary" id="btn-admin-login">Entrar</button>
+          </div>
+          <div class="admin-row hidden" id="admin-logged-row">
+            <span class="admin-status">Você é admin nessa sala.</span>
+            <button type="button" class="btn-secondary" id="btn-admin-logout">Deixar de ser admin</button>
+          </div>
+          <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
         </div>
 
         <!-- Dispositivo de Microfone -->
@@ -456,7 +473,7 @@
 
   <!-- 3. MODAL PERFIL (PRIMEIRA ENTRADA E CLIQUE NO SEU NOME) -->
   <div id="modal-profile" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-profile-title">
-    <div class="modal-card">
+    <div class="modal-card modal-profile-card">
       <div class="modal-header">
         <h3 id="modal-profile-title">Seu perfil</h3>
         <button class="modal-close-btn" data-close-modal="modal-profile">✕</button>
@@ -479,8 +496,13 @@
         </div>
 
         <div class="form-group">
-          <label>Cor</label>
+          <label>Cor da bolinha <span class="form-help-inline">(atrás da foto, ou com suas iniciais)</span></label>
           <div class="profile-colors" id="profile-colors"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Cor do nome <span class="form-help-inline">(todo mundo vê: <strong id="profile-name-preview" class="profile-name-preview"></strong>)</span></label>
+          <div class="profile-colors" id="profile-name-colors"></div>
         </div>
 
         <div class="form-group">
@@ -513,6 +535,7 @@
       <button type="button" class="btn-secondary" id="user-popover-mute">🔇 Silenciar pra mim</button>
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
     </div>
+    <button type="button" class="btn-secondary user-popover-kick hidden" id="user-popover-kick">🚪 Tirar da call (admin)</button>
     <button type="button" class="btn-secondary user-popover-reconnect" id="user-popover-reconnect"
       title="Use se você parou de ouvir essa pessoa">🔄 Reconectar a voz</button>
   </div>

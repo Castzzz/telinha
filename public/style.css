@@ -1997,3 +1997,71 @@ ul {
 .whats-new-list strong {
   color: var(--text-header);
 }
+
+/* ==================== CANAIS SALVOS E ADMIN ==================== */
+/* Lixeira do canal: aparece ao passar o mouse (pra quem pode apagar) */
+.channel-delete-btn {
+  margin-left: 6px;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: opacity var(--transition-fast), background var(--transition-fast);
+}
+
+.channel-row:hover .channel-delete-btn,
+.channel-delete-btn:focus-visible {
+  opacity: 0.8;
+}
+
+.channel-delete-btn:hover {
+  opacity: 1;
+  background: rgba(242, 63, 67, 0.25);
+}
+
+.badge-admin {
+  font-size: 11px;
+}
+
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-row .form-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-status {
+  flex: 1;
+  color: var(--text-normal);
+}
+
+.user-popover-kick {
+  width: 100%;
+  margin-top: 8px;
+  color: var(--accent-red);
+}
+
+/* ==================== COR DO NOME ==================== */
+.profile-name-preview {
+  color: var(--text-header);
+  font-weight: 700;
+}
+
+.profile-name-color-reset {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.profile-name-color-reset.selected {
+  border-color: var(--accent-brand);
+  color: var(--text-header);
+}
+
+/* Cabe as duas fileiras de cores sem quebrar linha */
+.modal-profile-card {
+  max-width: 500px;
+}

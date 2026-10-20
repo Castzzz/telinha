@@ -2,7 +2,7 @@
 
 Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá pra assistir filme, jogo ou vídeo junto: **o som do PC vai na transmissão, separado do microfone**, então você pode ficar mutado e todo mundo ouve o filme direitinho.
 
-- 🔊 Canais de voz (`Geral`, `Cinema`, `Futebol`, `Gameplay` e os que vocês criarem)
+- 🔊 Canais de voz: o `Geral` e os que vocês criarem (ficam salvos até alguém apagar)
 - 🖥️ Várias pessoas transmitindo a tela ao mesmo tempo, com modo mosaico
 - 🎧 No Windows e no Linux dá pra mandar **só o som de um app** (sem as vozes da chamada)
 - 🧠 Cancelamento de ruído com IA no microfone (tira teclado, ventilador, barulho da rua)
@@ -102,11 +102,15 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 
 | Quero… | Como |
 |---|---|
-| **Mutar o microfone** | Botão 🎙️ ou tecla `M` |
+| **Mutar o microfone** | Botão 🎙️ ou tecla `M`. Ao entrar na call o microfone já abre |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D` |
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
-| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda |
+| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (todo mundo vê) e bio |
+| **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca) |
+| **Tema claro / escuro / preto** | ⚙️ → *Tema* |
+| **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
+| **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
 | **Trocar os atalhos** | ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
@@ -203,6 +207,11 @@ npm start       # só o servidor web em http://localhost:8080
 Os links de download deste README apontam sempre pra versão mais nova, então não precisa mudar nada aqui.
 
 > O app desktop usa a interface da sala (`public/`) **que vem instalada com ele** (`telinha://app`); do servidor só vem a conexão. Então mudou `public/`: publique versão (`npm run release`) **e** atualize o servidor (`npm run deploy:oracle`, pra quem entra pelo navegador). Mudou só `server.js` ou `sfu/`: basta o deploy.
+
+### Senha de admin
+A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e mostrada no fim do `npm run deploy:oracle` (fica em `/etc/telinha/telinha.env` na VM). Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
+
+Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app).
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)

@@ -125,16 +125,14 @@ async function runAllChallenges() {
     // ========================================================================
     console.log('\n--- SUITE 1: Dynamic Room Creation & Pruning Lifecycle ---');
 
-    await challenge('1.1: Default permanent channels are pre-seeded and flagged isDefault', async () => {
+    await challenge('1.1: Only "geral" is a pre-seeded permanent channel', async () => {
       const res = await fetch(`${BASE_URL}/api/channels`);
       assert.equal(res.status, 200);
       const list = await res.json();
-      const defaults = ['geral', 'cinema', 'futebol', 'gameplay'];
-      for (const d of defaults) {
-        const found = list.find((c) => c.id === d);
-        assert.ok(found, `Default channel "${d}" must be present`);
-        assert.equal(found.isDefault, true, `Channel "${d}" must have isDefault === true`);
-      }
+      const geral = list.find((c) => c.id === 'geral');
+      assert.ok(geral, 'Default channel "geral" must be present');
+      assert.equal(geral.isDefault, true);
+      assert.deepEqual(list.filter((c) => c.isDefault).map((c) => c.id), ['geral'], 'Only "geral" is default');
     });
 
     await challenge('1.2: Dynamic room creation broadcasts channel-created and updates channels-list', async () => {
@@ -176,7 +174,7 @@ async function runAllChallenges() {
       clientB.disconnect();
     });
 
-    await challenge('1.3: Custom room persists while populated and prunes automatically when empty', async () => {
+    await challenge('1.3: Created room stays even after everyone leaves', async () => {
       const c1 = createSocketClient('User1');
       const c2 = createSocketClient('User2');
       const observer = createSocketClient('Observer');
@@ -219,30 +217,24 @@ async function runAllChallenges() {
       assert.ok(ch2, 'Custom channel must NOT be deleted while 1 user is still inside');
       assert.equal(ch2.userCount, 1);
 
-      // User2 disconnects -> channel now empty, must be PRUNED!
-      const prunePromise = new Promise((resolve) => {
+      // User2 disconnects -> channel empty, but created channels are saved until someone deletes them
+      const emptyPromise = new Promise((resolve) => {
         observer.on('channels-list', (channels) => {
-          if (!channels.some((c) => c.id === roomId)) {
-            resolve(channels);
-          }
+          const ch = channels.find((c) => c.id === roomId);
+          if (ch && ch.userCount === 0) resolve(channels);
         });
       });
 
       c2.disconnect();
 
-      const finalChannels = await prunePromise;
-      assert.ok(!finalChannels.some((c) => c.id === roomId), 'Empty custom room must be pruned from channels-list');
-
-      // Verify REST API confirms deletion
-      const res3 = await fetch(`${BASE_URL}/api/channels`);
-      const list3 = await res3.json();
-      assert.ok(!list3.some((c) => c.id === roomId), 'Empty custom room must be pruned from REST /api/channels');
+      const finalChannels = await emptyPromise;
+      assert.ok(finalChannels.some((c) => c.id === roomId), 'Empty created room must stay in channels-list');
 
       c1.disconnect();
       observer.disconnect();
     });
 
-    await challenge('1.4: Permanent default rooms are IMMUNE to pruning even when 0 users remain', async () => {
+    await challenge('1.4: "geral" stays when empty; room joined by link (not created) is temporary', async () => {
       const client = createSocketClient('Tester');
       await new Promise((r) => client.on('connect', r));
 
@@ -254,18 +246,17 @@ async function runAllChallenges() {
       client.emit('join-channel', { channelId: 'geral', userName: 'Tester' });
       await new Promise((r) => client.once('channel-state', r));
 
-      // Check all 4 default channels still exist with 0 users in cinema
       const res = await fetch(`${BASE_URL}/api/channels`);
       const list = await res.json();
-      const cinema = list.find((c) => c.id === 'cinema');
-      assert.ok(cinema, 'Default room "cinema" must NEVER be pruned');
-      assert.equal(cinema.isDefault, true);
-      assert.equal(cinema.userCount, 0);
+      assert.ok(!list.some((c) => c.id === 'cinema'), 'Room joined by link (never created) is pruned when empty');
 
-      const defaults = ['geral', 'cinema', 'futebol', 'gameplay'];
-      for (const d of defaults) {
-        assert.ok(list.some((c) => c.id === d), `Default room ${d} must remain present`);
-      }
+      // Leave geral too: it must stay
+      client.emit('leave-channel');
+      await sleep(60);
+      const list2 = await (await fetch(`${BASE_URL}/api/channels`)).json();
+      const geral = list2.find((c) => c.id === 'geral');
+      assert.ok(geral, '"geral" must never be pruned');
+      assert.equal(geral.isDefault, true);
 
       client.disconnect();
     });
@@ -336,6 +327,17 @@ async function runAllChallenges() {
     // SUITE 2: REAL-TIME AO VIVO BADGE PROPAGATION ACROSS MULTI-VIEWERS
     // ========================================================================
     console.log('\n--- SUITE 2: AO VIVO Badge Propagation Across Multi-Viewers ---');
+
+    // Desde a 2.0 só o Geral é fixo: cria os canais que as próximas suites usam (ficam salvos)
+    {
+      const setup = createSocketClient('Setup');
+      await new Promise((r) => setup.on('connect', r));
+      for (const name of ['Cinema', 'Futebol', 'Gameplay']) {
+        const res = await new Promise((resolve) => setup.emit('create-channel', { name }, resolve));
+        assert.equal(res.channelId, name.toLowerCase());
+      }
+      setup.disconnect();
+    }
 
     await challenge('2.1: AO VIVO badge propagates in real-time to multi-viewers in-room and cross-channel', async () => {
       const streamer = createSocketClient('StreamerAlice');

@@ -7,9 +7,10 @@ import express from 'express';
 import http from 'node:http';
 import { Server } from 'socket.io';
 import path from 'node:path';
+import fs from 'node:fs';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { randomUUID, createHash, createHmac } from 'node:crypto';
+import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // Process-Level Defensive Error Boundaries
@@ -27,6 +28,11 @@ const PORT = Number(process.env.PORT) || 8080;
 const SFU_SECRET = process.env.SFU_SECRET || '';
 const SFU_PATH = process.env.SFU_PATH || '/sfu/ws';
 const PUBLIC_DIR = path.join(import.meta.dirname, 'public');
+// Pasta onde os canais criados ficam salvos (sobrevivem a reinício e deploy). Sem ela, só na memória.
+const DATA_DIR = process.env.TELINHA_DATA_DIR || '';
+const CHANNELS_FILE = DATA_DIR ? path.join(DATA_DIR, 'channels.json') : '';
+// Senha de admin: quem digitar nas Configurações pode tirar gente da call e apagar qualquer canal
+const ADMIN_KEY = process.env.ADMIN_KEY || '';
 
 const app = express();
 const server = http.createServer(app);
@@ -164,25 +170,71 @@ const USER_COLORS = [
 // Uma reação: um emoji só (com tom de pele, ZWJ, bandeira...), sem texto junto
 const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\p{Emoji_Component}|\u200d|\ufe0f|[\u{E0020}-\u{E007F}])+$/u;
 
+// Só o Geral é fixo; o resto a turma cria (e apaga) pelo app
 const DEFAULT_CHANNELS = [
-  { id: 'geral', name: 'Geral', isDefault: true },
-  { id: 'cinema', name: 'Cinema', isDefault: true },
-  { id: 'futebol', name: 'Futebol', isDefault: true },
-  { id: 'gameplay', name: 'Gameplay', isDefault: true }
+  { id: 'geral', name: 'Geral', isDefault: true }
 ];
 
 // Map<channelId, Channel>
+// Canal criado pelo "Criar Canal" é salvo e fica até alguém apagar. Canal que nasce de um
+// link antigo (?channel=x) ou de versão antiga do app é temporário: some quando esvazia.
 const channels = new Map();
 
+function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now() }) {
+  return { id, name, isDefault, temporary, createdBy, createdAt, users: new Map(), messages: [] };
+}
+
 for (const def of DEFAULT_CHANNELS) {
-  channels.set(def.id, {
-    id: def.id,
-    name: def.name,
-    isDefault: true,
-    createdAt: Date.now(),
-    users: new Map(),
-    messages: []
-  });
+  channels.set(def.id, newChannel({ id: def.id, name: def.name, isDefault: true }));
+}
+
+const CHANNEL_ID_RE = /^[a-z0-9_-]{1,64}$/;
+
+function loadSavedChannels() {
+  if (!CHANNELS_FILE) return;
+  try {
+    const saved = JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf8'));
+    for (const c of Array.isArray(saved?.channels) ? saved.channels : []) {
+      if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || channels.has(c.id)) continue;
+      const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim().slice(0, 30) : c.id;
+      const createdBy = typeof c.createdBy === 'string' ? c.createdBy : null;
+      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now() }));
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('⚠️ [Canais] Não deu pra ler os canais salvos:', err.message);
+  }
+}
+
+// Grava num arquivo temporário e renomeia: se o servidor cair no meio, o arquivo antigo fica inteiro
+function saveChannels() {
+  if (!CHANNELS_FILE) return;
+  const list = [...channels.values()]
+    .filter((c) => !c.isDefault && !c.temporary)
+    .map(({ id, name, createdBy, createdAt }) => ({ id, name, createdBy, createdAt }));
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${CHANNELS_FILE}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ channels: list }, null, 2));
+    fs.renameSync(tmp, CHANNELS_FILE);
+  } catch (err) {
+    console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
+  }
+}
+
+loadSavedChannels();
+
+function isAdminKey(key) {
+  if (!ADMIN_KEY || typeof key !== 'string') return false;
+  const a = Buffer.from(key);
+  const b = Buffer.from(ADMIN_KEY);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+// Apaga: admin apaga qualquer um; quem criou apaga o seu. O Geral nunca.
+function canDeleteChannel(user, channel) {
+  if (!channel || channel.isDefault) return false;
+  if (user.isAdmin) return true;
+  return Boolean(channel.createdBy && user.profileId && channel.createdBy === user.profileId);
 }
 
 // O que os outros podem ver de um usuário (a foto vai à parte, por /api/avatar/:id)
@@ -191,8 +243,10 @@ function publicUser(u) {
     id: u.id,
     name: u.name,
     color: u.color,
+    nameColor: u.nameColor || '',
     bio: u.bio,
     profileId: u.profileId,
+    isAdmin: Boolean(u.isAdmin),
     avatarV: u.avatar ? u.avatarV : 0,
     channelId: u.channelId,
     isSharing: u.isSharing,
@@ -207,8 +261,10 @@ function publicUser(u) {
 
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const PROFILE_ID_RE = /^[a-z0-9-]{8,64}$/i;
-const AVATAR_RE = /^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=]+)$/i;
+const AVATAR_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([a-z0-9+/=]+)$/i;
 const MAX_AVATAR_BYTES = 200 * 1024;
+// GIF vai sem redimensionar (senão para de mexer), então pode ser maior
+const MAX_GIF_AVATAR_BYTES = 1024 * 1024;
 
 // Aplica os campos válidos do perfil; retorna true se algo mudou
 function applyProfile(user, raw) {
@@ -221,6 +277,12 @@ function applyProfile(user, raw) {
   }
   if (typeof profile.color === 'string' && HEX_COLOR_RE.test(profile.color) && profile.color !== user.color) {
     user.color = profile.color;
+    changed = true;
+  }
+  // Cor do nome (vazio = cor normal do tema)
+  if (typeof profile.nameColor === 'string' && (profile.nameColor === '' || HEX_COLOR_RE.test(profile.nameColor))
+    && profile.nameColor !== user.nameColor) {
+    user.nameColor = profile.nameColor;
     changed = true;
   }
   if (typeof profile.bio === 'string') {
@@ -239,7 +301,8 @@ function applyProfile(user, raw) {
   } else if (typeof profile.avatar === 'string' && profile.avatar) {
     const match = profile.avatar.match(AVATAR_RE);
     const data = match ? Buffer.from(match[2], 'base64') : null;
-    if (data && data.length <= MAX_AVATAR_BYTES && !(user.avatar && user.avatar.data.equals(data))) {
+    const maxBytes = match?.[1].toLowerCase() === 'image/gif' ? MAX_GIF_AVATAR_BYTES : MAX_AVATAR_BYTES;
+    if (data && data.length <= maxBytes && !(user.avatar && user.avatar.data.equals(data))) {
       user.avatar = { mime: match[1].toLowerCase(), data };
       user.avatarV = Date.now();
       changed = true;
@@ -258,6 +321,7 @@ function getChannelsSummary() {
       id: channel.id,
       name: channel.name,
       isDefault: channel.isDefault,
+      createdBy: channel.createdBy,
       userCount: channel.users.size,
       activeStreams: sharers.length,
       sharers,
@@ -370,7 +434,9 @@ io.on('connection', (socket) => {
     name: `Amigo-${socket.id.slice(0, 4)}`,
     color: USER_COLORS[colorIndex],
     bio: '',
+    nameColor: '',
     profileId: null,
+    isAdmin: false,
     avatar: null,
     avatarV: 0,
     channelId: null,
@@ -389,7 +455,58 @@ io.on('connection', (socket) => {
   const summary = getChannelsSummary();
   socket.emit('channels-list', summary);
   socket.emit('channels-summary', summary);
-  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET) });
+  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(ADMIN_KEY) });
+
+  const broadcastChannels = () => {
+    const list = getChannelsSummary();
+    io.emit('channels-list', list);
+    io.emit('channels-summary', list);
+  };
+
+  // Vira admin com a senha (o app manda sozinho ao conectar, se já tiver salvo)
+  socket.on('admin-login', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const ok = isAdminKey(safeObject(rawPayload).key);
+    if (ok !== user.isAdmin) {
+      user.isAdmin = ok;
+      if (user.channelId) io.to(user.channelId).emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
+      broadcastChannels();
+    }
+    cb({ success: ok, error: ok ? undefined : (ADMIN_KEY ? 'Senha errada.' : 'Essa sala não tem admin.') });
+  }));
+
+  // Admin: tira alguém da call (a pessoa continua no app e pode entrar de novo)
+  socket.on('kick-user', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode tirar alguém da call.' });
+    const targetId = safeObject(rawPayload).userId;
+    const target = typeof targetId === 'string' && targetId !== socket.id ? io.sockets.sockets.get(targetId) : null;
+    if (!target?.data?.user?.channelId) return cb({ success: false, error: 'Essa pessoa não está em nenhuma call.' });
+    target.emit('kicked', { by: user.name });
+    leaveCurrentChannel(target);
+    cb({ success: true });
+  }));
+
+  // Apagar canal: quem estiver nele sai da call
+  socket.on('delete-channel', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const channelId = safeObject(rawPayload).channelId;
+    const channel = typeof channelId === 'string' ? channels.get(channelId) : null;
+    if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (!canDeleteChannel(user, channel)) {
+      return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só admin ou quem criou o canal pode apagar.' });
+    }
+    // Avisa antes: quem está no canal sai da call sozinho no app
+    io.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
+    for (const memberId of [...channel.users.keys()]) {
+      const member = io.sockets.sockets.get(memberId);
+      if (member) leaveCurrentChannel(member);
+    }
+    channels.delete(channel.id);
+    saveChannels();
+    broadcastChannels();
+    cb({ success: true });
+  }));
 
   // Client requests channels update
   socket.on('get-channels', safeHandler(() => {
@@ -411,6 +528,10 @@ io.on('connection', (socket) => {
 
     const data = safeObject(payload);
     const cb = safeCallback(callback);
+    // Quem cria fora da call ainda não mandou o perfil: o id dele vem junto pra poder apagar depois
+    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId)) {
+      user.profileId = data.profileId;
+    }
 
     const rawName = typeof data.name === 'string' ? data.name.trim() : '';
     const cleanName = rawName.slice(0, 30) || `Sala-${Date.now().toString(36).slice(-4)}`;
@@ -430,15 +551,8 @@ io.on('connection', (socket) => {
     }
 
     if (!channels.has(finalId)) {
-      const newChan = {
-        id: finalId,
-        name: cleanName,
-        isDefault: false,
-        createdAt: Date.now(),
-        users: new Map(),
-        messages: []
-      };
-      channels.set(finalId, newChan);
+      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId }));
+      saveChannels();
       const summaryList = getChannelsSummary();
       io.emit('channels-list', summaryList);
       io.emit('channels-summary', summaryList);
@@ -499,17 +613,10 @@ io.on('connection', (socket) => {
     if (isDeafened !== undefined) user.isDeafened = isDeafened;
     if (isSharing !== undefined) user.isSharing = isSharing;
 
-    // Create custom channel if it does not exist
+    // Canal que não existe (link antigo, versão antiga do app): cria temporário, some quando esvaziar
     if (!channels.has(cleanChannelId)) {
       const formattedName = cleanChannelId.charAt(0).toUpperCase() + cleanChannelId.slice(1);
-      channels.set(cleanChannelId, {
-        id: cleanChannelId,
-        name: formattedName,
-        isDefault: false,
-        createdAt: Date.now(),
-        users: new Map(),
-        messages: []
-      });
+      channels.set(cleanChannelId, newChannel({ id: cleanChannelId, name: formattedName, temporary: true }));
     }
 
     const channel = channels.get(cleanChannelId);
@@ -726,6 +833,7 @@ io.on('connection', (socket) => {
       senderName: user.name,
       userName: user.name,
       userColor: user.color,
+      userNameColor: user.nameColor || '',
       userAvatarV: user.avatar ? user.avatarV : 0,
       text: rawText.slice(0, 600),
       timestamp: Date.now()
@@ -803,8 +911,8 @@ function leaveCurrentChannel(socket) {
     socket.to(channelId).emit('user-left', leftPayload);
     socket.to(channelId).emit('user-channel-left', leftPayload);
 
-    // Prune custom channel if empty
-    if (!channel.isDefault && channel.users.size === 0) {
+    // Canal temporário vazio some (os criados pelo "Criar Canal" ficam salvos)
+    if (channel.temporary && channel.users.size === 0) {
       channels.delete(channelId);
     }
   }

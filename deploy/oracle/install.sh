@@ -35,7 +35,7 @@ systemctl stop dnf-makecache.service 2>/dev/null || true
 log "Usuários e pastas"
 id telinha >/dev/null 2>&1 || useradd --system --home-dir "$APP" --shell /sbin/nologin telinha
 id caddy >/dev/null 2>&1 || useradd --system --home-dir /var/lib/caddy --create-home --shell /sbin/nologin caddy
-mkdir -p "$APP/app" "$APP/bin" /etc/telinha /etc/caddy
+mkdir -p "$APP/app" "$APP/bin" "$APP/data" /etc/telinha /etc/caddy
 chmod 700 /etc/telinha
 
 log "Node.js $NODE_VERSION (binário oficial, hash conferido)"
@@ -75,6 +75,10 @@ log "Segredos (gerados uma vez, ficam só na VM)"
 if [ ! -f /etc/telinha/telinha.env ]; then
   echo "SFU_SECRET=$(openssl rand -hex 32)" > /etc/telinha/telinha.env
 fi
+# Senha de admin da sala (Configurações > Admin no app). Pra trocar: apague a linha e rode o deploy.
+if ! grep -q '^ADMIN_KEY=' /etc/telinha/telinha.env; then
+  echo "ADMIN_KEY=$(openssl rand -hex 4)" >> /etc/telinha/telinha.env
+fi
 if [ -n "${DUCKDNS_TOKEN:-}" ]; then
   printf 'DUCKDNS_DOMAIN=%s\nDUCKDNS_TOKEN=%s\n' "${DOMAIN%%.duckdns.org}" "$DUCKDNS_TOKEN" > /etc/telinha/duckdns.env
 fi
@@ -94,6 +98,8 @@ WorkingDirectory=$APP/app
 EnvironmentFile=/etc/telinha/telinha.env
 Environment=PORT=8080
 Environment=NODE_ENV=production
+# Canais criados ficam aqui (fora de app/, que o deploy apaga e recria)
+Environment=TELINHA_DATA_DIR=$APP/data
 ExecStart=$APP/node/bin/node --max-old-space-size=192 server.js
 Restart=always
 RestartSec=2
@@ -197,3 +203,4 @@ sleep 3
 systemctl --no-pager --lines=0 status telinha-server telinha-sfu caddy | grep -E '●|Active:' || true
 echo
 echo "Pronto: https://$DOMAIN"
+grep '^ADMIN_KEY=' /etc/telinha/telinha.env | sed 's/^ADMIN_KEY=/Senha de admin (Configurações > Admin no app): /'
