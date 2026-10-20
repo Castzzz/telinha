@@ -194,6 +194,96 @@ async function runTests() {
     assert.equal((await fetch(`${URL_BASE}/api/chat-image/..%2Fchannels.json`)).status, 404);
     console.log('  ✓ Imagem no chat: salva em disco, chega pra todos; arquivo falso, gigante e caminho estranho recusados');
 
+    // 10. Canal de texto: histórico salvo em disco, volta depois de reiniciar, paginação e apagar
+    const textList = new Promise((resolve) => alice2.on('text-channels', (list) => { if (list.some((c) => c.id === 'memes')) resolve(list); }));
+    const createdText = await emit(bob, 'create-text-channel', { name: 'Memes', profileId: 'bob-profile-00002' });
+    assert.equal(createdText.channelId, 'memes');
+    await textList;
+    const got = new Promise((resolve) => alice2.on('text-message', (m) => { if (m.text === 'msg 0') resolve(m); }));
+    for (let i = 0; i < 60; i++) {
+      const r = await emit(bob, 'text-message', { channelId: 'memes', text: `msg ${i}` });
+      if (!r.success) { await new Promise((ok) => setTimeout(ok, 3100)); i--; }
+    }
+    assert.equal((await got).channelId, 'memes', 'quem não está em call nenhuma também recebe');
+    await new Promise((r) => setTimeout(r, 3100));
+    assert.equal((await emit(bob, 'text-image', { channelId: 'memes', data: png, mime: 'image/png', width: 1, height: 1 })).success, true);
+    assert.equal((await emit(alice2, 'text-message', { channelId: 'nao-existe', text: 'oi' })).success, false);
+
+    // Reinicia: canal e mensagens continuam
+    clients.forEach((c) => c.disconnect());
+    clients.length = 0;
+    await stopServer(proc);
+    proc = await startServer();
+    const reader = await connect();
+    clients.push(reader);
+    const page1 = await emit(reader, 'text-history', { channelId: 'memes' });
+    assert.equal(page1.messages.length, 50);
+    assert.equal(page1.hasMore, true);
+    assert.ok(page1.messages.at(-1).image, 'a última é a imagem');
+    const imgAfter = await fetch(`${URL_BASE}${page1.messages.at(-1).image.url}`);
+    assert.equal(imgAfter.status, 200, 'imagem do canal de texto sobrevive ao reinício');
+    const page2 = await emit(reader, 'text-history', { channelId: 'memes', before: page1.messages[0].id });
+    assert.equal(page2.messages.length, 11);
+    assert.equal(page2.messages[0].text, 'msg 0');
+    assert.equal(page2.hasMore, false);
+
+    // Só quem criou (ou admin) apaga; apagar some com o arquivo
+    await join(reader, 'geral', 'carol-profile-0003');
+    assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, false);
+    assert.equal((await emit(reader, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, true);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.ok(!fs.existsSync(path.join(DATA_DIR, 'text', 'memes.jsonl')), 'histórico apagado junto');
+    assert.equal(fs.readdirSync(path.join(DATA_DIR, 'text', 'images')).length, 0, 'imagens apagadas junto');
+    console.log('  ✓ Canal de texto: histórico e imagens salvos, voltam depois de reiniciar, paginação e apagar');
+
+    // 11. Admin: mutar pra todos (não dá pra se desmutar, nem reconectando), ensurdecer e mover de call
+    const dave = await connect();
+    clients.push(dave);
+    await join(dave, 'geral', 'dave-profile-0004');
+    dave.emit('user-state-changed', { isMicOn: true });
+    const modSeen = once(dave, 'server-moderation');
+    assert.equal((await emit(dave, 'admin-mute-user', { userId: reader.id, on: true })).success, false, 'quem não é admin não muta');
+    assert.equal((await emit(reader, 'admin-mute-user', { userId: dave.id, on: true })).success, true);
+    assert.equal((await modSeen).serverMuted, true);
+    dave.emit('user-state-changed', { isMicOn: true });
+    await new Promise((r) => setTimeout(r, 100));
+    let daveNow = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === dave.id);
+    assert.equal(daveNow.isMicOn, false, 'mutado pelo admin não abre o mic');
+    assert.equal(daveNow.serverMuted, true);
+    // Reconecta com o mesmo perfil: continua mutado
+    dave.disconnect();
+    const dave2 = await connect();
+    clients.push(dave2);
+    const daveState = await new Promise((resolve) => {
+      dave2.once('channel-state', resolve);
+      dave2.emit('join-channel', { channelId: 'geral', userName: 'dave', isMicOn: true, profile: { profileId: 'dave-profile-0004', name: 'dave' } });
+    });
+    assert.equal(daveState.me.serverMuted, true);
+    assert.equal(daveState.me.isMicOn, false);
+    // Ensurdecer e desfazer
+    assert.equal((await emit(reader, 'admin-deafen-user', { userId: dave2.id, on: true })).success, true);
+    daveNow = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === dave2.id);
+    assert.equal(daveNow.isDeafened, true);
+    dave2.emit('user-state-changed', { isDeafened: false });
+    await new Promise((r) => setTimeout(r, 100));
+    daveNow = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === dave2.id);
+    assert.equal(daveNow.isDeafened, true, 'ensurdecido pelo admin não se desensurdece');
+    assert.equal((await emit(reader, 'admin-deafen-user', { userId: dave2.id, on: false })).success, true);
+    assert.equal((await emit(reader, 'admin-mute-user', { userId: dave2.id, on: false })).success, true);
+    dave2.emit('user-state-changed', { isMicOn: true });
+    await new Promise((r) => setTimeout(r, 100));
+    daveNow = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === dave2.id);
+    assert.equal(daveNow.isMicOn, true, 'liberado, volta a abrir o mic');
+    assert.equal(daveNow.isDeafened, false);
+    // Mover de call
+    await emit(reader, 'create-channel', { name: 'Sala Dois' });
+    const moved = once(dave2, 'moved-by-admin');
+    assert.equal((await emit(dave2, 'admin-move-user', { userId: reader.id, channelId: 'sala-dois' })).success, false);
+    assert.equal((await emit(reader, 'admin-move-user', { userId: dave2.id, channelId: 'sala-dois' })).success, true);
+    assert.equal((await moved).channelId, 'sala-dois');
+    console.log('  ✓ Admin: mutar/ensurdecer pra todos (vale reconectando) e mover de call; quem não é admin não consegue');
+
     console.log('\n✅ TODOS OS TESTES DE CANAIS E ADMIN PASSARAM\n');
   } finally {
     clients.forEach((c) => c.disconnect());

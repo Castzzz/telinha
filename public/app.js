@@ -295,7 +295,7 @@ let connectedOnce = false;
 function openMicAfterJoin() {
   if (!openMicOnJoin) return;
   openMicOnJoin = false;
-  if (appState.myUser.isMicOn || appState.myUser.isDeafened) return;
+  if (appState.myUser.isMicOn || appState.myUser.isDeafened || isMicLockedByAdmin()) return;
   appState.myUser.isMicOn = true;
   updateMicButton();
   onMicrophoneToggle(true);
@@ -324,6 +324,7 @@ function adminLogin(key, onDone) {
     appState.isAdmin = Boolean(res?.success);
     renderAdminSettings();
     renderChannelsTree();
+    renderTextChannels();
     updateVoiceLounge();
     onDone?.(res || {});
   });
@@ -438,6 +439,8 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
     if (me.id) appState.myId = me.id;
     if (me.name) appState.myUser.name = me.name;
     if (me.color) appState.myUser.color = me.color;
+    appState.myUser.serverMuted = Boolean(me.serverMuted);
+    appState.myUser.serverDeafened = Boolean(me.serverDeafened);
     updateUserDockProfile();
   }
 
@@ -598,6 +601,11 @@ const handleUserStateChanged = (state) => {
         unwatchScreen(streamKey(userId, 'camera'));
       }
     }
+    if (typeof state.serverMuted === 'boolean' || typeof state.serverDeafened === 'boolean') {
+      u.serverMuted = Boolean(state.serverMuted);
+      u.serverDeafened = Boolean(state.serverDeafened);
+      if (userId !== appState.myId) applyUserVolume(userId);
+    }
     if (Array.isArray(state.extraScreens)) {
       const before = Array.isArray(u.extraScreens) ? u.extraScreens : [];
       u.extraScreens = state.extraScreens;
@@ -666,7 +674,7 @@ socket.on('chat-message', (msg) => {
   appState.channelChats.get(msg.channelId).push(msg);
 
   if (msg.channelId === appState.currentChannelId) {
-    appendChatMessage(msg, true);
+    if (!appState.textView) appendChatMessage(msg, true);
   } else {
     appState.unreadChannels.add(msg.channelId);
     renderChannelsTree();
@@ -778,6 +786,65 @@ socket.on('channel-deleted', ({ channelId, channelName, by } = {}) => {
   renderChannelsTree();
 });
 
+// Ícones de mutado/ensurdecido; com a 🛡️ quando foi o admin
+function muteIndicatorsHtml(u) {
+  const byAdmin = '<span class="admin-lock" aria-hidden="true">🛡️</span>';
+  let html = '';
+  if (!u.isMicOn) {
+    html += u.serverMuted || u.serverDeafened
+      ? `<span class="indicator-icon mic-muted" title="Mutado pelo admin">${MIC_OFF_SVG}${byAdmin}</span>`
+      : `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>`;
+  }
+  if (u.isDeafened) {
+    html += u.serverDeafened
+      ? `<span class="indicator-icon mic-muted" title="Ensurdecido pelo admin">${HEADPHONES_OFF_SVG}${byAdmin}</span>`
+      : `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>`;
+  }
+  return html;
+}
+
+function isMicLockedByAdmin() {
+  return Boolean(appState.myUser.serverMuted || appState.myUser.serverDeafened);
+}
+
+const DRAG_USER_TYPE = 'application/x-teletela-user';
+
+function moveUserToChannel(userId, channelId) {
+  const u = findUser(userId);
+  const ch = appState.channels.get(channelId);
+  socket.emit('admin-move-user', { userId, channelId }, (res) => {
+    if (res?.success) showToast(`➡️ ${u?.name || 'Pessoa'} foi pra #${ch?.name || channelId}.`, 'success');
+    else showToast(`❌ ${res?.error || 'Não deu pra mudar de call.'}`, 'error');
+  });
+}
+
+// Admin me mudou de call
+socket.on('moved-by-admin', ({ channelId, channelName, by } = {}) => {
+  if (!channelId || channelId === appState.currentChannelId) return;
+  switchChannel(channelId);
+  showToast(`➡️ ${by || 'Um admin'} te levou pra #${channelName || channelId}.`);
+});
+
+// Admin me mutou / ensurdeceu (ou desfez)
+socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
+  const me = appState.myUser;
+  const wasDeafenedByAdmin = me.serverDeafened;
+  me.serverMuted = Boolean(serverMuted);
+  me.serverDeafened = Boolean(serverDeafened);
+  if (isMicLockedByAdmin() && me.isMicOn) {
+    me.isMicOn = false;
+    onMicrophoneToggle(false);
+  }
+  if (me.serverDeafened && !me.isDeafened) onDeafenToggle(true);
+  else if (wasDeafenedByAdmin && !me.serverDeafened && me.isDeafened) onDeafenToggle(false);
+  updateMicButton();
+  renderChannelsTree();
+  updateVoiceLounge();
+  if (me.serverDeafened) showToast(`🎧 ${by || 'Um admin'} te ensurdeceu.`, 'error');
+  else if (me.serverMuted) showToast(`🔇 ${by || 'Um admin'} te mutou pra todos.`, 'error');
+  else showToast(`🎙️ ${by || 'Um admin'} liberou seu microfone.`, 'success');
+});
+
 function canDeleteChannel(ch) {
   if (!ch || ch.isDefault) return false;
   return appState.isAdmin || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
@@ -869,6 +936,24 @@ function renderChannelsTree() {
       e.stopPropagation();
       deleteChannel(chId);
     });
+    // Solta aqui a pessoa arrastada (admin)
+    li.addEventListener('dragover', (e) => {
+      if (!appState.isAdmin || !e.dataTransfer.types.includes(DRAG_USER_TYPE)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      li.classList.add('drop-target');
+    });
+    li.addEventListener('dragleave', (e) => {
+      if (!li.contains(e.relatedTarget)) li.classList.remove('drop-target');
+    });
+    li.addEventListener('drop', (e) => {
+      li.classList.remove('drop-target');
+      const userId = e.dataTransfer.getData(DRAG_USER_TYPE);
+      if (!userId || !appState.isAdmin) return;
+      e.preventDefault();
+      if (ch.users.has(userId)) return;
+      moveUserToChannel(userId, chId);
+    });
     row.addEventListener('click', () => switchChannel(chId));
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -906,12 +991,22 @@ function renderChannelsTree() {
         </span>
         <div class="user-indicators">
           ${liveBadgesHtml(u, { compact: true })}
-          ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
-          ${u.isDeafened ? `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>` : ''}
+          ${muteIndicatorsHtml(u)}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
         </div>
       `;
       userLi.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
+      // Admin arrasta a pessoa pra outra call, igual no Discord
+      if (appState.isAdmin) {
+        userLi.draggable = true;
+        userLi.title += ' · arraste pra outra call';
+        userLi.addEventListener('dragstart', (e) => {
+          e.dataTransfer.setData(DRAG_USER_TYPE, u.id);
+          e.dataTransfer.effectAllowed = 'move';
+          userLi.classList.add('dragging');
+        });
+        userLi.addEventListener('dragend', () => userLi.classList.remove('dragging'));
+      }
       userLi.addEventListener('click', (e) => {
         if (isMe) openProfileModal();
         else openUserPopover(u.id, e);
@@ -950,13 +1045,18 @@ function updateTopBar() {
   const topCount = $('#topbar-users-count');
   if (topCount) topCount.textContent = String(count);
 
+  const textCh = appState.textView ? appState.textChannels.get(appState.textView) : null;
   const chatLabel = $('#chat-channel-label');
-  if (chatLabel) chatLabel.textContent = `#${name}-chat`;
+  if (chatLabel) chatLabel.textContent = textCh ? `#${textCh.name}` : `#${name}-chat`;
+  $('#btn-chat-back-voice')?.classList.toggle('hidden', !textCh || !inCall);
 
   const chatInput = $('#chat-input');
   if (chatInput) {
-    chatInput.disabled = !inCall;
-    chatInput.placeholder = inCall ? `Conversar em #${name}...` : 'Entre num canal pra conversar';
+    // Canal de texto não precisa estar em call
+    chatInput.disabled = !inCall && !textCh;
+    chatInput.placeholder = textCh
+      ? `Mensagem em #${textCh.name}...`
+      : inCall ? `Conversar em #${name}...` : 'Entre num canal pra conversar';
   }
 }
 
@@ -1002,8 +1102,7 @@ function updateVoiceLounge() {
         <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
-          ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
-          ${u.isDeafened ? `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>` : ''}
+          ${muteIndicatorsHtml(u)}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
         </div>
       `;
@@ -1091,6 +1190,8 @@ function nameStyle(u) {
 function renderChannelChat(channelId) {
   const container = $('#chat-messages');
   if (!container) return;
+  // Vendo um canal de texto: o chat da call fica pra quando voltar
+  if (appState.textView) return;
 
   container.innerHTML = '';
   const messages = appState.channelChats.get(channelId) || [];
@@ -1119,7 +1220,12 @@ function appendChatMessage(msg, autoScroll = true) {
   const div = document.createElement('div');
   div.className = 'chat-msg';
 
-  const time = new Date(msg.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const when = new Date(msg.timestamp || Date.now());
+  const hour = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  // Canal de texto guarda mensagens de outros dias: aí mostra a data também
+  const time = when.toDateString() === new Date().toDateString()
+    ? hour
+    : `${when.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${hour}`;
   const color = safeColor(msg.userColor);
   const author = { id: msg.senderId || msg.userId, name: msg.userName || msg.senderName, avatarV: msg.userAvatarV };
 
@@ -1165,7 +1271,7 @@ function linkifyText(text) {
 }
 
 function chatImageHtml(image) {
-  if (!image || typeof image.url !== 'string' || !/^\/api\/chat-image\/[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(image.url)) return '';
+  if (!image || typeof image.url !== 'string' || !/^\/api\/(chat|text)-image\/[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(image.url)) return '';
   const size = image.width && image.height ? ` width="${Number(image.width)}" height="${Number(image.height)}"` : '';
   return `<img class="chat-image" src="${escapeHtml(SERVER_URL + image.url)}"${size} alt="Imagem" loading="lazy" />`;
 }
@@ -1215,7 +1321,8 @@ async function prepareChatImage(file) {
 let sendingChatImage = false;
 async function sendChatImage(file) {
   if (!file) return;
-  if (!appState.currentChannelId) {
+  const textChannelId = appState.textView;
+  if (!appState.currentChannelId && !textChannelId) {
     showToast('Entre num canal pra mandar imagem.');
     return;
   }
@@ -1226,7 +1333,10 @@ async function sendChatImage(file) {
     const image = await prepareChatImage(file);
     showToast('📎 Enviando imagem...');
     // A legenda é o que estiver escrito no campo
-    const res = await socket.timeout(60000).emitWithAck('chat-image', { ...image, text: input?.value.trim() || '' });
+    const text = input?.value.trim() || '';
+    const res = textChannelId
+      ? await socket.timeout(60000).emitWithAck('text-image', { ...image, text, channelId: textChannelId })
+      : await socket.timeout(60000).emitWithAck('chat-image', { ...image, text });
     if (res?.success) {
       if (input) input.value = '';
     } else {
@@ -1286,9 +1396,179 @@ function setupChatImages() {
   });
 }
 
+// -----------------------------------------------------------------------------
+// CANAIS DE TEXTO: o histórico fica salvo no servidor. Abrem no painel do chat, sem
+// precisar estar (nem sair) de call nenhuma.
+// -----------------------------------------------------------------------------
+appState.textChannels = new Map(); // id -> { id, name, createdBy, createdAt, lastMessageAt }
+appState.textView = null; // canal de texto aberto no chat (null = chat da call)
+appState.textMessages = new Map(); // id -> { messages: [], hasMore, loading }
+
+function textLastSeen(id) {
+  return (prefs.textLastSeen || {})[id] || 0;
+}
+
+function markTextSeen(id) {
+  const ch = appState.textChannels.get(id);
+  if (!ch?.lastMessageAt || textLastSeen(id) >= ch.lastMessageAt) return;
+  savePrefs({ textLastSeen: { ...(prefs.textLastSeen || {}), [id]: ch.lastMessageAt } });
+}
+
+function renderTextChannels() {
+  const tree = $('#text-channels-tree');
+  if (!tree) return;
+  tree.innerHTML = '';
+  for (const ch of appState.textChannels.values()) {
+    const li = document.createElement('li');
+    const active = appState.textView === ch.id;
+    const unread = !active && ch.lastMessageAt > textLastSeen(ch.id);
+    li.className = `channel-item ${active ? 'channel-active' : ''} ${unread ? 'channel-unread' : ''}`;
+    li.dataset.textChannelId = ch.id;
+    li.innerHTML = `
+      <div class="channel-row" role="button" tabindex="0">
+        <span class="channel-speaker-icon channel-hash">#</span>
+        <span class="channel-name">${escapeHtml(ch.name)}</span>
+        ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+      </div>
+    `;
+    const row = li.querySelector('.channel-row');
+    row.addEventListener('click', () => openTextChannel(ch.id));
+    row.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        openTextChannel(ch.id);
+      }
+    });
+    li.querySelector('.channel-delete-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!window.confirm(`Apagar o canal de texto #${ch.name}? Todas as mensagens e imagens dele somem. Não dá pra desfazer.`)) return;
+      socket.emit('delete-text-channel', { channelId: ch.id }, (res) => {
+        if (res?.success) showToast(`🗑️ Canal #${ch.name} apagado.`, 'success');
+        else showToast(`❌ ${res?.error || 'Não deu pra apagar o canal.'}`, 'error');
+      });
+    });
+    tree.appendChild(li);
+  }
+}
+
+function openTextChannel(id) {
+  if (!appState.textChannels.has(id)) return;
+  appState.textView = id;
+  const drawer = $('#chat-drawer');
+  drawer?.classList.remove('collapsed');
+  $('#btn-toggle-chat')?.classList.add('active');
+  markTextSeen(id);
+  renderTextChannels();
+  updateTopBar();
+  const state = appState.textMessages.get(id);
+  if (state) renderTextChat();
+  else loadTextHistory(id);
+  $('#chat-input')?.focus();
+}
+
+function closeTextView() {
+  if (!appState.textView) return;
+  appState.textView = null;
+  renderTextChannels();
+  updateTopBar();
+  renderChannelChat(appState.currentChannelId);
+}
+
+function loadTextHistory(id, before = null) {
+  const state = appState.textMessages.get(id) || { messages: [], hasMore: false, loading: false };
+  if (state.loading) return;
+  state.loading = true;
+  appState.textMessages.set(id, state);
+  if (!before) renderTextChat(); // mostra "carregando" enquanto chega
+  socket.emit('text-history', before ? { channelId: id, before } : { channelId: id }, (res) => {
+    state.loading = false;
+    if (!res?.success) return;
+    const container = $('#chat-messages');
+    const keepFromBottom = container ? container.scrollHeight - container.scrollTop : 0;
+    // Mensagem que chegou ao vivo enquanto o histórico vinha não fica repetida
+    const known = new Set(state.messages.map((m) => m.id));
+    const fresh = res.messages.filter((m) => !known.has(m.id));
+    // As do servidor são sempre mais antigas que as que já estão aqui (ao vivo ou já carregadas)
+    state.messages = [...fresh, ...state.messages];
+    state.hasMore = res.hasMore;
+    if (appState.textView !== id) return;
+    renderTextChat();
+    // Carregou as antigas em cima: a tela não pula
+    if (before && container) container.scrollTop = container.scrollHeight - keepFromBottom;
+  });
+}
+
+function renderTextChat() {
+  const container = $('#chat-messages');
+  const id = appState.textView;
+  const ch = appState.textChannels.get(id);
+  if (!container || !ch) return;
+  const state = appState.textMessages.get(id) || { messages: [], hasMore: false, loading: true };
+  container.innerHTML = '';
+  const banner = document.createElement('div');
+  banner.className = 'chat-welcome-banner';
+  if (state.hasMore || (state.loading && !state.messages.length)) {
+    banner.innerHTML = `<p>${state.loading ? 'Carregando mensagens...' : 'Role pra cima pra ver as mais antigas'}</p>`;
+  } else {
+    banner.innerHTML = `
+      <h3>Este é o começo de #${escapeHtml(ch.name)}</h3>
+      <p>Tudo que mandarem aqui fica salvo, mesmo depois de todo mundo sair.</p>
+    `;
+  }
+  container.appendChild(banner);
+  state.messages.forEach((msg) => appendChatMessage(msg, false));
+  container.scrollTop = container.scrollHeight;
+}
+
+function setupTextChannels() {
+  $('#btn-chat-back-voice')?.addEventListener('click', closeTextView);
+  // Perto do topo: busca as mensagens mais antigas
+  $('#chat-messages')?.addEventListener('scroll', (e) => {
+    const id = appState.textView;
+    const state = id && appState.textMessages.get(id);
+    if (!state || !state.hasMore || state.loading || e.target.scrollTop > 60) return;
+    const oldest = state.messages[0];
+    if (oldest) loadTextHistory(id, oldest.id);
+  });
+}
+
+socket.on('text-channels', (list) => {
+  if (!Array.isArray(list)) return;
+  appState.textChannels = new Map(list.map((ch) => [ch.id, ch]));
+  // O canal aberto foi apagado enquanto estávamos desconectados
+  if (appState.textView && !appState.textChannels.has(appState.textView)) closeTextView();
+  renderTextChannels();
+  updateTopBar();
+});
+
+socket.on('text-message', (msg) => {
+  const ch = appState.textChannels.get(msg?.channelId);
+  if (!ch) return;
+  ch.lastMessageAt = msg.timestamp;
+  const state = appState.textMessages.get(msg.channelId);
+  if (state && !state.messages.some((m) => m.id === msg.id)) state.messages.push(msg);
+  if (appState.textView === msg.channelId) {
+    appendChatMessage(msg, true);
+    markTextSeen(msg.channelId);
+  }
+  renderTextChannels();
+});
+
+socket.on('text-channel-deleted', ({ channelId, channelName, by } = {}) => {
+  if (!channelId) return;
+  if (appState.textView === channelId) {
+    appState.textChannels.delete(channelId);
+    closeTextView();
+    showToast(`🗑️ ${by || 'Alguém'} apagou o canal #${channelName || channelId}.`, 'error');
+  }
+  appState.textChannels.delete(channelId);
+  appState.textMessages.delete(channelId);
+  renderTextChannels();
+});
+
 function addSystemChatMessage(text, channelId = appState.currentChannelId) {
   const container = $('#chat-messages');
-  if (!container || channelId !== appState.currentChannelId) return;
+  if (!container || channelId !== appState.currentChannelId || appState.textView) return;
 
   const div = document.createElement('div');
   div.className = 'chat-system-notice';
@@ -1327,6 +1607,10 @@ function setupDockControls() {
 
   // Mic Mute Toggle
   micBtn?.addEventListener('click', () => {
+    if (!appState.myUser.isMicOn && isMicLockedByAdmin()) {
+      showToast(appState.myUser.serverDeafened ? '🎧 Um admin te ensurdeceu.' : '🔇 Um admin te mutou pra todos.', 'error');
+      return;
+    }
     appState.myUser.isMicOn = !appState.myUser.isMicOn;
     if (appState.myUser.isMicOn && appState.myUser.isDeafened) {
       appState.myUser.isDeafened = false;
@@ -1347,6 +1631,10 @@ function setupDockControls() {
 
   // Deafen Toggle
   deafenBtn?.addEventListener('click', () => {
+    if (appState.myUser.isDeafened && appState.myUser.serverDeafened) {
+      showToast('🎧 Um admin te ensurdeceu.', 'error');
+      return;
+    }
     const nextDeafened = !appState.myUser.isDeafened;
     onDeafenToggle(nextDeafened);
 
@@ -1404,9 +1692,15 @@ function setupChatAndReactions() {
     const text = chatInput?.value?.trim();
     if (!text) return;
 
-    socket.emit('chat-message', {
-      text: text.slice(0, 600)
-    });
+    if (appState.textView) {
+      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 2000) }, (res) => {
+        if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra mandar a mensagem.'}`, 'error');
+      });
+    } else {
+      socket.emit('chat-message', {
+        text: text.slice(0, 600)
+      });
+    }
 
     chatInput.value = '';
   });
@@ -1554,14 +1848,17 @@ function setupEmojiPicker(onPick) {
 
 function setupModals() {
   // Open create channel modal
-  const openCreateModal = () => {
+  const openCreateModal = (type = 'voice') => {
+    const radio = document.querySelector(`input[name="channel-type"][value="${type}"]`);
+    if (radio) radio.checked = true;
     $('#modal-create-channel')?.classList.remove('hidden');
     $('#input-channel-name')?.focus();
   };
+  $('#btn-add-text-channel')?.addEventListener('click', () => openCreateModal('text'));
 
-  $('#btn-header-add-channel')?.addEventListener('click', openCreateModal);
-  $('#btn-add-channel-category')?.addEventListener('click', openCreateModal);
-  $('#btn-open-create-modal')?.addEventListener('click', openCreateModal);
+  $('#btn-header-add-channel')?.addEventListener('click', () => openCreateModal());
+  $('#btn-add-channel-category')?.addEventListener('click', () => openCreateModal());
+  $('#btn-open-create-modal')?.addEventListener('click', () => openCreateModal());
 
   // Close modals on buttons with data-close-modal
   $$('[data-close-modal]').forEach((btn) => {
@@ -1590,11 +1887,19 @@ function setupModals() {
     const name = input?.value?.trim();
     if (!name) return;
 
-    socket.emit('create-channel', { name, profileId: myProfile.id }, (response) => {
-      if (response && response.channelId) {
-        switchChannel(response.channelId);
-      }
-    });
+    const type = document.querySelector('input[name="channel-type"]:checked')?.value;
+    if (type === 'text') {
+      socket.emit('create-text-channel', { name, profileId: myProfile.id }, (response) => {
+        if (response?.success) openTextChannel(response.channelId);
+        else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
+      });
+    } else {
+      socket.emit('create-channel', { name, profileId: myProfile.id }, (response) => {
+        if (response && response.channelId) {
+          switchChannel(response.channelId);
+        }
+      });
+    }
 
     input.value = '';
     $('#modal-create-channel')?.classList.add('hidden');
@@ -1830,7 +2135,8 @@ function applyUserVolume(userId) {
   const u = findUser(userId);
   if (!u) return;
   const { volume, muted } = getVolumePref(u);
-  appState.setUserVolume(userId, muted ? 0 : volume);
+  // Mutado pelo admin: ninguém ouve, mesmo que o app dele insista em mandar a voz
+  appState.setUserVolume(userId, muted || u.serverMuted || u.serverDeafened ? 0 : volume);
 }
 
 let popoverUserId = null;
@@ -1849,6 +2155,12 @@ function openUserPopover(userId, anchorEvent) {
   $('#user-popover-bio').textContent = u.bio || '';
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
+  const adminRow = $('#user-popover-admin');
+  adminRow?.classList.toggle('hidden', !appState.isAdmin);
+  const muteAll = $('#user-popover-server-mute');
+  if (muteAll) muteAll.textContent = u.serverMuted ? '🎙️ Desmutar pra todos' : '🔇 Mutar pra todos';
+  const deafAll = $('#user-popover-server-deafen');
+  if (deafAll) deafAll.textContent = u.serverDeafened ? '🎧 Tirar o ensurdecer' : '🎧 Ensurdecer pra todos';
 
   pop.classList.remove('hidden');
   // Abre ao lado do clique, sem sair da janela
@@ -1899,6 +2211,21 @@ function setupUserPopover() {
     renderChannelsTree();
     updateVoiceLounge();
   });
+
+  const moderate = (event, field, done) => {
+    const u = findUser(popoverUserId);
+    if (!u) return;
+    const on = !u[field];
+    socket.emit(event, { userId: u.id, on }, (res) => {
+      if (res?.success) showToast(done(u.name, on), 'success');
+      else showToast(`❌ ${res?.error || 'Não deu certo.'}`, 'error');
+    });
+    closeUserPopover();
+  };
+  $('#user-popover-server-mute')?.addEventListener('click', () =>
+    moderate('admin-mute-user', 'serverMuted', (name, on) => (on ? `🔇 ${name} está mutado pra todos.` : `🎙️ ${name} pode falar de novo.`)));
+  $('#user-popover-server-deafen')?.addEventListener('click', () =>
+    moderate('admin-deafen-user', 'serverDeafened', (name, on) => (on ? `🎧 ${name} está ensurdecido.` : `🎧 ${name} voltou a ouvir.`)));
 
   $('#user-popover-kick')?.addEventListener('click', () => {
     const u = findUser(popoverUserId);
@@ -2357,14 +2684,15 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '2.1';
+const WHATS_NEW_VERSION = '2.2';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
-  // Veio direto de antes da 2.0 (nunca viu novidade nenhuma): mostra o que chegou nela também
-  const skippedTwoZero = !prefs.seenWhatsNew;
+  // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
+  const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
-  $('#whats-new-2-0')?.classList.toggle('hidden', !skippedTwoZero);
+  $('#whats-new-2-1')?.classList.toggle('hidden', seen >= 2.1);
+  $('#whats-new-2-0')?.classList.toggle('hidden', seen >= 2.0);
   $('#modal-whats-new')?.classList.remove('hidden');
 }
 
@@ -4769,6 +5097,7 @@ function initApp() {
   setupDockControls();
   setupChatAndReactions();
   setupChatImages();
+  setupTextChannels();
   setupModals();
   setupUserPopover();
   setupProfileModal();

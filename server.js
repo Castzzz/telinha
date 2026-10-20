@@ -202,6 +202,16 @@ function loadSavedChannels() {
       const createdBy = typeof c.createdBy === 'string' ? c.createdBy : null;
       channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now() }));
     }
+    for (const c of Array.isArray(saved?.textChannels) ? saved.textChannels : []) {
+      if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || textChannels.has(c.id)) continue;
+      const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim().slice(0, 30) : c.id;
+      textChannels.set(c.id, newTextChannel({
+        id: c.id,
+        name,
+        createdBy: typeof c.createdBy === 'string' ? c.createdBy : null,
+        createdAt: Number(c.createdAt) || Date.now()
+      }));
+    }
   } catch (err) {
     if (err.code !== 'ENOENT') console.error('⚠️ [Canais] Não deu pra ler os canais salvos:', err.message);
   }
@@ -216,14 +226,141 @@ function saveChannels() {
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
-    fs.writeFileSync(tmp, JSON.stringify({ channels: list }, null, 2));
+    const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt }) => ({ id, name, createdBy, createdAt }));
+    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList }, null, 2));
     fs.renameSync(tmp, CHANNELS_FILE);
   } catch (err) {
     console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
   }
 }
 
+// ----------------------------------------------------
+// Canais de texto: o histórico fica salvo (um arquivo por canal, uma mensagem por linha).
+// Na memória só as últimas mensagens de cada um; as antigas vêm do disco quando alguém rola.
+// Separados dos canais de voz (outro Map, outros eventos): app antigo nem fica sabendo deles.
+// ----------------------------------------------------
+const TEXT_DIR = DATA_DIR ? path.join(DATA_DIR, 'text') : path.join(os.tmpdir(), `teletela-text-${process.pid}`);
+const TEXT_IMAGE_DIR = path.join(TEXT_DIR, 'images');
+const MAX_TEXT_MESSAGES_PER_CHANNEL = 20000; // passou disso, apaga as mais antigas
+const TEXT_RECENT_IN_MEMORY = 100;
+const TEXT_PAGE_SIZE = 50;
+const MAX_TEXT_LENGTH = 2000;
+const MAX_TEXT_IMAGES_TOTAL_BYTES = 5 * 1024 * 1024 * 1024; // passou disso, apaga as imagens mais antigas
+const TEXT_IMAGE_FILE_RE = /^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/;
+
+// Map<id, { id, name, createdBy, createdAt, recent: [], count, lastMessageAt }>
+const textChannels = new Map();
+const textImages = []; // [{ file, size, mtime }] do mais antigo pro mais novo
+let textImagesBytes = 0;
+
+function newTextChannel({ id, name, createdBy = null, createdAt = Date.now() }) {
+  return { id, name, createdBy, createdAt, recent: [], count: 0, lastMessageAt: 0 };
+}
+
+function textFile(id) {
+  return path.join(TEXT_DIR, `${id}.jsonl`);
+}
+
+function readTextMessages(id) {
+  try {
+    return fs.readFileSync(textFile(id), 'utf8').split('\n').filter(Boolean).flatMap((line) => {
+      try { return [JSON.parse(line)]; } catch { return []; }
+    });
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error(`⚠️ [Texto] Não deu pra ler #${id}:`, err.message);
+    return [];
+  }
+}
+
+function loadTextChannelHistory(ch) {
+  const all = readTextMessages(ch.id);
+  ch.count = all.length;
+  ch.recent = all.slice(-TEXT_RECENT_IN_MEMORY);
+  ch.lastMessageAt = all.length ? all[all.length - 1].timestamp || 0 : 0;
+}
+
+function textImageFileOf(msg) {
+  const file = typeof msg?.image?.url === 'string' ? msg.image.url.split('/').pop() : '';
+  return TEXT_IMAGE_FILE_RE.test(file) ? file : null;
+}
+
+function removeTextImage(file) {
+  const i = textImages.findIndex((img) => img.file === file);
+  if (i !== -1) {
+    textImagesBytes -= textImages[i].size;
+    textImages.splice(i, 1);
+  }
+  fs.rm(path.join(TEXT_IMAGE_DIR, file), { force: true }, () => {});
+}
+
+function appendTextMessage(ch, msg) {
+  fs.mkdirSync(TEXT_DIR, { recursive: true });
+  fs.appendFileSync(textFile(ch.id), `${JSON.stringify(msg)}\n`);
+  ch.recent.push(msg);
+  if (ch.recent.length > TEXT_RECENT_IN_MEMORY) ch.recent.shift();
+  ch.count++;
+  ch.lastMessageAt = msg.timestamp;
+  // Passou do limite: fica com 90% (não reescreve o arquivo a cada mensagem nova)
+  if (ch.count > MAX_TEXT_MESSAGES_PER_CHANNEL) {
+    const all = readTextMessages(ch.id);
+    const keep = all.slice(-Math.floor(MAX_TEXT_MESSAGES_PER_CHANNEL * 0.9));
+    for (const old of all.slice(0, all.length - keep.length)) {
+      const file = textImageFileOf(old);
+      if (file) removeTextImage(file);
+    }
+    const tmp = `${textFile(ch.id)}.tmp`;
+    fs.writeFileSync(tmp, keep.map((m) => JSON.stringify(m)).join('\n') + '\n');
+    fs.renameSync(tmp, textFile(ch.id));
+    ch.count = keep.length;
+  }
+}
+
+function saveTextImage(data, mime) {
+  fs.mkdirSync(TEXT_IMAGE_DIR, { recursive: true });
+  const file = `${randomUUID()}.${CHAT_IMAGE_TYPES[mime]}`;
+  fs.writeFileSync(path.join(TEXT_IMAGE_DIR, file), data);
+  textImages.push({ file, size: data.length, mtime: Date.now() });
+  textImagesBytes += data.length;
+  while (textImagesBytes > MAX_TEXT_IMAGES_TOTAL_BYTES && textImages.length > 1) {
+    const old = textImages.shift();
+    textImagesBytes -= old.size;
+    fs.rm(path.join(TEXT_IMAGE_DIR, old.file), { force: true }, () => {});
+  }
+  return file;
+}
+
+function loadTextStorage() {
+  try {
+    fs.mkdirSync(TEXT_IMAGE_DIR, { recursive: true });
+    const files = fs.readdirSync(TEXT_IMAGE_DIR).filter((f) => TEXT_IMAGE_FILE_RE.test(f));
+    for (const file of files) {
+      const st = fs.statSync(path.join(TEXT_IMAGE_DIR, file));
+      textImages.push({ file, size: st.size, mtime: st.mtimeMs });
+      textImagesBytes += st.size;
+    }
+    textImages.sort((a, b) => a.mtime - b.mtime);
+  } catch (err) {
+    console.error('⚠️ [Texto] Pasta de imagens indisponível:', err.message);
+  }
+  for (const ch of textChannels.values()) loadTextChannelHistory(ch);
+}
+
+function deleteTextChannelData(ch) {
+  for (const msg of readTextMessages(ch.id)) {
+    const file = textImageFileOf(msg);
+    if (file) removeTextImage(file);
+  }
+  fs.rm(textFile(ch.id), { force: true }, () => {});
+}
+
+function getTextChannelsSummary() {
+  return [...textChannels.values()]
+    .map(({ id, name, createdBy, createdAt, lastMessageAt }) => ({ id, name, createdBy, createdAt, lastMessageAt }))
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
 loadSavedChannels();
+loadTextStorage();
 
 // Imagens do chat: ficam em disco (não na memória da VM) e vão sendo apagadas as mais
 // antigas quando passam do limite. O histórico do chat não sobrevive a reinício, então
@@ -272,6 +409,18 @@ function isAdminKey(key) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+// Mutado/ensurdecido pelo admin: guardado pelo perfil, pra não escapar reconectando
+const serverMutedProfiles = new Set();
+const serverDeafenedProfiles = new Set();
+
+function applyServerModeration(user) {
+  user.serverMuted = Boolean(user.profileId && serverMutedProfiles.has(user.profileId));
+  user.serverDeafened = Boolean(user.profileId && serverDeafenedProfiles.has(user.profileId));
+  // Mutado pelo admin não abre o microfone; ensurdecido também não ouve nem fala
+  if (user.serverMuted || user.serverDeafened) user.isMicOn = false;
+  if (user.serverDeafened) user.isDeafened = true;
+}
+
 // Apaga: admin apaga qualquer um; quem criou apaga o seu. O Geral nunca.
 function canDeleteChannel(user, channel) {
   if (!channel || channel.isDefault) return false;
@@ -289,6 +438,8 @@ function publicUser(u) {
     bio: u.bio,
     profileId: u.profileId,
     isAdmin: Boolean(u.isAdmin),
+    serverMuted: Boolean(u.serverMuted),
+    serverDeafened: Boolean(u.serverDeafened),
     avatarV: u.avatar ? u.avatarV : 0,
     channelId: u.channelId,
     isSharing: u.isSharing,
@@ -405,6 +556,15 @@ app.get('/api/chat-image/:file', (req, res) => {
   });
 });
 
+app.get('/api/text-image/:file', (req, res) => {
+  const file = req.params.file;
+  if (!TEXT_IMAGE_FILE_RE.test(file)) return res.status(404).end();
+  res.set({ 'Cache-Control': 'public, max-age=86400, immutable', 'X-Content-Type-Options': 'nosniff' });
+  res.sendFile(path.join(TEXT_IMAGE_DIR, file), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
+
 app.get('/api/avatar/:userId', (req, res) => {
   const user = io.sockets.sockets.get(req.params.userId)?.data?.user;
   if (!user?.avatar) return res.status(404).end();
@@ -489,6 +649,8 @@ io.on('connection', (socket) => {
     nameColor: '',
     profileId: null,
     isAdmin: false,
+    serverMuted: false,
+    serverDeafened: false,
     avatar: null,
     avatarV: 0,
     channelId: null,
@@ -539,6 +701,62 @@ io.on('connection', (socket) => {
     leaveCurrentChannel(target);
     cb({ success: true });
   }));
+
+  // Admin: arrasta alguém pra outra call (o app da pessoa troca de canal sozinho)
+  socket.on('admin-move-user', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode mudar alguém de call.' });
+    const payload = safeObject(rawPayload);
+    const target = typeof payload.userId === 'string' ? io.sockets.sockets.get(payload.userId) : null;
+    const targetUser = target?.data?.user;
+    const channel = typeof payload.channelId === 'string' ? channels.get(payload.channelId) : null;
+    if (!targetUser?.channelId) return cb({ success: false, error: 'Essa pessoa não está em nenhuma call.' });
+    if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (targetUser.channelId === channel.id) return cb({ success: true });
+    target.emit('moved-by-admin', { channelId: channel.id, channelName: channel.name, by: user.name });
+    cb({ success: true });
+  }));
+
+  // Admin: muta / ensurdece pra todo mundo (vale até o admin desfazer, mesmo reconectando)
+  const moderate = (kind) => safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
+    const payload = safeObject(rawPayload);
+    const target = typeof payload.userId === 'string' ? io.sockets.sockets.get(payload.userId) : null;
+    const targetUser = target?.data?.user;
+    if (!targetUser) return cb({ success: false, error: 'Essa pessoa saiu.' });
+    if (!targetUser.profileId) return cb({ success: false, error: 'Essa pessoa está com uma versão antiga do app.' });
+    const on = payload.on === true;
+    const set = kind === 'mute' ? serverMutedProfiles : serverDeafenedProfiles;
+    if (on) set.add(targetUser.profileId);
+    else set.delete(targetUser.profileId);
+    const wasDeafened = targetUser.serverDeafened;
+    applyServerModeration(targetUser);
+    // Tirou o ensurdecer do admin: volta a ouvir (o mic continua como a pessoa deixar)
+    if (kind === 'deafen' && !on && wasDeafened) targetUser.isDeafened = false;
+    target.emit('server-moderation', { serverMuted: targetUser.serverMuted, serverDeafened: targetUser.serverDeafened, by: user.name });
+    if (targetUser.channelId) {
+      const statePayload = {
+        userId: target.id,
+        channelId: targetUser.channelId,
+        isSharing: targetUser.isSharing,
+        isCameraOn: targetUser.isCameraOn,
+        extraScreens: targetUser.extraScreens,
+        isMicOn: targetUser.isMicOn,
+        isDeafened: targetUser.isDeafened,
+        serverMuted: targetUser.serverMuted,
+        serverDeafened: targetUser.serverDeafened,
+        isSpeaking: false,
+        streamQuality: targetUser.streamQuality
+      };
+      io.to(targetUser.channelId).emit('user-state-changed', statePayload);
+      io.to(targetUser.channelId).emit('user-state-updated', statePayload);
+    }
+    broadcastChannels();
+    cb({ success: true });
+  });
+  socket.on('admin-mute-user', moderate('mute'));
+  socket.on('admin-deafen-user', moderate('deafen'));
 
   // Apagar canal: quem estiver nele sai da call
   socket.on('delete-channel', safeHandler((rawPayload, maybeCallback) => {
@@ -643,6 +861,7 @@ io.on('connection', (socket) => {
       if (isMicOn !== undefined) user.isMicOn = isMicOn;
       if (isDeafened !== undefined) user.isDeafened = isDeafened;
       if (isSharing !== undefined) user.isSharing = isSharing;
+      applyServerModeration(user);
       const stateEvt = {
         userId: socket.id,
         channelId: cleanChannelId,
@@ -665,6 +884,7 @@ io.on('connection', (socket) => {
     if (isMicOn !== undefined) user.isMicOn = isMicOn;
     if (isDeafened !== undefined) user.isDeafened = isDeafened;
     if (isSharing !== undefined) user.isSharing = isSharing;
+    applyServerModeration(user);
 
     // Canal que não existe (link antigo, versão antiga do app): cria temporário, some quando esvaziar
     if (!channels.has(cleanChannelId)) {
@@ -734,11 +954,13 @@ io.on('connection', (socket) => {
         presenceChanged = true;
       }
     }
-    if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn) {
+    // Mutado/ensurdecido pelo admin não consegue se desmutar
+    const micLocked = user.serverMuted || user.serverDeafened;
+    if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn && !(micLocked && rawPayload.isMicOn)) {
       user.isMicOn = rawPayload.isMicOn;
       presenceChanged = true;
     }
-    if (typeof rawPayload.isDeafened === 'boolean' && user.isDeafened !== rawPayload.isDeafened) {
+    if (typeof rawPayload.isDeafened === 'boolean' && user.isDeafened !== rawPayload.isDeafened && !(user.serverDeafened && !rawPayload.isDeafened)) {
       user.isDeafened = rawPayload.isDeafened;
       presenceChanged = true;
     }
@@ -757,6 +979,8 @@ io.on('connection', (socket) => {
       extraScreens: user.extraScreens,
       isMicOn: user.isMicOn,
       isDeafened: user.isDeafened,
+      serverMuted: user.serverMuted,
+      serverDeafened: user.serverDeafened,
       isSpeaking: user.isSpeaking,
       streamQuality: user.streamQuality
     };
@@ -909,6 +1133,131 @@ io.on('connection', (socket) => {
     }
 
     io.to(user.channelId).emit('chat-message', chatMsg);
+  }));
+
+  // ---------------- Canais de texto ----------------
+  socket.emit('text-channels', getTextChannelsSummary());
+  const broadcastTextChannels = () => io.emit('text-channels', getTextChannelsSummary());
+
+  socket.on('create-text-channel', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const data = safeObject(rawPayload);
+    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId)) {
+      user.profileId = data.profileId;
+    }
+    const cleanName = (typeof data.name === 'string' ? data.name.trim() : '').slice(0, 30);
+    if (!cleanName) return cb({ success: false, error: 'Dê um nome pro canal.' });
+    const slug = cleanName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `texto-${Date.now().toString(36).slice(-4)}`;
+    let id = slug.slice(0, 60);
+    for (let n = 2; textChannels.has(id); n++) id = `${slug.slice(0, 56)}-${n}`;
+    textChannels.set(id, newTextChannel({ id, name: cleanName, createdBy: user.profileId }));
+    saveChannels();
+    broadcastTextChannels();
+    cb({ success: true, channelId: id, channelName: cleanName });
+  }));
+
+  socket.on('delete-text-channel', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const id = safeObject(rawPayload).channelId;
+    const ch = typeof id === 'string' ? textChannels.get(id) : null;
+    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só admin ou quem criou o canal pode apagar.' });
+    textChannels.delete(ch.id);
+    deleteTextChannelData(ch);
+    saveChannels();
+    io.emit('text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });
+    broadcastTextChannels();
+    cb({ success: true });
+  }));
+
+  // Histórico: sem "before", as últimas; com "before" (id de mensagem), as anteriores a ela
+  socket.on('text-history', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
+    if (!ch) return cb({ success: false, messages: [], hasMore: false });
+    if (typeof payload.before !== 'string') {
+      const messages = ch.recent.slice(-TEXT_PAGE_SIZE);
+      return cb({ success: true, messages, hasMore: ch.count > messages.length });
+    }
+    const all = readTextMessages(ch.id);
+    const idx = all.findIndex((m) => m.id === payload.before);
+    if (idx <= 0) return cb({ success: true, messages: [], hasMore: false });
+    const start = Math.max(0, idx - TEXT_PAGE_SIZE);
+    cb({ success: true, messages: all.slice(start, idx), hasMore: start > 0 });
+  }));
+
+  // Até 5 mensagens a cada 3 s por pessoa (texto e imagem juntos)
+  const textSendTimes = [];
+  const textRateLimited = () => {
+    const now = Date.now();
+    while (textSendTimes.length && now - textSendTimes[0] > 3000) textSendTimes.shift();
+    if (textSendTimes.length >= 5) return true;
+    textSendTimes.push(now);
+    return false;
+  };
+
+  const textMessageBase = (ch) => ({
+    id: `msg-${Date.now()}-${randomUUID().slice(0, 8)}`,
+    channelId: ch.id,
+    senderId: socket.id,
+    userId: socket.id,
+    profileId: user.profileId,
+    userName: user.name,
+    userColor: user.color,
+    userNameColor: user.nameColor || '',
+    userAvatarV: user.avatar ? user.avatarV : 0,
+    timestamp: Date.now()
+  });
+
+  const publishTextMessage = (ch, msg, cb) => {
+    try {
+      appendTextMessage(ch, msg);
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra salvar a mensagem:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu salvar a mensagem.' });
+    }
+    io.emit('text-message', msg);
+    cb({ success: true });
+  };
+
+  socket.on('text-message', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
+    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
+    if (!text) return cb({ success: false, error: 'Mensagem vazia.' });
+    if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
+    publishTextMessage(ch, { ...textMessageBase(ch), text }, cb);
+  }));
+
+  socket.on('text-image', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
+    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
+    const data = Buffer.isBuffer(payload.data) ? payload.data : null;
+    if (!CHAT_IMAGE_TYPES[mime] || !data || data.length === 0) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
+    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 8 MB).' });
+    if (!imageMatchesType(data, mime)) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
+    if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
+    let file;
+    try {
+      file = saveTextImage(data, mime);
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra salvar a imagem:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu guardar a imagem.' });
+    }
+    const dim = (v) => (Number.isInteger(v) && v > 0 && v <= 20000 ? v : null);
+    const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
+    publishTextMessage(ch, {
+      ...textMessageBase(ch),
+      text,
+      image: { url: `/api/text-image/${file}`, width: dim(payload.width), height: dim(payload.height) }
+    }, cb);
   }));
 
   // Imagem no chat (com legenda opcional). Uma a cada 2 s por pessoa.

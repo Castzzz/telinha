@@ -112,6 +112,9 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
+| **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
+| **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
+| **Admin: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até o admin desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
 | **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
@@ -214,7 +217,7 @@ Os links de download deste README apontam sempre pra versão mais nova, então n
 ### Senha de admin
 A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e mostrada no fim do `npm run deploy:oracle` (fica em `/etc/telinha/telinha.env` na VM). Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
 
-Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app).
+Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 20 mil mensagens por canal) e as imagens deles em `data/text/images/` (até 5 GB no total); passando do limite, as mais antigas são apagadas.
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)

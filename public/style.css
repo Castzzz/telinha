@@ -2189,3 +2189,127 @@ ul {
   border-radius: var(--radius-md);
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
 }
+
+/* ==================== CANAIS DE TEXTO ==================== */
+.category-text {
+  margin-top: 16px;
+}
+
+.channel-hash {
+  font-weight: 700;
+  color: var(--text-muted);
+  width: 14px;
+  text-align: center;
+}
+
+.btn-chat-back {
+  margin-left: auto;
+  margin-right: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-hover);
+  color: var(--text-normal);
+  white-space: nowrap;
+}
+
+.btn-chat-back:hover {
+  background: var(--bg-active);
+  color: var(--text-header);
+}
+
+.channel-type-choice {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.channel-type-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.channel-type-option:has(input:checked) {
+  border-color: var(--accent-brand);
+  background: rgba(88, 101, 242, 0.12);
+}
+
+.channel-type-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.channel-type-option span {
+  font-weight: 700;
+  color: var(--text-header);
+  font-size: 14px;
+}
+
+.channel-type-option small {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+/* Canal com mensagem nova que você ainda não viu */
+.channel-item.channel-unread > .channel-row {
+  color: var(--text-header);
+  font-weight: 700;
+}
+
+.channel-item.channel-unread > .channel-row::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--text-header);
+  flex-shrink: 0;
+}
+
+/* O rótulo do form-group é em maiúsculas; dentro das opções de tipo, não */
+.form-group .channel-type-option,
+.form-group .channel-type-option span,
+.form-group .channel-type-option small {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* ==================== ADMIN: ARRASTAR, MUTAR PRA TODOS ==================== */
+.channel-user[draggable="true"] {
+  cursor: grab;
+}
+
+.channel-user.dragging {
+  opacity: 0.4;
+}
+
+.channel-item.drop-target > .channel-row {
+  background: rgba(88, 101, 242, 0.25);
+  outline: 1px dashed var(--accent-brand);
+  color: var(--text-header);
+}
+
+.user-popover-admin {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-medium);
+}
+
+.user-popover-admin .user-popover-actions {
+  flex-wrap: wrap;
+}
+
+.admin-lock {
+  font-size: 9px;
+  margin-left: 1px;
+}

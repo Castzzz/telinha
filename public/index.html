@@ -114,6 +114,14 @@
             <span class="plus-icon">+</span> Criar Canal
           </button>
         </div>
+
+        <!-- Canais de texto: o histórico fica salvo no servidor -->
+        <div class="category-header category-text">
+          <span class="category-caret">▼</span>
+          <span class="category-title">Canais de Texto</span>
+          <button id="btn-add-text-channel" class="btn-category-add" title="Criar canal de texto">+</button>
+        </div>
+        <ul class="channels-tree" id="text-channels-tree"></ul>
       </nav>
 
       <!-- PERSISTENT BOTTOM USER DOCK -->
@@ -230,6 +238,7 @@
           <span class="chat-hash">💬</span>
           <span id="chat-channel-label">#geral-chat</span>
         </div>
+        <button id="btn-chat-back-voice" class="btn-chat-back hidden" title="Voltar pro chat da call">🔊 Chat da call</button>
         <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
       </div>
 
@@ -273,11 +282,27 @@
   <div id="modal-create-channel" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-create-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-create-title">Criar Canal de Voz</h3>
+        <h3 id="modal-create-title">Criar Canal</h3>
         <button class="modal-close-btn" data-close-modal="modal-create-channel">✕</button>
       </div>
 
       <form id="form-create-channel">
+        <div class="form-group">
+          <label>Tipo</label>
+          <div class="channel-type-choice">
+            <label class="channel-type-option">
+              <input type="radio" name="channel-type" value="voice" checked />
+              <span>🔊 Voz</span>
+              <small>Call com voz, tela e câmera. O chat dela é temporário.</small>
+            </label>
+            <label class="channel-type-option">
+              <input type="radio" name="channel-type" value="text" />
+              <span># Texto</span>
+              <small>Só mensagens e imagens, que ficam salvas.</small>
+            </label>
+          </div>
+        </div>
+
         <div class="form-group">
           <label for="input-channel-name">Nome do Canal</label>
           <input
@@ -314,12 +339,20 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 2.1</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 2.2</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Canais de texto:</strong> crie em <em>Canais de Texto</em> na barra do lado. Tudo que mandarem (mensagens e imagens) fica salvo, e dá pra usar sem estar em call.</li>
+          <li><strong>Admin 👑 arrasta gente de call:</strong> igual no Discord, pega a pessoa na lista e solta em outro canal.</li>
+          <li><strong>Admin muta ou ensurdece pra todos:</strong> clique na pessoa. Ela não consegue se desmutar até o admin liberar (aparece um 🛡️ do lado).</li>
+        </ul>
+        <!-- Só pra quem pulou a 2.1 -->
+        <div id="whats-new-2-1" class="whats-new-older hidden">
+          <h4>E o que chegou na 2.1</h4>
+          <ul class="whats-new-list">
           <li><strong>Várias telas ao mesmo tempo:</strong> já transmitindo, clique de novo em transmitir → <em>Transmitir outra tela</em> (até 3). O som vai na tela 1.</li>
           <li><strong>Volume da transmissão até 300%.</strong> E a barra de volume lá embaixo só aparece quando você está vendo alguém.</li>
           <li><strong>Reações que aprendem:</strong> os emojis que você mais usa vão tomando o lugar na barra.</li>
@@ -328,6 +361,7 @@
           <li><strong>Esconder sua própria transmissão:</strong> no menu do botão de transmitir ou em ⚙️. Os amigos continuam vendo e o seu PC agradece.</li>
           <li><strong>Visual:</strong> ícones novos lá embaixo, barra de baixo alinhada e os botões da janela com a cor do tema.</li>
         </ul>
+        </div>
         <!-- Só pra quem veio direto de antes da 2.0 -->
         <div id="whats-new-2-0" class="whats-new-older hidden">
           <h4>E o que chegou na 2.0</h4>
@@ -562,6 +596,13 @@
     <div class="user-popover-actions">
       <button type="button" class="btn-secondary" id="user-popover-mute">🔇 Silenciar pra mim</button>
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
+    </div>
+    <div class="user-popover-admin hidden" id="user-popover-admin">
+      <span class="user-popover-label">Admin 👑 (vale pra todo mundo)</span>
+      <div class="user-popover-actions">
+        <button type="button" class="btn-secondary" id="user-popover-server-mute">🔇 Mutar pra todos</button>
+        <button type="button" class="btn-secondary" id="user-popover-server-deafen">🎧 Ensurdecer pra todos</button>
+      </div>
     </div>
     <button type="button" class="btn-secondary user-popover-kick hidden" id="user-popover-kick">🚪 Tirar da call (admin)</button>
     <button type="button" class="btn-secondary user-popover-reconnect" id="user-popover-reconnect"
