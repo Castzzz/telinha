@@ -99,6 +99,12 @@ function applyTheme(theme) {
 }
 applyTheme(prefs.theme);
 
+// Visual: novo (em teste) ou clássico
+function applyLook(look) {
+  document.documentElement.dataset.look = look === 'classico' ? 'classico' : 'novo';
+}
+applyLook(prefs.look);
+
 function savePrefs(patch) {
   Object.assign(prefs, patch);
   if (window.electronAPI?.setPrefs) {
@@ -2713,6 +2719,14 @@ function setupAdminSettings() {
 }
 
 function setupThemeSelect() {
+  const lookSelect = $('#select-look');
+  if (lookSelect) {
+    lookSelect.value = document.documentElement.dataset.look;
+    lookSelect.addEventListener('change', () => {
+      applyLook(lookSelect.value);
+      savePrefs({ look: lookSelect.value });
+    });
+  }
   const select = $('#select-theme');
   if (!select) return;
   select.value = document.documentElement.dataset.theme;

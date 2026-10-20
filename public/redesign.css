@@ -1,0 +1,347 @@
+/* ==========================================================================
+   TELETELA — VISUAL NOVO (em teste)
+   Só vale com <html data-look="novo">; ⚙️ Configurações > Visual volta pro clássico.
+   Painéis flutuando em cima do fundo, cantos redondos e menos linhas separando tudo.
+   Os ícones e as cores dos temas continuam os mesmos.
+   ========================================================================== */
+
+:root[data-look="novo"] {
+  --panel-radius: 14px;
+  --panel-gap: 8px;
+  --accent-soft: color-mix(in srgb, var(--accent-brand) 18%, transparent);
+  --accent-softer: color-mix(in srgb, var(--accent-brand) 10%, transparent);
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+
+:root[data-look="novo"][data-theme="claro"] {
+  --panel-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+[data-look="novo"] body {
+  background: var(--bg-tertiary);
+}
+
+/* ---------- Barra de cima: some no fundo, só os botões aparecem ---------- */
+[data-look="novo"] .app-topbar {
+  height: 48px;
+  border-bottom: none;
+  padding: 0 14px;
+}
+
+[data-look="novo"] .brand-logo .logo-emoji {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #5865f2, #7c3aed);
+  font-size: 15px;
+  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.35);
+}
+
+[data-look="novo"] .brand-text {
+  letter-spacing: -0.2px;
+}
+
+[data-look="novo"] .btn-topbar-action,
+[data-look="novo"] .btn-topbar-tool {
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+}
+
+[data-look="novo"] .btn-topbar-tool.active {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--text-header);
+}
+
+[data-look="novo"] .stream-tab-chip {
+  border-radius: var(--radius-pill);
+}
+
+/* ---------- Os três painéis flutuando ---------- */
+[data-look="novo"] .app-layout {
+  height: calc(100vh - 48px);
+  padding: 0 var(--panel-gap) var(--panel-gap);
+  gap: var(--panel-gap);
+  background: var(--bg-tertiary);
+}
+
+[data-look="novo"] .sidebar-channels,
+[data-look="novo"] .stage-section,
+[data-look="novo"] .chat-drawer {
+  border: none;
+  border-radius: var(--panel-radius);
+  box-shadow: var(--panel-shadow);
+}
+
+[data-look="novo"] .stage-section,
+[data-look="novo"] .chat-drawer {
+  overflow: hidden;
+}
+
+/* chat fechado: tira também o espaço entre os painéis */
+[data-look="novo"] .chat-drawer.collapsed {
+  margin-left: calc(-1 * var(--panel-gap));
+  box-shadow: none;
+}
+
+/* As alças de arrastar ficam no vão entre os painéis */
+[data-look="novo"] .sidebar-resizer {
+  right: -6px;
+}
+
+[data-look="novo"] .chat-resizer {
+  left: -6px;
+}
+
+/* ---------- Barra de canais ---------- */
+[data-look="novo"] .sidebar-header,
+[data-look="novo"] .chat-header {
+  border-bottom: none;
+  height: 52px;
+}
+
+[data-look="novo"] .sidebar-title {
+  font-size: 15px;
+  letter-spacing: -0.2px;
+}
+
+[data-look="novo"] .channels-scroller {
+  padding-top: 0;
+}
+
+[data-look="novo"] .category-header {
+  padding: 10px 8px 6px;
+}
+
+[data-look="novo"] .channel-row {
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+
+[data-look="novo"] .channel-item.channel-active > .channel-row {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent-brand);
+}
+
+[data-look="novo"] .channel-count {
+  background: var(--bg-primary);
+}
+
+[data-look="novo"] .channel-user {
+  border-radius: 8px;
+}
+
+[data-look="novo"] .channel-users.compact .channel-user {
+  border-radius: 50%;
+}
+
+[data-look="novo"] .btn-create-channel-row {
+  border-radius: 8px;
+}
+
+/* Seu perfil vira um cartão no pé da barra */
+[data-look="novo"] .user-dock {
+  margin: 0 8px 8px;
+  border: none;
+  border-radius: 12px;
+  background: var(--bg-tertiary);
+  height: calc(var(--bottom-bar-height) - 8px);
+}
+
+[data-look="novo"] .user-dock {
+  padding: 0 6px;
+  gap: 4px;
+}
+
+[data-look="novo"] .user-profile .user-avatar-wrap {
+  flex-shrink: 0;
+}
+
+[data-look="novo"] .dock-btn {
+  border-radius: 8px;
+  width: 30px;
+}
+
+/* ---------- Palco ---------- */
+[data-look="novo"] .lounge-user-card {
+  border: none;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-tertiary));
+  box-shadow: var(--panel-shadow);
+  width: 150px;
+  padding: 20px 14px 16px;
+}
+
+[data-look="novo"] .lounge-user-card:hover {
+  transform: translateY(-2px);
+}
+
+[data-look="novo"] .lounge-user-card .user-avatar-wrap,
+[data-look="novo"] .lounge-user-card .user-avatar {
+  width: 68px;
+  height: 68px;
+}
+
+[data-look="novo"] .lounge-user-card .user-avatar {
+  font-size: 24px;
+}
+
+[data-look="novo"] .btn-share-primary {
+  border-radius: var(--radius-pill);
+  padding: 12px 28px;
+}
+
+[data-look="novo"] .video-tile {
+  border: none;
+  border-radius: 12px;
+  box-shadow: var(--panel-shadow);
+}
+
+[data-look="novo"] .tile-user-badge,
+[data-look="novo"] .tile-stats-badge,
+[data-look="novo"] .tile-btn {
+  border-radius: var(--radius-pill);
+}
+
+/* Barra de baixo do palco sem fundo: a barra de reações flutua */
+[data-look="novo"] .stage-controls-bar {
+  background: transparent;
+  border-top: none;
+}
+
+[data-look="novo"] .reactions-bar {
+  border: none;
+  background: var(--bg-secondary);
+  box-shadow: var(--panel-shadow);
+}
+
+[data-look="novo"] .reaction-btn:hover {
+  background: var(--bg-hover);
+}
+
+[data-look="novo"] .btn-control-tool,
+[data-look="novo"] .btn-control-icon {
+  border-radius: 8px;
+}
+
+/* ---------- Chat ---------- */
+[data-look="novo"] .chat-messages {
+  gap: 2px;
+  padding: 8px 10px 12px;
+}
+
+[data-look="novo"] .chat-msg {
+  padding: 6px 8px;
+  border-radius: 10px;
+  transition: background var(--transition-fast);
+}
+
+[data-look="novo"] .chat-msg:hover {
+  background: var(--bg-hover);
+}
+
+[data-look="novo"] .chat-msg-avatar {
+  width: 36px;
+  height: 36px;
+}
+
+[data-look="novo"] .chat-welcome-banner {
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent-softer), transparent 70%), var(--bg-tertiary);
+  margin: 0 0 8px;
+  padding: 14px 16px;
+}
+
+[data-look="novo"] .chat-system-notice {
+  border-radius: var(--radius-pill);
+  margin: 4px 0;
+}
+
+[data-look="novo"] .chat-form {
+  border-top: none;
+  background: transparent;
+  padding: 0 10px;
+}
+
+[data-look="novo"] .chat-input {
+  border-radius: var(--radius-pill);
+  border-color: transparent;
+  padding: 0 16px;
+  height: 40px;
+}
+
+[data-look="novo"] .chat-input:focus {
+  border-color: var(--accent-brand);
+}
+
+[data-look="novo"] .btn-chat-send {
+  border-radius: var(--radius-pill);
+  height: 40px;
+  padding: 0 18px;
+}
+
+[data-look="novo"] .btn-chat-back {
+  border-radius: var(--radius-pill);
+}
+
+/* Canal de texto em tela cheia: as mensagens não esticam até a borda */
+[data-look="novo"] .app-layout.text-full .chat-messages,
+[data-look="novo"] .app-layout.text-full .chat-form {
+  padding-left: max(10px, calc((100% - 960px) / 2));
+  padding-right: max(10px, calc((100% - 960px) / 2));
+}
+
+/* ---------- Janelas e menus ---------- */
+[data-look="novo"] .modal-card {
+  border-radius: 18px;
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+
+[data-look="novo"] .user-popover,
+[data-look="novo"] .share-menu,
+[data-look="novo"] .emoji-picker-popover {
+  border-radius: 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
+}
+
+[data-look="novo"] .user-popover-actions .btn-secondary,
+[data-look="novo"] .btn-primary,
+[data-look="novo"] .btn-secondary {
+  border-radius: 10px;
+}
+
+[data-look="novo"] .form-select,
+[data-look="novo"] .form-group input[type="text"],
+[data-look="novo"] .form-group input[type="password"] {
+  border-radius: 10px;
+}
+
+[data-look="novo"] .toast {
+  border-radius: 12px;
+}
+
+/* ---------- Barras de rolagem finas ---------- */
+[data-look="novo"] ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+[data-look="novo"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+[data-look="novo"] ::-webkit-scrollbar-thumb {
+  background: var(--border-medium);
+  border-radius: var(--radius-pill);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+[data-look="novo"] ::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-muted);
+}
