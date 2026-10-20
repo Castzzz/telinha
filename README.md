@@ -117,7 +117,7 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–200%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Telinha*: vozes e transmissões juntas, até 200% |
 | **Volume do seu microfone** | ⚙️ → *Volume do seu microfone* (0–300%): sobe se os amigos te ouvem baixo, vale na hora |
-| **Som de entrada/saída** | Toca um áudio dos amigos (sorteado) quando alguém entra ou sai da call. Desliga em ⚙️ |
+| **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |
 | **Parou de ouvir alguém** | Clique na pessoa → *🔄 Reconectar a voz* (a conexão também se refaz sozinha se cair) |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |

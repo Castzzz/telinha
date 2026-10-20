@@ -332,7 +332,9 @@ const handleChannelsSummary = (channelsList) => {
 // rodava tudo duas vezes: avisos repetidos e ofertas de vídeo criadas em dobro.
 socket.on('channels-list', handleChannelsSummary);
 
-socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages }) => {
+socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages, soundSeed }) => {
+  // Eu entrei: ouço o mesmo áudio que tocou pra quem já estava no canal
+  playCallSound(soundSeed);
   if (me) {
     if (me.id) appState.myId = me.id;
     if (me.name) appState.myUser.name = me.name;
@@ -404,7 +406,7 @@ const handleUserJoined = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`👋 ${user.name} entrou no canal.`, channelId);
-    playCallSound();
+    playCallSound(data.soundSeed);
     updateTopBar();
     updateVoiceLounge();
 
@@ -418,19 +420,23 @@ const handleUserJoined = (data) => {
 
 socket.on('user-joined', handleUserJoined);
 
-// Som de quando alguém entra ou sai da call: áudios gravados pelos próprios amigos,
-// um sorteado por vez. Passa pelo volume geral e fica mudo com o ensurdecer.
+// Som de quando alguém entra ou sai da call: áudios gravados pelos próprios amigos.
+// O servidor sorteia o número (soundSeed) e manda o mesmo pra todo mundo do canal,
+// inclusive pra quem entrou/saiu: todos ouvem o mesmo áudio. Passa pelo volume geral
+// e fica mudo com o ensurdecer.
 const CALL_SOUNDS = Array.from({ length: 9 }, (_, i) => `/sounds/amigo-${i + 1}.ogg`);
 const callSoundBuffers = new Map();
 let lastCallSoundAt = 0;
 
-async function playCallSound() {
+async function playCallSound(soundSeed) {
   if (prefs.callSounds === false || appState.myUser.isDeafened) return;
   // Muita gente entrando junto (servidor reiniciou): um som só
   const now = Date.now();
   if (now - lastCallSoundAt < 1500) return;
   lastCallSoundAt = now;
-  const url = CALL_SOUNDS[Math.floor(Math.random() * CALL_SOUNDS.length)];
+  // Servidor antigo (sem soundSeed): sorteia aqui mesmo
+  const index = Number.isInteger(soundSeed) ? soundSeed % CALL_SOUNDS.length : Math.floor(Math.random() * CALL_SOUNDS.length);
+  const url = CALL_SOUNDS[index];
   const mixer = appState.mixerManager;
   try {
     const ctx = mixer?.audioContext;
@@ -469,7 +475,7 @@ const handleUserLeft = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`${userName} saiu do canal.`, channelId);
-    playCallSound();
+    playCallSound(data.soundSeed);
     updateTopBar();
     updateVoiceLounge();
     cleanupUserConnections(userId);
@@ -620,7 +626,8 @@ function leaveCall() {
   onWebRTCChannelChange(oldChannelId, null);
   appState.currentChannelId = null;
   appState.channels.get(oldChannelId)?.users.delete(appState.myId);
-  socket.emit('leave-channel');
+  // Eu saí: o servidor responde com o áudio que tocou pros outros
+  socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed));
 
   const params = new URLSearchParams(window.location.search);
   params.delete('channel');

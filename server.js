@@ -515,13 +515,17 @@ io.on('connection', (socket) => {
 
     socket.join(cleanChannelId);
 
+    // Som de entrada sorteado aqui, pra quem entrou e quem já estava ouvirem o mesmo áudio
+    const soundSeed = callSoundSeed();
+
     // 1. Send channel state & history to joining user
     socket.emit('channel-state', {
       channelId: cleanChannelId,
       channelName: channel.name,
       me: publicUser(user),
       users: getChannelUsersList(cleanChannelId),
-      recentMessages: channel.messages.slice(-50)
+      recentMessages: channel.messages.slice(-50),
+      soundSeed
     });
 
     // 2. Notify other channel members
@@ -531,7 +535,8 @@ io.on('connection', (socket) => {
       color: user.color,
       channelId: cleanChannelId,
       user: publicUser(user),
-      users: getChannelUsersList(cleanChannelId)
+      users: getChannelUsersList(cleanChannelId),
+      soundSeed
     };
     socket.to(cleanChannelId).emit('user-joined', joinedPayload);
     socket.to(cleanChannelId).emit('user-channel-joined', joinedPayload);
@@ -748,8 +753,10 @@ io.on('connection', (socket) => {
   }));
 
   // Explicit Channel Leave
-  socket.on('leave-channel', safeHandler(() => {
-    leaveCurrentChannel(socket);
+  // Responde com o som sorteado, pra quem saiu ouvir o mesmo áudio que ficou pros outros
+  socket.on('leave-channel', safeHandler((_rawPayload, maybeCallback) => {
+    const soundSeed = leaveCurrentChannel(socket);
+    safeCallback(maybeCallback)({ soundSeed });
   }));
 
   // Disconnect Handling
@@ -762,11 +769,17 @@ io.on('connection', (socket) => {
   });
 });
 
+// Número sorteado pro som de entrada/saída; cada app escolhe o áudio por ele (seed % quantidade)
+function callSoundSeed() {
+  return Math.floor(Math.random() * 1_000_000);
+}
+
 function leaveCurrentChannel(socket) {
   const user = socket.data?.user;
   if (!user || !user.channelId) return;
 
   const channelId = user.channelId;
+  const soundSeed = callSoundSeed();
   const channel = channels.get(channelId);
 
   if (channel) {
@@ -778,7 +791,8 @@ function leaveCurrentChannel(socket) {
       userName: user.name,
       name: user.name,
       channelId,
-      users: getChannelUsersList(channelId)
+      users: getChannelUsersList(channelId),
+      soundSeed
     };
 
     // Notify remaining channel members
@@ -799,6 +813,7 @@ function leaveCurrentChannel(socket) {
   const summaryList = getChannelsSummary();
   io.emit('channels-list', summaryList);
   io.emit('channels-summary', summaryList);
+  return soundSeed;
 }
 
 // ----------------------------------------------------
