@@ -8,6 +8,9 @@ const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
 
 registerAppScheme();
+// O app virou Teletela, mas os dados (perfil, preferências, volumes) continuam na pasta
+// antiga: sem isso o Electron usaria uma pasta "Teletela" nova e todo mundo perderia tudo
+app.setPath('userData', path.join(app.getPath('appData'), 'Telinha'));
 // No Wayland o portal só aceita atalho global de app com .desktop: sem isso, rodando
 // com "npm run app", o Chromium se registra como "electron" e o portal recusa
 app.setDesktopName('telinha.desktop');
@@ -372,8 +375,8 @@ function setupAutoUpdater() {
       buttons: ['Reiniciar agora', 'Depois'],
       defaultId: 0,
       cancelId: 1,
-      title: 'Atualização do Telinha',
-      message: `A versão ${info.version} do Telinha foi baixada.`,
+      title: 'Atualização do Teletela',
+      message: `A versão ${info.version} do Teletela foi baixada.`,
       detail: 'Ela é instalada quando você fechar o app. Quer reiniciar agora?'
     });
     if (response === 0) autoUpdater.quitAndInstall();
@@ -414,7 +417,7 @@ async function ensureLocalServer() {
   }
   if (!(await checkServerRunning(PORT))) {
     throw new Error(
-      `A porta ${PORT} está ocupada por outro programa (ou um servidor antigo do Telinha). Feche-o e tente de novo.`
+      `A porta ${PORT} está ocupada por outro programa (ou um servidor antigo do Teletela). Feche-o e tente de novo.`
     );
   }
   return `http://localhost:${PORT}`;
@@ -547,7 +550,7 @@ function setupLauncherIpc() {
     if (!origin) return { ok: false, error: 'Link inválido.' };
     if (!(await isTelinhaServer(origin))) {
       if (origin === SERVER_ROOM_URL) return { ok: false, error: 'A sala do servidor não respondeu. Tente de novo daqui a pouco.' };
-      return { ok: false, error: 'Não encontrei uma sala do Telinha nesse link. Confira se seu amigo está hospedando.' };
+      return { ok: false, error: 'Não encontrei uma sala do Teletela nesse link. Confira se seu amigo está hospedando.' };
     }
     saveConfig({ lastServerUrl: origin });
     await mainWindow.loadURL(roomUrl(origin));
@@ -571,7 +574,7 @@ function setupLauncherIpc() {
 function setupMenu() {
   const menu = Menu.buildFromTemplate([
     {
-      label: 'Telinha',
+      label: 'Teletela',
       submenu: [
         { label: 'Voltar ao início', accelerator: 'CmdOrCtrl+Shift+H', click: () => showLauncher() },
         {
@@ -688,7 +691,7 @@ async function createWindow() {
     height: 840,
     minWidth: 940,
     minHeight: 600,
-    title: 'Telinha — Transmissão e Voz (Discord / TeamSpeak Style)',
+    title: 'Teletela',
     backgroundColor: '#1e1f22',
     autoHideMenuBar: true,
     // Sem a barra do sistema: minimizar/maximizar/fechar são desenhados por cima do canto

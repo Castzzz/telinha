@@ -1,5 +1,5 @@
 /**
- * server.js - Telinha Signaling & Channel Server
+ * server.js - Teletela Signaling & Channel Server
  * Discord / TeamSpeak style voice & screen sharing architecture
  */
 
@@ -160,6 +160,9 @@ const USER_COLORS = [
   '#9B84EC', // Discord Lavender
   '#00A8FC'  // Discord Cyan
 ];
+
+// Uma reação: um emoji só (com tom de pele, ZWJ, bandeira...), sem texto junto
+const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\p{Emoji_Component}|\u200d|\ufe0f|[\u{E0020}-\u{E007F}])+$/u;
 
 const DEFAULT_CHANNELS = [
   { id: 'geral', name: 'Geral', isDefault: true },
@@ -741,8 +744,9 @@ io.on('connection', (socket) => {
     if (!isPlainObject(rawPayload) || !user.channelId) return;
     if (typeof rawPayload.emoji !== 'string') return;
 
-    const cleanEmoji = rawPayload.emoji.trim().slice(0, 8);
-    if (!cleanEmoji) return;
+    // Qualquer emoji (família, bandeira e tom de pele passam de 8 caracteres), mas só emoji
+    const cleanEmoji = rawPayload.emoji.trim();
+    if (!cleanEmoji || cleanEmoji.length > 32 || !EMOJI_RE.test(cleanEmoji)) return;
 
     io.to(user.channelId).emit('reaction', {
       channelId: user.channelId,

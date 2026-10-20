@@ -1,30 +1,30 @@
 ==============================================
-  TELINHA - como instalar e entrar na sala
+  TELETELA - como instalar e entrar na sala
 ==============================================
 
 ONDE BAIXAR
 -----------
   Passo a passo completo: https://github.com/Castzzz/telinha
 
-  Windows: https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe
-  Linux:   https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage
+  Windows: https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Setup.exe
+  Linux:   https://github.com/Castzzz/telinha/releases/latest/download/Teletela.AppImage
 
 WINDOWS
 -------
-1. Baixe o Telinha-Setup.exe e abra.
+1. Baixe o Teletela-Setup.exe e abra.
 2. Se aparecer "O Windows protegeu o computador":
    clique em "Mais informações" e depois em "Executar assim mesmo".
    (o app é seguro, só não tem assinatura digital paga)
-3. O Telinha instala e abre sozinho. Depois fica no Menu Iniciar.
+3. O Teletela instala e abre sozinho. Depois fica no Menu Iniciar.
 4. Se o Windows perguntar sobre o Firewall, clique em "Permitir".
 5. As próximas versões chegam sozinhas: o app avisa quando baixar.
 
 LINUX
 -----
-1. Baixe o Telinha.AppImage.
+1. Baixe o Teletela.AppImage.
 2. No terminal, na pasta onde baixou:
-     chmod +x Telinha.AppImage
-     ./Telinha.AppImage
+     chmod +x Teletela.AppImage
+     ./Teletela.AppImage
 3. Se der erro de "libfuse.so.2", instale o fuse2:
      Arch/CachyOS:  sudo pacman -S fuse2
      Ubuntu/Mint:   sudo apt install libfuse2   (24.04+: libfuse2t64)
@@ -35,7 +35,7 @@ ENTRAR NA SALA
 --------------
 1. Peça o link da sala pro anfitrião
    (algo como https://palavra-palavra.trycloudflare.com).
-2. No Telinha, cole o link em "Entrar na sala de um amigo"
+2. No Teletela, cole o link em "Entrar na sala de um amigo"
    e clique em "Entrar".
 3. O link muda toda vez que o anfitrião abre a sala.
    Se der erro, peça o link novo.
@@ -44,7 +44,7 @@ DICAS
 -----
 - M = mutar microfone   |   D = ensurdecer
   (dá pra trocar em Configurações > Atalhos de teclado; com Ctrl/Alt
-  ou F1-F24 funciona até com o Telinha minimizado, no meio do jogo)
+  ou F1-F24 funciona até com o Teletela minimizado, no meio do jogo)
 - Clique no seu nome (embaixo, à esquerda) pra pôr foto, cor e frase.
 - Clique no nome de um amigo pra aumentar/diminuir o volume dele
   ou silenciar só pra você.

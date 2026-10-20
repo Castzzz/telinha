@@ -1,4 +1,4 @@
-# 📺 Telinha
+# 📺 Teletela
 
 Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá pra assistir filme, jogo ou vídeo junto: **o som do PC vai na transmissão, separado do microfone**, então você pode ficar mutado e todo mundo ouve o filme direitinho.
 
@@ -15,16 +15,16 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 
 | Sistema | Baixar | Atualiza sozinho? |
 |---|---|---|
-| **Windows** 10/11 | **[Telinha-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe)** | ✅ Sim |
-| **Linux** (qualquer distro) | **[Telinha.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage)** | ✅ Sim |
+| **Windows** 10/11 | **[Teletela-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Setup.exe)** | ✅ Sim |
+| **Linux** (qualquer distro) | **[Teletela.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.AppImage)** | ✅ Sim |
 
 <details>
 <summary>Outras opções (não se atualizam sozinhas)</summary>
 
 | Sistema | Baixar | Quando usar |
 |---|---|---|
-| Windows | [Telinha-Portatil.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Portatil.exe) | Se não puder instalar nada no PC |
-| Linux | [Telinha.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.tar.gz) | Se o AppImage não abrir de jeito nenhum |
+| Windows | [Teletela-Portatil.exe](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Portatil.exe) | Se não puder instalar nada no PC |
+| Linux | [Teletela.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.tar.gz) | Se o AppImage não abrir de jeito nenhum |
 
 Todas as versões e o que mudou em cada uma: [Releases](https://github.com/Castzzz/telinha/releases).
 </details>
@@ -33,25 +33,25 @@ Todas as versões e o que mudou em cada uma: [Releases](https://github.com/Castz
 
 ## 🪟 Instalar no Windows
 
-1. Baixe o **[Telinha-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Telinha-Setup.exe)** e abra.
+1. Baixe o **[Teletela-Setup.exe](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Setup.exe)** e abra.
 2. Vai aparecer **"O Windows protegeu o computador"**. É porque o app não tem assinatura digital paga, não é vírus. Clique em **Mais informações** e depois em **Executar assim mesmo**.
-3. O Telinha instala e abre sozinho. Depois ele fica no **Menu Iniciar**.
+3. O Teletela instala e abre sozinho. Depois ele fica no **Menu Iniciar**.
 4. Se o Windows perguntar sobre o **Firewall**, clique em **Permitir**.
 
 Pronto. Agora é [entrar na sala](#-entrar-na-sala).
 
 ## 🐧 Instalar no Linux
 
-1. Baixe o **[Telinha.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.AppImage)**.
+1. Baixe o **[Teletela.AppImage](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.AppImage)**.
 2. Abra um terminal na pasta onde baixou e libere a execução:
    ```bash
    cd ~/Downloads
-   chmod +x Telinha.AppImage
+   chmod +x Teletela.AppImage
    ```
    *(sem terminal: botão direito no arquivo → Propriedades → Permissões → marque "Permitir executar como programa")*
 3. Abra:
    ```bash
-   ./Telinha.AppImage
+   ./Teletela.AppImage
    ```
 4. Se der erro falando de **`libfuse.so.2`**, instale o fuse2 e tente de novo:
 
@@ -66,11 +66,11 @@ Pronto. Agora é [entrar na sala](#-entrar-na-sala).
 <details>
 <summary>Se o AppImage não abrir de jeito nenhum (usar o .tar.gz)</summary>
 
-Baixe o **[Telinha.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Telinha.tar.gz)** e:
+Baixe o **[Teletela.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.tar.gz)** e:
 ```bash
 cd ~/Downloads
-tar -xzf Telinha.tar.gz
-cd Telinha*/
+tar -xzf Teletela.tar.gz
+cd Teletela*/
 ./telinha
 ```
 Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
@@ -81,8 +81,8 @@ Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
 ## 🚪 Entrar na sala
 
 1. Peça o **link da sala** pra quem está hospedando. Ele é parecido com `https://palavra-palavra-palavra.trycloudflare.com`.
-2. No Telinha, cole o link em **Entrar na sala de um amigo** e clique em **Entrar**.
-3. Na primeira vez, o Telinha pede seu **perfil** (nome, foto, cor). Dá pra mudar depois.
+2. No Teletela, cole o link em **Entrar na sala de um amigo** e clique em **Entrar**.
+3. Na primeira vez, o Teletela pede seu **perfil** (nome, foto, cor). Dá pra mudar depois.
 
 > ⚠️ **O link muda toda vez** que alguém abre a sala. Se der erro, peça o link novo.
 
@@ -90,10 +90,10 @@ Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
 <summary>Quero hospedar a sala eu mesmo</summary>
 
 1. Instale o [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (no Arch/CachyOS: `sudo pacman -S cloudflared`; no Windows: `winget install --id Cloudflare.cloudflared`).
-2. No Telinha, clique em **🏠 Hospedar no meu PC** e espere o link aparecer (pode levar até 1 minuto).
+2. No Teletela, clique em **🏠 Hospedar no meu PC** e espere o link aparecer (pode levar até 1 minuto).
 3. Clique em **📋 Copiar link**, mande pros amigos e clique em **Entrar na sala**.
 
-A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo mundo cai.
+A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo mundo cai.
 </details>
 
 ---
@@ -115,7 +115,7 @@ A sala só existe enquanto o seu Telinha estiver aberto: se você fechar, todo m
 | **Sair da call** | Botão 📞 *Sair da call* no topo: desliga voz e transmissões sem fechar o app. Clique num canal pra voltar |
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–200%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
-| **Volume geral** | ⚙️ → *Volume geral do Telinha*: vozes e transmissões juntas, até 200% |
+| **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
 | **Volume do seu microfone** | ⚙️ → *Volume do seu microfone* (0–300%): sobe se os amigos te ouvem baixo, vale na hora |
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |
@@ -140,9 +140,9 @@ Em ⚙️ → *Cancelamento de ruído do microfone*:
 Só afeta a sua voz, nunca o som da transmissão.
 
 ### ⌨️ Atalhos com o jogo aberto
-Os atalhos funcionam mesmo com o Telinha minimizado, se forem uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Telinha na frente, senão você não conseguiria digitar essa letra no jogo.
+Os atalhos funcionam mesmo com o Teletela minimizado, se forem uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.
 
-No **Linux com Wayland** (Hyprland, Sway…) quem segura a tecla no meio do jogo é o sistema: crie o atalho na config dele chamando o Telinha. No Hyprland:
+No **Linux com Wayland** (Hyprland, Sway…) quem segura a tecla no meio do jogo é o sistema: crie o atalho na config dele chamando o Teletela. No Hyprland:
 
 ```
 bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute
@@ -154,7 +154,7 @@ bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://t
 
 ## 🔄 Atualizações
 
-Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não precisa fazer nada. O Telinha confere se tem versão nova quando abre, baixa em segundo plano e pergunta se quer reiniciar. Se escolher "Depois", ele instala quando você fechar o app.
+Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não precisa fazer nada. O Teletela confere se tem versão nova quando abre, baixa em segundo plano e pergunta se quer reiniciar. Se escolher "Depois", ele instala quando você fechar o app.
 
 ---
 
@@ -162,7 +162,7 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 
 | Problema | Solução |
 |---|---|
-| *"Não encontrei uma sala do Telinha nesse link"* | A sala fechou ou o link é antigo. Peça o link novo. Se o link acabou de ser criado, espere uns segundos e tente de novo. |
+| *"Não encontrei uma sala do Teletela nesse link"* | A sala fechou ou o link é antigo. Peça o link novo. Se o link acabou de ser criado, espere uns segundos e tente de novo. |
 | *"O Windows protegeu o computador"* | Normal: **Mais informações → Executar assim mesmo**. |
 | AppImage não abre (*"libfuse.so.2"*) | Instale o fuse2 ([veja a tabela](#-instalar-no-linux)) ou use o `.tar.gz`. |
 | Amigos não ouvem o som da minha transmissão (Linux) | ⚙️ → *Áudio da Transmissão* → escolha **Som_do_PC_Jogos_e_Videos** ou **Monitor of …**. |

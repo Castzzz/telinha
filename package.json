@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "1.3.2",
+  "version": "2.0.0",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -34,7 +34,7 @@
   "author": "castzin",
   "build": {
     "appId": "com.castzin.telinha",
-    "productName": "Telinha",
+    "productName": "Teletela",
     "electronVersion": "42.11.11",
     "asar": false,
     "directories": {
@@ -52,7 +52,7 @@
         "tar.gz"
       ],
       "category": "AudioVideo",
-      "artifactName": "Telinha.${ext}"
+      "artifactName": "Teletela.${ext}"
     },
     "win": {
       "target": [
@@ -63,10 +63,10 @@
     },
     "nsis": {
       "oneClick": true,
-      "artifactName": "Telinha-Setup.${ext}"
+      "artifactName": "Teletela-Setup.${ext}"
     },
     "portable": {
-      "artifactName": "Telinha-Portatil.${ext}"
+      "artifactName": "Teletela-Portatil.${ext}"
     },
     "publish": [
       {

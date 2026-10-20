@@ -1,5 +1,5 @@
 /* ==========================================================================
-   TELINHA — DISCORD DARK THEME & LAYOUT STYLESHEET
+   TELETELA — TEMAS (ESCURO / PRETO / CLARO) & LAYOUT STYLESHEET
    ========================================================================== */
 
 :root {
@@ -39,6 +39,41 @@
   --font-family: 'gg sans', 'Noto Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s ease;
+  color-scheme: dark;
+}
+
+/* Tema "Mais escuro": quase tudo preto */
+:root[data-theme="preto"] {
+  --bg-primary: #111214;
+  --bg-secondary: #0b0b0d;
+  --bg-tertiary: #000000;
+  --bg-floating: #000000;
+  --bg-card: #18191c;
+  --border-subtle: #000000;
+  --border-medium: #26272b;
+}
+
+/* Tema claro */
+:root[data-theme="claro"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f2f3f5;
+  --bg-tertiary: #e3e5e8;
+  --bg-floating: #ffffff;
+  --bg-card: #ebedef;
+  --bg-hover: rgba(0, 0, 0, 0.05);
+  --bg-active: rgba(0, 0, 0, 0.1);
+  --text-normal: #313338;
+  --text-muted: #5c5e66;
+  --text-header: #060607;
+  --text-link: #006ce7;
+  --border-subtle: #d4d6da;
+  --border-medium: #c4c9ce;
+  color-scheme: light;
+}
+
+:root[data-theme="claro"] .badge-live-stream,
+:root[data-theme="claro"] .badge-live {
+  color: var(--accent-red);
 }
 
 /* ================= BASE RESET ================= */
@@ -128,16 +163,6 @@ ul {
   color: var(--text-header);
 }
 
-.badge-pro {
-  background: linear-gradient(135deg, #7c3aed, #5865f2);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
-  border-radius: var(--radius-pill);
-  letter-spacing: 0.5px;
-}
-
 .active-channel-pill {
   display: flex;
   align-items: center;
@@ -160,7 +185,7 @@ ul {
 }
 
 .btn-topbar-action {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--bg-hover);
   color: var(--text-normal);
   padding: 5px 10px;
   border-radius: var(--radius-sm);
@@ -180,8 +205,8 @@ ul {
 }
 
 .btn-topbar-action:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
+  background: var(--bg-active);
+  color: var(--text-header);
 }
 
 /* STREAM TABS */
@@ -218,7 +243,7 @@ ul {
 .stream-tab.active {
   background: rgba(88, 101, 242, 0.2);
   border-color: var(--accent-brand);
-  color: #fff;
+  color: var(--text-header);
 }
 
 .live-dot {
@@ -259,7 +284,7 @@ ul {
 .btn-topbar-tool.active {
   background: rgba(88, 101, 242, 0.2);
   border-color: var(--accent-brand);
-  color: #fff;
+  color: var(--text-header);
 }
 
 /* ================= 3-PANE LAYOUT ================= */
@@ -506,6 +531,18 @@ ul {
 
 .indicator-icon {
   font-size: 12px;
+}
+
+/* Ícone de microfone (desenhado, no lugar do emoji) */
+.mic-svg {
+  width: 1.15em;
+  height: 1.15em;
+  display: block;
+}
+
+.indicator-icon.mic-muted {
+  color: var(--accent-red);
+  display: inline-flex;
 }
 
 /* SIDEBAR CREATE ROW */
@@ -952,6 +989,50 @@ ul {
   background: var(--bg-hover);
 }
 
+.reaction-btn-more {
+  color: var(--text-muted);
+  font-weight: 700;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.reaction-btn-more[aria-expanded="true"] {
+  color: var(--accent-brand);
+  background: var(--bg-active);
+}
+
+/* Seletor de qualquer emoji: abre em cima da barra de reações */
+.stage-controls-bar {
+  position: relative;
+}
+
+.emoji-picker-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.emoji-picker-popover emoji-picker {
+  --background: var(--bg-floating);
+  --border-color: var(--border-medium);
+  --indicator-color: var(--accent-brand);
+  --input-border-color: var(--border-medium);
+  --input-font-color: var(--text-normal);
+  --input-placeholder-color: var(--text-muted);
+  --outline-color: var(--accent-brand);
+  --category-font-color: var(--text-muted);
+  --button-active-background: var(--bg-active);
+  --button-hover-background: var(--bg-hover);
+  --num-columns: 9;
+  height: 380px;
+}
+
 .stage-controls-right {
   display: flex;
   align-items: center;
@@ -971,7 +1052,7 @@ ul {
 
 .btn-control-tool:hover {
   background: var(--bg-hover);
-  color: #fff;
+  color: var(--text-header);
 }
 
 /* ================= FLOATING REACTIONS LAYER ================= */
@@ -1013,6 +1094,7 @@ ul {
 
 /* ================= RIGHT CHAT DRAWER ================= */
 .chat-drawer {
+  position: relative;
   width: 300px;
   background: var(--bg-secondary);
   border-left: 1px solid var(--border-subtle);
@@ -1023,7 +1105,7 @@ ul {
 }
 
 .chat-drawer.collapsed {
-  width: 0;
+  width: 0 !important; /* vence a largura arrastada (style inline) */
   overflow: hidden;
   border-left: none;
 }
@@ -1137,7 +1219,7 @@ ul {
 .chat-system-notice {
   font-size: 12px;
   color: var(--text-muted);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--bg-hover);
   padding: 6px 12px;
   border-radius: var(--radius-md);
   text-align: center;
@@ -1153,6 +1235,7 @@ ul {
 
 .chat-input {
   flex: 1;
+  min-width: 0; /* sem isso o campo não encolhe e empurra o "Enviar" pra fora do chat */
   background: var(--bg-tertiary);
   border: 1px solid var(--border-medium);
   border-radius: var(--radius-md);
@@ -1207,7 +1290,7 @@ ul {
 }
 
 .modal-settings-card {
-  max-width: 520px;
+  max-width: 720px;
 }
 
 /* Tela pequena: o cartão cabe na janela e o meio rola (título e botões ficam fixos) */
@@ -1316,7 +1399,7 @@ ul {
 .preset-chip:hover {
   border-color: var(--accent-brand);
   background: rgba(88, 101, 242, 0.15);
-  color: #fff;
+  color: var(--text-header);
 }
 
 /* VAD METER BAR */
@@ -1423,6 +1506,21 @@ ul {
 .resizing-sidebar .sidebar-resizer {
   background: var(--accent-brand);
   outline: none;
+}
+
+/* A do chat fica na borda esquerda */
+.chat-resizer {
+  right: auto;
+  left: -3px;
+}
+
+.chat-drawer.collapsed .chat-resizer {
+  display: none;
+}
+
+/* Sem a animação de largura enquanto arrasta, senão o chat fica atrás do mouse */
+.resizing-sidebar .chat-drawer {
+  transition: none;
 }
 
 /* Durante o arraste: sem selecionar texto e com o cursor de redimensionar em tudo */
@@ -1786,7 +1884,7 @@ ul {
 
 .stream-tab-close:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-active);
 }
 
 /* ==================== VOLUME POR TRANSMISSÃO E VOLUME GERAL ==================== */
@@ -1883,4 +1981,19 @@ ul {
 
 .user-profile {
   min-width: 0;
+}
+
+/* ==================== NOVIDADES DA VERSÃO ==================== */
+.whats-new-list {
+  list-style: disc;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  color: var(--text-normal);
+  line-height: 1.5;
+}
+
+.whats-new-list strong {
+  color: var(--text-header);
 }

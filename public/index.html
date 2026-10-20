@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Telinha — Transmissão e Voz estilo Discord / TeamSpeak</title>
+  <title>Teletela</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>" />
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -14,14 +14,14 @@
     <div class="topbar-left">
       <div class="brand-logo">
         <span class="logo-emoji">📺</span>
-        <span class="brand-text">Telinha <span class="badge-pro">PRO</span></span>
+        <span class="brand-text">Teletela</span>
       </div>
       <div class="active-channel-pill" id="topbar-channel-pill">
         <span class="channel-icon">🔊</span>
         <span id="topbar-channel-name">Geral</span>
         <span class="channel-users-badge" id="topbar-users-count" title="Usuários no canal">0</span>
       </div>
-      <button id="btn-leave-call" class="btn-topbar-action btn-leave-call" title="Sair da call (o Telinha continua aberto; clique num canal pra voltar)">
+      <button id="btn-leave-call" class="btn-topbar-action btn-leave-call" title="Sair da call (o Teletela continua aberto; clique num canal pra voltar)">
         📞 Sair da call
       </button>
       <button id="btn-copy-invite" class="btn-topbar-action" title="Copiar link direto para esta sala">
@@ -212,7 +212,10 @@
           <button class="reaction-btn" data-emoji="🎮" title="GG / Gameplay">🎮</button>
           <button class="reaction-btn" data-emoji="👏" title="Aplausos">👏</button>
           <button class="reaction-btn" data-emoji="❤️" title="Amei">❤️</button>
+          <button id="btn-more-reactions" class="reaction-btn reaction-btn-more" title="Qualquer emoji" aria-label="Escolher outro emoji" aria-expanded="false">＋</button>
         </div>
+        <!-- Seletor com todos os emojis (carregado só na primeira vez que abre) -->
+        <div id="emoji-picker-popover" class="emoji-picker-popover hidden"></div>
 
         <div class="stage-controls-right">
           <button id="btn-stage-stop-watching" class="btn-control-icon" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
@@ -224,6 +227,9 @@
 
     <!-- RIGHT CHANNEL TEXT CHAT DRAWER -->
     <aside id="chat-drawer" class="chat-drawer">
+      <div class="sidebar-resizer chat-resizer" id="chat-resizer" role="separator" aria-orientation="vertical"
+        aria-label="Largura do chat" tabindex="0"
+        title="Arraste pra mudar a largura (duplo clique volta ao normal)"></div>
       <div class="chat-header">
         <div class="chat-header-title">
           <span class="chat-hash">💬</span>
@@ -300,15 +306,50 @@
     </div>
   </div>
 
+  <!-- NOVIDADES: aparece uma vez na primeira vez que abre a versão nova -->
+  <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-whats-new-title">📺 Bem-vindo ao Teletela 2.0</h3>
+        <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Nome novo:</strong> o Telinha agora é Teletela.</li>
+          <li><strong>Já entra falando:</strong> ao entrar num canal o microfone abre sozinho.</li>
+          <li><strong>Qualquer emoji:</strong> o <strong>＋</strong> na barra de reações abre todos os emojis, com busca.</li>
+          <li><strong>Temas:</strong> escuro, mais escuro (preto) e claro, em ⚙️ Configurações.</li>
+          <li><strong>Chat com largura ajustável:</strong> arraste a borda esquerda dele, igual à barra de canais.</li>
+          <li><strong>Configurações mais largas</strong> e ícone de microfone de verdade quando alguém tá mutado.</li>
+        </ul>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn-primary" data-close-modal="modal-whats-new">Bora</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 2. MODAL CONFIGURAÇÕES DE ÁUDIO E DISPOSITIVOS -->
   <div id="modal-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title">
     <div class="modal-card modal-settings-card">
       <div class="modal-header">
-        <h3 id="modal-settings-title">Configurações de Áudio e Voz</h3>
+        <h3 id="modal-settings-title">Configurações</h3>
         <button class="modal-close-btn" data-close-modal="modal-settings">✕</button>
       </div>
 
       <div class="modal-body settings-body">
+        <!-- Tema -->
+        <div class="form-group">
+          <label for="select-theme">Tema</label>
+          <select id="select-theme" class="form-select">
+            <option value="escuro">Escuro</option>
+            <option value="preto">Mais escuro (preto)</option>
+            <option value="claro">Claro</option>
+          </select>
+        </div>
+
         <!-- Dispositivo de Microfone -->
         <div class="form-group">
           <label for="select-audio-input">Microfone (Entrada de Voz)</label>
@@ -352,12 +393,12 @@
 
         <!-- Volume geral -->
         <div class="form-group">
-          <label for="input-master-volume">Volume geral do Telinha</label>
+          <label for="input-master-volume">Volume geral do Teletela</label>
           <div class="master-volume-row">
             <input type="range" id="input-master-volume" min="0" max="200" step="5" value="100" />
             <span id="master-volume-text" class="master-volume-text">100%</span>
           </div>
-          <p class="form-help">Aumenta ou abaixa tudo que o Telinha toca (vozes e transmissões), até 200%.</p>
+          <p class="form-help">Aumenta ou abaixa tudo que o Teletela toca (vozes e transmissões), até 200%.</p>
         </div>
 
         <!-- Dispositivo do Som do Sistema (Linux Loopback Monitor Sink) -->
@@ -382,11 +423,11 @@
           </div>
           <label class="hotkey-global" id="hotkey-global-wrap">
             <input type="checkbox" id="input-hotkey-global" />
-            Funcionar mesmo com o Telinha minimizado (ex: no meio do jogo)
+            Funcionar mesmo com o Teletela minimizado (ex: no meio do jogo)
           </label>
           <p class="form-help">
             Clique no botão e aperte a tecla (Esc cancela, Backspace remove).
-            Com o Telinha minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
+            Com o Teletela minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
             pra não roubar letras que você digita em outros programas.
           </p>
           <p class="form-help hidden" id="hotkey-wayland-help">

@@ -92,6 +92,13 @@ async function loadPrefs() {
 
 const prefs = await loadPrefs();
 
+// Tema: escuro (padrão), preto ou claro
+const THEMES = ['escuro', 'preto', 'claro'];
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = THEMES.includes(theme) ? theme : 'escuro';
+}
+applyTheme(prefs.theme);
+
 function savePrefs(patch) {
   Object.assign(prefs, patch);
   if (window.electronAPI?.setPrefs) {
@@ -107,6 +114,18 @@ function savePrefs(patch) {
 function randomId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Microfone desenhado (o emoji 🔇 é um alto-falante, não um microfone)
+const MIC_PATHS = '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/>';
+const MIC_ON_SVG = `<svg class="mic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}</svg>`;
+const MIC_OFF_SVG = `<svg class="mic-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${MIC_PATHS}<path d="M3 3l18 18"/></svg>`;
+
+function updateMicButton() {
+  const on = appState.myUser.isMicOn;
+  $('#btn-toggle-mic')?.classList.toggle('active-muted', !on);
+  const micIcon = $('#dock-mic-icon');
+  if (micIcon) micIcon.innerHTML = on ? MIC_ON_SVG : MIC_OFF_SVG;
 }
 
 const PROFILE_COLORS = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#ED4245', '#F47B67', '#9B84EC', '#00A8FC'];
@@ -251,12 +270,31 @@ const socket = io(SERVER_URL, {
 // -----------------------------------------------------------------------------
 // 4. SIGNALING EVENT HANDLERS
 // -----------------------------------------------------------------------------
+// Ao entrar na call (abrindo o app ou voltando depois de "Sair da call") o microfone abre
+// sozinho quando o canal responder. Trocar de canal ou reconectar mantém o mute como estava.
+let openMicOnJoin = false;
+let connectedOnce = false;
+
+function openMicAfterJoin() {
+  if (!openMicOnJoin) return;
+  openMicOnJoin = false;
+  if (appState.myUser.isMicOn || appState.myUser.isDeafened) return;
+  appState.myUser.isMicOn = true;
+  updateMicButton();
+  onMicrophoneToggle(true);
+  socket.emit('user-state-changed', { isMicOn: true, isDeafened: appState.myUser.isDeafened });
+  renderChannelsTree();
+  updateVoiceLounge();
+}
+
 socket.on('connect', () => {
   appState.myId = socket.id;
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
   // Send join-channel with current user state (fora da call não entra em nenhum)
   if (!appState.currentChannelId) return;
+  if (!connectedOnce) openMicOnJoin = true;
+  connectedOnce = true;
   socket.emit('join-channel', {
     channelId: appState.currentChannelId,
     userName: appState.myUser.name,
@@ -382,6 +420,7 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
   updateTopBar();
   renderChannelChat(channelId);
   updateVoiceLounge();
+  openMicAfterJoin();
 });
 
 const handleUserJoined = (data) => {
@@ -565,7 +604,9 @@ socket.on('chat-message', (msg) => {
 });
 
 // Floating reaction receiving
-socket.on('reaction', ({ channelId, userName, emoji }) => {
+socket.on('reaction', ({ channelId, userId, userName, emoji }) => {
+  // A minha já apareceu na hora em que cliquei (o servidor manda pro canal inteiro, eu incluso)
+  if (userId === appState.myId) return;
   if (channelId === appState.currentChannelId) {
     spawnFloatingReaction(userName, emoji);
   }
@@ -583,6 +624,7 @@ function switchChannel(targetChannelId) {
   if (cleanId === appState.currentChannelId) return;
 
   const oldChannelId = appState.currentChannelId;
+  if (!oldChannelId) openMicOnJoin = true;
   appState.currentChannelId = cleanId;
   appState.unreadChannels.delete(cleanId);
   localStorage.setItem('telinha_last_channel', cleanId);
@@ -745,7 +787,7 @@ function renderChannelsTree() {
         </span>
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
-          ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">🔇</span>` : ''}
+          ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon user-deafened" title="Áudio Desativado">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
         </div>
@@ -841,7 +883,7 @@ function updateVoiceLounge() {
         <span class="lounge-user-name">${escapeHtml(u.name)}${isMe ? ' (Você)' : ''}</span>
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
-          ${!u.isMicOn ? `<span class="indicator-icon">🔇</span>` : ''}
+          ${!u.isMicOn ? `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>` : ''}
           ${u.isDeafened ? `<span class="indicator-icon">🎧🚫</span>` : ''}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
         </div>
@@ -1023,9 +1065,7 @@ function setupDockControls() {
       if (deafIcon) deafIcon.textContent = '🎧';
     }
 
-    micBtn.classList.toggle('active-muted', !appState.myUser.isMicOn);
-    const micIcon = $('#dock-mic-icon');
-    if (micIcon) micIcon.textContent = appState.myUser.isMicOn ? '🎙️' : '🔇';
+    updateMicButton();
 
     onMicrophoneToggle(appState.myUser.isMicOn);
 
@@ -1047,9 +1087,7 @@ function setupDockControls() {
     const deafIcon = $('#dock-deafen-icon');
     if (deafIcon) deafIcon.textContent = appState.myUser.isDeafened ? '🎧🚫' : '🎧';
 
-    micBtn?.classList.toggle('active-muted', !appState.myUser.isMicOn);
-    const micIcon = $('#dock-mic-icon');
-    if (micIcon) micIcon.textContent = appState.myUser.isMicOn ? '🎙️' : '🔇';
+    updateMicButton();
 
     socket.emit('user-state-changed', {
       isDeafened: appState.myUser.isDeafened,
@@ -1127,15 +1165,17 @@ function setupChatAndReactions() {
   });
 
   // Emoji Reactions
+  const sendReaction = (emoji) => {
+    socket.emit('reaction', { emoji });
+    spawnFloatingReaction(appState.myUser.name, emoji);
+  };
   $$('.reaction-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
       const emoji = btn.getAttribute('data-emoji');
-      if (emoji) {
-        socket.emit('reaction', { emoji });
-        spawnFloatingReaction(appState.myUser.name, emoji);
-      }
+      if (emoji) sendReaction(emoji);
     });
   });
+  setupEmojiPicker(sendReaction);
 
   // Copy invite link
   $('#btn-copy-invite')?.addEventListener('click', () => {
@@ -1145,6 +1185,63 @@ function setupChatAndReactions() {
     }).catch(() => {
       showToast('Link: ' + url);
     });
+  });
+}
+
+// Botão "+" das reações: seletor com todos os emojis e busca em português.
+// O seletor (e a lista de emojis) só carrega na primeira vez que abre.
+function setupEmojiPicker(onPick) {
+  const btn = $('#btn-more-reactions');
+  const popover = $('#emoji-picker-popover');
+  if (!btn || !popover) return;
+
+  let loading = null;
+  const load = () => loading ??= Promise.all([
+    import('./vendor/emoji-picker/picker.js'),
+    import('./vendor/emoji-picker/pt_BR.js')
+  ]).then(([{ default: Picker }, { default: i18n }]) => {
+    const picker = new Picker({
+      locale: 'pt',
+      i18n,
+      dataSource: new URL('vendor/emoji-picker/data-pt.json', window.location.href).href
+    });
+    picker.addEventListener('emoji-click', (e) => {
+      if (e.detail?.unicode) onPick(e.detail.unicode);
+      close();
+    });
+    popover.appendChild(picker);
+    return picker;
+  }).catch((err) => {
+    loading = null;
+    throw err;
+  });
+
+  const close = () => {
+    popover.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  const open = async () => {
+    try {
+      const picker = await load();
+      picker.className = document.documentElement.dataset.theme === 'claro' ? 'light' : 'dark';
+      popover.classList.remove('hidden');
+      btn.setAttribute('aria-expanded', 'true');
+      picker.shadowRoot?.querySelector('input.search')?.focus();
+    } catch (err) {
+      console.error('[Reações] Seletor de emojis não carregou:', err);
+      showToast('❌ Não deu pra abrir os emojis.', 'error');
+    }
+  };
+
+  btn.addEventListener('click', () => {
+    if (popover.classList.contains('hidden')) open();
+    else close();
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!popover.classList.contains('hidden') && !popover.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !popover.classList.contains('hidden')) close();
   });
 }
 
@@ -1750,9 +1847,9 @@ async function saveHotkey(action, accelerator) {
   const registered = await applyGlobalHotkeys();
   if (!accelerator || !window.electronAPI?.setGlobalHotkeys || !hotkeysGlobal) return;
   if (!canBeGlobalHotkey(accelerator)) {
-    showToast('ℹ️ Esse atalho só funciona com o Telinha na frente. Use Ctrl/Alt + tecla ou F1–F24 pra funcionar minimizado.');
+    showToast('ℹ️ Esse atalho só funciona com o Teletela na frente. Use Ctrl/Alt + tecla ou F1–F24 pra funcionar minimizado.');
   } else if (registered[action] === false) {
-    showToast('⚠️ Outro programa já usa esse atalho; ele só vai funcionar com o Telinha na frente.', 'error');
+    showToast('⚠️ Outro programa já usa esse atalho; ele só vai funcionar com o Teletela na frente.', 'error');
   }
 }
 
@@ -1838,18 +1935,48 @@ function setupMasterVolume() {
   input.addEventListener('change', () => savePrefs({ masterVolume: Number(input.value) }));
 }
 
-// Barra de salas e canais: arrasta a borda direita pra mudar a largura (guardada nas preferências)
+function setupThemeSelect() {
+  const select = $('#select-theme');
+  if (!select) return;
+  select.value = document.documentElement.dataset.theme;
+  select.addEventListener('change', () => {
+    applyTheme(select.value);
+    savePrefs({ theme: select.value });
+  });
+}
+
+// Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
+const WHATS_NEW_VERSION = '2.0';
+function showWhatsNewOnce() {
+  if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
+  savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
+  if (!isFirstRun) $('#modal-whats-new')?.classList.remove('hidden');
+}
+
+// Barra de salas e canais (borda direita) e chat (borda esquerda): arrasta a borda pra mudar
+// a largura (guardada nas preferências)
 const SIDEBAR_MIN_WIDTH = 220; // cabe o dock com os 5 botões
 const SIDEBAR_MAX_WIDTH = 480;
+const CHAT_MIN_WIDTH = 240;
+const CHAT_MAX_WIDTH = 520;
 
 function setupSidebarResize() {
-  const sidebar = $('#sidebar-channels');
-  const handle = $('#sidebar-resizer');
+  setupPanelResize($('#sidebar-channels'), $('#sidebar-resizer'), {
+    min: SIDEBAR_MIN_WIDTH, max: SIDEBAR_MAX_WIDTH, prefKey: 'sidebarWidth', edge: 'right'
+  });
+  setupPanelResize($('#chat-drawer'), $('#chat-resizer'), {
+    min: CHAT_MIN_WIDTH, max: CHAT_MAX_WIDTH, prefKey: 'chatWidth', edge: 'left'
+  });
+}
+
+function setupPanelResize(sidebar, handle, { min, max, prefKey, edge }) {
   if (!sidebar || !handle) return;
-  const clamp = (w) => Math.round(Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, w)));
+  // Borda esquerda: arrastar pra esquerda alarga
+  const dir = edge === 'left' ? -1 : 1;
+  const clamp = (w) => Math.round(Math.min(max, Math.max(min, w)));
   const apply = (w) => { sidebar.style.width = w ? `${clamp(w)}px` : ''; };
-  const save = () => savePrefs({ sidebarWidth: sidebar.style.width ? parseInt(sidebar.style.width, 10) : null });
-  apply(prefs.sidebarWidth);
+  const save = () => savePrefs({ [prefKey]: sidebar.style.width ? parseInt(sidebar.style.width, 10) : null });
+  apply(prefs[prefKey]);
 
   handle.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
@@ -1858,7 +1985,7 @@ function setupSidebarResize() {
     const startWidth = sidebar.getBoundingClientRect().width;
     handle.setPointerCapture(e.pointerId);
     document.body.classList.add('resizing-sidebar');
-    const onMove = (ev) => apply(startWidth + ev.clientX - startX);
+    const onMove = (ev) => apply(startWidth + dir * (ev.clientX - startX));
     const onUp = () => {
       handle.removeEventListener('pointermove', onMove);
       document.body.classList.remove('resizing-sidebar');
@@ -1870,7 +1997,7 @@ function setupSidebarResize() {
   });
   handle.addEventListener('dblclick', () => { apply(null); save(); });
   handle.addEventListener('keydown', (e) => {
-    const step = e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0;
+    const step = (e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0) * dir;
     if (!step) return;
     e.preventDefault();
     apply(sidebar.getBoundingClientRect().width + step);
@@ -3136,10 +3263,10 @@ async function onMicrophoneToggle(isMicOn) {
     } catch (err) {
       console.error('[WebRTC] Failed to acquire microphone:', err);
       appState.myUser.isMicOn = false;
-      const micBtn = document.getElementById('btn-toggle-mic');
-      if (micBtn) micBtn.classList.add('active-muted');
-      const micIcon = document.getElementById('dock-mic-icon');
-      if (micIcon) micIcon.textContent = '🔇';
+      updateMicButton();
+      socket.emit('user-state-changed', { isMicOn: false });
+      renderChannelsTree();
+      updateVoiceLounge();
       showToast('❌ Permissão de microfone negada ou indisponível.', 'error');
     }
   } else {
@@ -3999,6 +4126,8 @@ function initApp() {
   setupSidebarResize();
   setupMasterVolume();
   setupMicGain();
+  setupThemeSelect();
+  updateMicButton();
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {
     callSoundsInput.checked = prefs.callSounds !== false;
@@ -4008,6 +4137,7 @@ function initApp() {
   updateTopBar();
   updateVoiceLounge();
   if (isFirstRun) openProfileModal();
+  showWhatsNewOnce();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
