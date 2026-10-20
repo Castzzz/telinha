@@ -103,7 +103,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | Quero… | Como |
 |---|---|
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. Ao entrar na call o microfone já abre |
-| **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D` |
+| **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
@@ -112,7 +112,8 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
-| **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
+| **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
+| **Recolher os canais** | Clique em *Canais de Voz* ou *Canais de Texto*. Recolhido, fica só o canal em que você está (com as fotos lado a lado) e os canais de texto com mensagem nova |
 | **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Admin: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até o admin desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |

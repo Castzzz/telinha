@@ -124,6 +124,9 @@ const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" strok
 const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
 const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
 const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
+// Alto-falante (silenciar alguém só pra você)
+const SPEAKER_PATHS = '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>';
+const SPEAKER_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SPEAKER_PATHS}<path d="M3 3l18 18"/></svg>`;
 
 function updateMicButton() {
   const on = appState.myUser.isMicOn;
@@ -899,10 +902,14 @@ function renderChannelsTree() {
 
   // Render tree
   treeContainer.innerHTML = '';
+  // Recolhido (igual Discord): só o canal em que você está, com as fotos lado a lado
+  const collapsed = Boolean(prefs.collapsedVoice);
+  updateCategoryHeaders();
 
   channelIds.forEach((chId) => {
     const ch = appState.channels.get(chId);
     if (!ch) return;
+    if (collapsed && chId !== appState.currentChannelId) return;
 
     const isActive = chId === appState.currentChannelId;
     const hasUnread = appState.unreadChannels.has(chId);
@@ -966,7 +973,7 @@ function renderChannelsTree() {
 
     // Nested Users List
     const usersUl = document.createElement('ul');
-    usersUl.className = 'channel-users';
+    usersUl.className = `channel-users${collapsed ? ' compact' : ''}`;
     usersUl.id = `channel-users-${chId}`;
 
     ch.users.forEach((u) => {
@@ -992,10 +999,11 @@ function renderChannelsTree() {
         <div class="user-indicators">
           ${liveBadgesHtml(u, { compact: true })}
           ${muteIndicatorsHtml(u)}
-          ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">🔕</span>` : ''}
+          ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">${SPEAKER_OFF_SVG}</span>` : ''}
         </div>
       `;
       userLi.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
+      if (collapsed) userLi.title = `${u.name}${isMe ? ' (você)' : ''} · ${userLi.title}`;
       // Admin arrasta a pessoa pra outra call, igual no Discord
       if (appState.isAdmin) {
         userLi.draggable = true;
@@ -1035,15 +1043,8 @@ function updateTopBar() {
   const inCall = Boolean(appState.currentChannelId);
   const ch = appState.channels.get(appState.currentChannelId);
   const name = ch ? ch.name : appState.currentChannelId || 'Fora da call';
-  const count = ch ? ch.users.size : inCall ? 1 : 0;
 
   $('#btn-leave-call')?.classList.toggle('hidden', !inCall);
-
-  const topName = $('#topbar-channel-name');
-  if (topName) topName.textContent = name;
-
-  const topCount = $('#topbar-users-count');
-  if (topCount) topCount.textContent = String(count);
 
   const textCh = appState.textView ? appState.textChannels.get(appState.textView) : null;
   const chatLabel = $('#chat-channel-label');
@@ -1103,7 +1104,7 @@ function updateVoiceLounge() {
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
           ${muteIndicatorsHtml(u)}
-          ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">🔕</span>` : ''}
+          ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">${SPEAKER_OFF_SVG}</span>` : ''}
         </div>
       `;
       card.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
@@ -1399,6 +1400,39 @@ function setupChatImages() {
 // -----------------------------------------------------------------------------
 // CANAIS DE TEXTO: o histórico fica salvo no servidor. Abrem no painel do chat, sem
 // precisar estar (nem sair) de call nenhuma.
+function updateCategoryHeaders() {
+  for (const [id, key] of [['#category-voice', 'collapsedVoice'], ['#category-text', 'collapsedText']]) {
+    const header = $(id);
+    if (!header) continue;
+    header.classList.toggle('collapsed', Boolean(prefs[key]));
+    header.setAttribute('aria-expanded', String(!prefs[key]));
+  }
+  $('#btn-open-create-modal')?.closest('.sidebar-action-wrap')?.classList.toggle('hidden', Boolean(prefs.collapsedVoice));
+}
+
+function setupCategoryCollapse() {
+  const bind = (id, key, render) => {
+    const header = $(id);
+    if (!header) return;
+    const toggle = () => {
+      savePrefs({ [key]: !prefs[key] });
+      render();
+    };
+    header.addEventListener('click', (e) => {
+      if (e.target.closest('button')) return; // o "+" continua criando canal
+      toggle();
+    });
+    header.addEventListener('keydown', (e) => {
+      if (e.target !== header || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      toggle();
+    });
+  };
+  bind('#category-voice', 'collapsedVoice', renderChannelsTree);
+  bind('#category-text', 'collapsedText', renderTextChannels);
+  updateCategoryHeaders();
+}
+
 // -----------------------------------------------------------------------------
 appState.textChannels = new Map(); // id -> { id, name, createdBy, createdAt, lastMessageAt }
 appState.textView = null; // canal de texto aberto no chat (null = chat da call)
@@ -1418,10 +1452,13 @@ function renderTextChannels() {
   const tree = $('#text-channels-tree');
   if (!tree) return;
   tree.innerHTML = '';
+  updateCategoryHeaders();
   for (const ch of appState.textChannels.values()) {
     const li = document.createElement('li');
     const active = appState.textView === ch.id;
     const unread = !active && ch.lastMessageAt > textLastSeen(ch.id);
+    // Recolhido: só o canal aberto e os que têm mensagem nova
+    if (prefs.collapsedText && !active && !unread) continue;
     li.className = `channel-item ${active ? 'channel-active' : ''} ${unread ? 'channel-unread' : ''}`;
     li.dataset.textChannelId = ch.id;
     li.innerHTML = `
@@ -1451,6 +1488,13 @@ function renderTextChannels() {
   }
 }
 
+// Canal de texto aberto ocupa a tela toda, a não ser que você esteja assistindo alguém
+function updateTextLayout() {
+  const watching = [...appState.activeStreams.values()].some((info) => !info.isLocal);
+  const chatOpen = !$('#chat-drawer')?.classList.contains('collapsed');
+  $('#app-layout')?.classList.toggle('text-full', Boolean(appState.textView) && chatOpen && !watching);
+}
+
 function openTextChannel(id) {
   if (!appState.textChannels.has(id)) return;
   appState.textView = id;
@@ -1460,6 +1504,7 @@ function openTextChannel(id) {
   markTextSeen(id);
   renderTextChannels();
   updateTopBar();
+  updateTextLayout();
   const state = appState.textMessages.get(id);
   if (state) renderTextChat();
   else loadTextHistory(id);
@@ -1471,6 +1516,7 @@ function closeTextView() {
   appState.textView = null;
   renderTextChannels();
   updateTopBar();
+  updateTextLayout();
   renderChannelChat(appState.currentChannelId);
 }
 
@@ -1711,12 +1757,14 @@ function setupChatAndReactions() {
     if (drawer) {
       drawer.classList.toggle('collapsed');
       $('#btn-toggle-chat')?.classList.toggle('active', !drawer.classList.contains('collapsed'));
+      updateTextLayout();
     }
   });
 
   $('#btn-close-chat')?.addEventListener('click', () => {
     $('#chat-drawer')?.classList.add('collapsed');
     $('#btn-toggle-chat')?.classList.remove('active');
+    updateTextLayout();
   });
 
   // Emoji Reactions
@@ -1732,15 +1780,6 @@ function setupChatAndReactions() {
   renderQuickReactions();
   setupEmojiPicker(sendReaction);
 
-  // Copy invite link
-  $('#btn-copy-invite')?.addEventListener('click', () => {
-    const url = `${SERVER_URL}/?channel=${encodeURIComponent(appState.currentChannelId || 'geral')}`;
-    navigator.clipboard?.writeText(url).then(() => {
-      showToast('Link de convite copiado!', 'success');
-    }).catch(() => {
-      showToast('Link: ' + url);
-    });
-  });
 }
 
 // Barra de reações rápidas: começa com estes e vai virando os emojis que você mais usa.
@@ -2158,9 +2197,9 @@ function openUserPopover(userId, anchorEvent) {
   const adminRow = $('#user-popover-admin');
   adminRow?.classList.toggle('hidden', !appState.isAdmin);
   const muteAll = $('#user-popover-server-mute');
-  if (muteAll) muteAll.textContent = u.serverMuted ? '🎙️ Desmutar pra todos' : '🔇 Mutar pra todos';
+  if (muteAll) muteAll.innerHTML = u.serverMuted ? `${MIC_ON_SVG} Desmutar pra todos` : `${MIC_OFF_SVG} Mutar pra todos`;
   const deafAll = $('#user-popover-server-deafen');
-  if (deafAll) deafAll.textContent = u.serverDeafened ? '🎧 Tirar o ensurdecer' : '🎧 Ensurdecer pra todos';
+  if (deafAll) deafAll.innerHTML = u.serverDeafened ? `${HEADPHONES_ON_SVG} Tirar o ensurdecer` : `${HEADPHONES_OFF_SVG} Ensurdecer pra todos`;
 
   pop.classList.remove('hidden');
   // Abre ao lado do clique, sem sair da janela
@@ -2179,7 +2218,7 @@ function renderUserPopoverVolume() {
   $('#user-popover-volume-text').textContent = `${volume}%`;
   const muteBtn = $('#user-popover-mute');
   muteBtn.classList.toggle('active', muted);
-  muteBtn.textContent = muted ? '🔕 Silenciado' : '🔇 Silenciar pra mim';
+  muteBtn.innerHTML = `${SPEAKER_OFF_SVG} ${muted ? 'Silenciado' : 'Silenciar pra mim'}`;
 }
 
 function closeUserPopover() {
@@ -2684,13 +2723,14 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '2.2';
+const WHATS_NEW_VERSION = '2.3';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
   const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
+  $('#whats-new-2-2')?.classList.toggle('hidden', seen >= 2.2);
   $('#whats-new-2-1')?.classList.toggle('hidden', seen >= 2.1);
   $('#whats-new-2-0')?.classList.toggle('hidden', seen >= 2.0);
   $('#modal-whats-new')?.classList.remove('hidden');
@@ -3033,6 +3073,11 @@ function streamVolumeKey(key) {
   return base ? `${base}${String(key).slice(owner.length)}` : base;
 }
 
+// Ensurdecer cala as vozes; as transmissões só se a pessoa pediu nas configurações
+function streamsDeafened() {
+  return appState.myUser.isDeafened && prefs.deafenStreams === true;
+}
+
 function savedStreamVolume(userId) {
   return (prefs.streamVolumes || {})[streamVolumeKey(userId)] ?? 100;
 }
@@ -3047,7 +3092,7 @@ function setStreamVolume(userId, percent, { save = true } = {}) {
   appState.setStreamVolume(userId, pct);
   // Sem o mixer o som sai pelo próprio <video> (que só vai até 100%)
   const videoEl = document.getElementById(`video-el-${userId}`);
-  if (videoEl && !appState.myUser.isDeafened && videoEl.dataset.mixerOutput !== '1') {
+  if (videoEl && !streamsDeafened() && videoEl.dataset.mixerOutput !== '1') {
     videoEl.volume = Math.min(1.0, pct / 100);
     setRemoteElementMuted(videoEl, pct === 0);
   }
@@ -3117,7 +3162,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
     video.id = `video-el-${userId}`;
     video.autoplay = true;
     video.playsInline = true;
-    video.muted = isLocal || appState.myUser.isDeafened;
+    video.muted = isLocal || streamsDeafened();
 
     const unmuteBtn = document.createElement('button');
     unmuteBtn.id = `unmute-btn-${userId}`;
@@ -3241,6 +3286,7 @@ function toggleExpandedStream(userId) {
 }
 
 function updateStageLayout() {
+  updateTextLayout();
   const grid = document.getElementById('videos-grid');
   const lounge = document.getElementById('voice-lounge');
   const watchingLabel = document.getElementById('watching-stream-label');
@@ -3308,7 +3354,7 @@ function updateStageLayout() {
       const vol = getStreamVolume(uid) / 100;
       const audible = mosaic || uid === shownAlone;
       appState.mixerManager?.setStreamAudible(uid, audible);
-      if (appState.myUser.isDeafened) {
+      if (streamsDeafened()) {
         videoEl.muted = true;
       } else {
         videoEl.volume = Math.min(1.0, vol);
@@ -4105,7 +4151,7 @@ function onDeafenToggle(isDeafened) {
     for (const [userId, info] of appState.activeStreams.entries()) {
       if (!info.isLocal) {
         const videoEl = document.getElementById(`video-el-${userId}`);
-        if (videoEl) {
+        if (videoEl && prefs.deafenStreams === true) {
           setRemoteElementMuted(videoEl, isDeafened);
         }
       }
@@ -5074,6 +5120,7 @@ function initAudioSystem() {
 
   appState.mixerManager = new VolumeMixerManager({ audioContext: appState.audioContext });
   appState.mixerManager.setMasterVolume(prefs.masterVolume ?? 100);
+  appState.mixerManager.setDeafenStreams(prefs.deafenStreams === true);
   appState.audioManager = new AudioManager({ volumeMixer: appState.mixerManager });
   appState.deafenController = new DeafenController({
     appState,
@@ -5098,6 +5145,7 @@ function initApp() {
   setupChatAndReactions();
   setupChatImages();
   setupTextChannels();
+  setupCategoryCollapse();
   setupModals();
   setupUserPopover();
   setupProfileModal();
@@ -5113,6 +5161,15 @@ function initApp() {
   if (hideOwnInput) {
     hideOwnInput.checked = Boolean(prefs.hideOwnStream);
     hideOwnInput.addEventListener('change', () => setHideOwnStream(hideOwnInput.checked));
+  }
+  const deafenStreamsInput = $('#input-deafen-streams');
+  if (deafenStreamsInput) {
+    deafenStreamsInput.checked = prefs.deafenStreams === true;
+    deafenStreamsInput.addEventListener('change', () => {
+      savePrefs({ deafenStreams: deafenStreamsInput.checked });
+      appState.mixerManager?.setDeafenStreams(deafenStreamsInput.checked);
+      updateStageLayout();
+    });
   }
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {

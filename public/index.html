@@ -16,16 +16,8 @@
         <span class="logo-emoji">📺</span>
         <span class="brand-text">Teletela</span>
       </div>
-      <div class="active-channel-pill" id="topbar-channel-pill">
-        <span class="channel-icon">🔊</span>
-        <span id="topbar-channel-name">Geral</span>
-        <span class="channel-users-badge" id="topbar-users-count" title="Usuários no canal">0</span>
-      </div>
       <button id="btn-leave-call" class="btn-topbar-action btn-leave-call" title="Sair da call (o Teletela continua aberto; clique num canal pra voltar)">
         📞 Sair da call
-      </button>
-      <button id="btn-copy-invite" class="btn-topbar-action" title="Copiar link direto para esta sala">
-        🔗 Convidar
       </button>
     </div>
 
@@ -56,7 +48,7 @@
 
       <!-- CHANNELS LIST WRAPPER -->
       <nav class="channels-scroller" aria-label="Canais de voz">
-        <div class="category-header">
+        <div class="category-header" id="category-voice" role="button" tabindex="0" aria-expanded="true" title="Recolher/mostrar os canais de voz">
           <span class="category-caret">▼</span>
           <span class="category-title">Canais de Voz</span>
           <button id="btn-add-channel-category" class="btn-category-add" title="Criar Canal">+</button>
@@ -116,7 +108,7 @@
         </div>
 
         <!-- Canais de texto: o histórico fica salvo no servidor -->
-        <div class="category-header category-text">
+        <div class="category-header category-text" id="category-text" role="button" tabindex="0" aria-expanded="true" title="Recolher/mostrar os canais de texto">
           <span class="category-caret">▼</span>
           <span class="category-title">Canais de Texto</span>
           <button id="btn-add-text-channel" class="btn-category-add" title="Criar canal de texto">+</button>
@@ -339,16 +331,26 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 2.2</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 2.3</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Ensurdecido ainda ouve as transmissões:</strong> o 🎧 agora cala só as vozes. Se quiser calar tudo como antes, tem a opção em ⚙️ Configurações.</li>
+          <li><strong>Canal de texto em tela cheia:</strong> abre ocupando a tela toda (se você estiver vendo uma transmissão, fica no cantinho).</li>
+          <li><strong>Recolher os canais:</strong> clique em <em>Canais de Voz</em> ou <em>Canais de Texto</em>. Recolhido, fica só o canal em que você está, com as fotos da galera lado a lado.</li>
+          <li><strong>Barra de cima mais limpa</strong> e ícones de microfone e fone também no menu de mutar alguém.</li>
+        </ul>
+        <!-- Só pra quem pulou a 2.2 -->
+        <div id="whats-new-2-2" class="whats-new-older hidden">
+          <h4>E o que chegou na 2.2</h4>
+          <ul class="whats-new-list">
           <li><strong>Canais de texto:</strong> crie em <em>Canais de Texto</em> na barra do lado. Tudo que mandarem (mensagens e imagens) fica salvo, e dá pra usar sem estar em call.</li>
           <li><strong>Admin 👑 arrasta gente de call:</strong> igual no Discord, pega a pessoa na lista e solta em outro canal.</li>
           <li><strong>Admin muta ou ensurdece pra todos:</strong> clique na pessoa. Ela não consegue se desmutar até o admin liberar (aparece um 🛡️ do lado).</li>
         </ul>
+        </div>
         <!-- Só pra quem pulou a 2.1 -->
         <div id="whats-new-2-1" class="whats-new-older hidden">
           <h4>E o que chegou na 2.1</h4>
@@ -456,6 +458,14 @@
           <label class="hotkey-global">
             <input type="checkbox" id="input-hide-own-stream" />
             Esconder minha própria transmissão e câmera daqui (os amigos continuam vendo; poupa o PC)
+          </label>
+        </div>
+
+        <!-- Ensurdecer e transmissões -->
+        <div class="form-group">
+          <label class="hotkey-global">
+            <input type="checkbox" id="input-deafen-streams" />
+            Ensurdecer também silencia as transmissões (desligado: você para de ouvir as vozes, mas continua ouvindo as telas)
           </label>
         </div>
 
@@ -594,14 +604,14 @@
       <span id="user-popover-volume-text">100%</span>
     </div>
     <div class="user-popover-actions">
-      <button type="button" class="btn-secondary" id="user-popover-mute">🔇 Silenciar pra mim</button>
+      <button type="button" class="btn-secondary" id="user-popover-mute">Silenciar pra mim</button>
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
     </div>
     <div class="user-popover-admin hidden" id="user-popover-admin">
       <span class="user-popover-label">Admin 👑 (vale pra todo mundo)</span>
       <div class="user-popover-actions">
-        <button type="button" class="btn-secondary" id="user-popover-server-mute">🔇 Mutar pra todos</button>
-        <button type="button" class="btn-secondary" id="user-popover-server-deafen">🎧 Ensurdecer pra todos</button>
+        <button type="button" class="btn-secondary" id="user-popover-server-mute">Mutar pra todos</button>
+        <button type="button" class="btn-secondary" id="user-popover-server-deafen">Ensurdecer pra todos</button>
       </div>
     </div>
     <button type="button" class="btn-secondary user-popover-kick hidden" id="user-popover-kick">🚪 Tirar da call (admin)</button>

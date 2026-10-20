@@ -165,27 +165,6 @@ ul {
   color: var(--text-header);
 }
 
-.active-channel-pill {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-medium);
-  padding: 4px 10px;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-header);
-}
-
-.channel-users-badge {
-  background: var(--bg-tertiary);
-  color: var(--text-muted);
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: var(--radius-pill);
-}
-
 .btn-topbar-action {
   background: var(--bg-hover);
   color: var(--text-normal);
@@ -364,6 +343,47 @@ ul {
 .category-caret {
   font-size: 9px;
   margin-right: 6px;
+  transition: transform var(--transition-fast);
+}
+
+.category-header[role="button"] {
+  cursor: pointer;
+  user-select: none;
+}
+
+.category-header[role="button"]:hover .category-title,
+.category-header[role="button"]:hover .category-caret {
+  color: var(--text-normal);
+}
+
+.category-header.collapsed .category-caret {
+  transform: rotate(-90deg);
+}
+
+/* Canal recolhido: só as fotos, pequenas, uma do lado da outra */
+.channel-users.compact {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 8px 6px 30px;
+}
+
+.channel-users.compact .channel-user {
+  padding: 2px;
+  width: auto;
+  position: relative;
+}
+
+.channel-users.compact .channel-user-name,
+.channel-users.compact .user-indicators {
+  display: none;
+}
+
+.channel-users.compact .user-avatar-wrap,
+.channel-users.compact .user-avatar {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
 }
 
 .category-title {
@@ -1517,6 +1537,22 @@ ul {
   display: none;
 }
 
+/* Canal de texto em tela cheia (sem transmissão aberta) */
+.app-layout.text-full .stage-section {
+  display: none;
+}
+
+.app-layout.text-full .chat-drawer {
+  flex: 1;
+  width: auto !important;
+  border-left: none;
+  transition: none;
+}
+
+.app-layout.text-full .chat-resizer {
+  display: none;
+}
+
 /* Sem a animação de largura enquanto arrasta, senão o chat fica atrás do mouse */
 .resizing-sidebar .chat-drawer {
   transition: none;
@@ -1712,6 +1748,15 @@ ul {
 .user-popover-actions .btn-secondary {
   padding: 6px 10px;
   border: 1px solid var(--border-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-popover-actions .btn-secondary .icon-svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 .user-popover-actions .btn-secondary.active {

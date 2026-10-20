@@ -506,8 +506,18 @@ test('STRESS 3.1: silenceAllRemoteMedia Mutes and Unmutes Remote Elements Cleanl
     socket: { emit() {} }
   });
 
-  // 1. Deafen ON
+  // 0. Por padrão ensurdecer cala só as vozes: as transmissões continuam tocando
   deafenCtrl.setDeafened(true);
+  assert.equal(mockAudio1.muted, true, 'Remote audio 1 must be muted');
+  assert.equal(mockVideo1.muted, false, 'Streams keep playing while deafened by default');
+  assert.equal(mixer.streamBus.gain.value, 1.0, 'Stream bus stays open');
+  assert.equal(mixer.masterDeafenGain.gain.value, 0.0, 'Voice bus is silenced');
+  deafenCtrl.setDeafened(false);
+
+  // 1. Deafen ON com a opção "ensurdecer também silencia as transmissões"
+  mixer.setDeafenStreams(true);
+  deafenCtrl.setDeafened(true);
+  assert.equal(mixer.streamBus.gain.value, 0.0, 'Stream bus silenced');
   assert.equal(mockAudio1.muted, true, 'Remote audio 1 must be muted');
   assert.equal(mockAudio2.muted, true, 'Remote audio 2 must be muted');
   assert.equal(mockVideo1.muted, true, 'Remote video 1 must be muted');

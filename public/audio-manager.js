@@ -404,6 +404,19 @@ export function sanitizeVolumePercent(volumePercent, defaultPercent = 100) {
 // Transmissão vai até 300% (filme baixinho); voz de cada pessoa até 200%
 const MAX_STREAM_VOLUME_PERCENT = 300;
 
+function rampGain(node, target, audioContext) {
+  if (!node || !node.gain) return;
+  const now = audioContext?.currentTime || 0;
+  if (typeof node.gain.cancelScheduledValues === 'function') {
+    node.gain.cancelScheduledValues(now);
+    node.gain.linearRampToValueAtTime(target, now + 0.03);
+  } else if (typeof node.gain.setValueAtTime === 'function') {
+    node.gain.setValueAtTime(target, now);
+  } else {
+    node.gain.value = target;
+  }
+}
+
 /**
  * VolumeMixerManager - Manages Web Audio GainNodes: 0–200% for users, 0–300% for streams
  */
@@ -416,18 +429,25 @@ export class VolumeMixerManager {
     this.userMixers = new Map(); // userId -> { sourceNode, gainNode, stream, volumePercent, userName }
     this.streamMixers = new Map(); // streamId -> { sourceNode, gainNode, stream, volumePercent }
 
-    if (this.audioContext) {
-      this.masterDeafenGain = this.audioContext.createGain ? this.audioContext.createGain() : null;
-      if (this.masterDeafenGain && this.audioContext.destination) {
-        try {
-          this.masterDeafenGain.connect(this.audioContext.destination);
-        } catch (_) {}
-      }
-    } else {
-      this.masterDeafenGain = null;
+    // vozes -> masterDeafenGain ┐
+    // telas -> streamBus ───────┴-> outputGain (volume geral) -> saída
+    // Ensurdecer zera só as vozes; as transmissões só se deafenStreams estiver ligado
+    this.masterDeafenGain = null;
+    this.streamBus = null;
+    this.outputGain = null;
+    if (this.audioContext && this.audioContext.createGain) {
+      this.outputGain = this.audioContext.createGain();
+      this.masterDeafenGain = this.audioContext.createGain();
+      this.streamBus = this.audioContext.createGain();
+      try {
+        if (this.audioContext.destination) this.outputGain.connect(this.audioContext.destination);
+        this.masterDeafenGain.connect(this.outputGain);
+        this.streamBus.connect(this.outputGain);
+      } catch (_) {}
     }
     this.isDeafened = false;
-    this.masterVolume = 1.0; // volume geral do Telinha (0–2), multiplicado no mesmo ganho do ensurdecer
+    this.deafenStreams = false;
+    this.masterVolume = 1.0; // volume geral do Teletela (0–2)
   }
 
   ensureAudioContext() {
@@ -512,8 +532,8 @@ export class VolumeMixerManager {
       }
     }
 
-    if (this.masterDeafenGain) {
-      try { gainNode.connect(this.masterDeafenGain); } catch (_) {}
+    if (this.streamBus) {
+      try { gainNode.connect(this.streamBus); } catch (_) {}
     }
 
     const savedVol = this.loadStreamVolume(streamId);
@@ -611,8 +631,8 @@ export class VolumeMixerManager {
       const gainNode = this.audioContext && this.audioContext.createGain
         ? this.audioContext.createGain(1.0)
         : { gain: { value: 1.0, setValueAtTime(v) { this.value = v; } } };
-      if (this.masterDeafenGain && gainNode.connect) {
-        try { gainNode.connect(this.masterDeafenGain); } catch (_) {}
+      if (this.streamBus && gainNode.connect) {
+        try { gainNode.connect(this.streamBus); } catch (_) {}
       }
       entry = { gainNode, sourceNode: null, stream: null, volumePercent: safeVolumePercent };
       this.streamMixers.set(streamId, entry);
@@ -670,19 +690,22 @@ export class VolumeMixerManager {
     return gain;
   }
 
-  applyMasterGain() {
-    if (!this.masterDeafenGain || !this.masterDeafenGain.gain) return;
+  /**
+   * Se ensurdecer também silencia as transmissões (por padrão não silencia)
+   */
+  setDeafenStreams(on) {
+    this.deafenStreams = Boolean(on);
+    this.applyMasterGain();
+  }
 
-    const now = this.audioContext?.currentTime || 0;
-    const targetGain = this.isDeafened ? 0.0 : this.masterVolume;
-    if (typeof this.masterDeafenGain.gain.cancelScheduledValues === 'function') {
-      this.masterDeafenGain.gain.cancelScheduledValues(now);
-      this.masterDeafenGain.gain.linearRampToValueAtTime(targetGain, now + 0.03);
-    } else if (typeof this.masterDeafenGain.gain.setValueAtTime === 'function') {
-      this.masterDeafenGain.gain.setValueAtTime(targetGain, now);
-    } else {
-      this.masterDeafenGain.gain.value = targetGain;
-    }
+  get streamsDeafened() {
+    return this.isDeafened && this.deafenStreams;
+  }
+
+  applyMasterGain() {
+    rampGain(this.masterDeafenGain, this.isDeafened ? 0.0 : 1.0, this.audioContext);
+    rampGain(this.streamBus, this.streamsDeafened ? 0.0 : 1.0, this.audioContext);
+    rampGain(this.outputGain, this.masterVolume, this.audioContext);
   }
 
   detachUserStream(userId) {
@@ -858,9 +881,9 @@ export class DeafenController {
       });
     }
 
-    // B. Mute/unmute all active screen videos
+    // B. Mute/unmute all active screen videos (só se ensurdecer também cala as transmissões)
     const videoContainer = document.getElementById('videos-grid');
-    if (videoContainer) {
+    if (videoContainer && this.mixerManager?.deafenStreams) {
       const videos = videoContainer.querySelectorAll('video');
       videos.forEach((video) => {
         setRemoteElementMuted(video, shouldMute);
