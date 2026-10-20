@@ -202,7 +202,7 @@ npm start       # só o servidor web em http://localhost:8080
 
 Os links de download deste README apontam sempre pra versão mais nova, então não precisa mudar nada aqui.
 
-> A interface da sala (`public/`) e o `server.js` vêm do **servidor de quem hospeda**: se só mudou isso, basta hospedar com o código novo, sem publicar versão. Publicar só é necessário quando muda algo em `electron/` ou `native/`.
+> O app desktop usa a interface da sala (`public/`) **que vem instalada com ele** (`telinha://app`); do servidor só vem a conexão. Então mudou `public/`: publique versão (`npm run release`) **e** atualize o servidor (`npm run deploy:oracle`, pra quem entra pelo navegador). Mudou só `server.js` ou `sfu/`: basta o deploy.
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)
