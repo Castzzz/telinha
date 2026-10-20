@@ -225,6 +225,46 @@ function saveChannels() {
 
 loadSavedChannels();
 
+// Imagens do chat: ficam em disco (não na memória da VM) e vão sendo apagadas as mais
+// antigas quando passam do limite. O histórico do chat não sobrevive a reinício, então
+// as imagens também começam do zero quando o servidor sobe.
+const CHAT_IMAGE_DIR = DATA_DIR ? path.join(DATA_DIR, 'chat-images') : path.join(os.tmpdir(), `teletela-chat-images-${process.pid}`);
+const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_CHAT_IMAGES_TOTAL_BYTES = 300 * 1024 * 1024;
+const CHAT_IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
+const CHAT_IMAGE_ID_RE = /^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/;
+const chatImages = []; // [{ file, size }] do mais antigo pro mais novo
+let chatImagesBytes = 0;
+
+try {
+  fs.rmSync(CHAT_IMAGE_DIR, { recursive: true, force: true });
+  fs.mkdirSync(CHAT_IMAGE_DIR, { recursive: true });
+} catch (err) {
+  console.error('⚠️ [Chat] Pasta de imagens indisponível:', err.message);
+}
+
+// Confere pelos primeiros bytes que é mesmo o tipo de imagem dito (não confia no cliente)
+function imageMatchesType(data, mime) {
+  if (mime === 'image/png') return data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  if (mime === 'image/jpeg') return data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  if (mime === 'image/gif') return data.subarray(0, 6).toString('latin1').startsWith('GIF8');
+  if (mime === 'image/webp') return data.subarray(0, 4).toString('latin1') === 'RIFF' && data.subarray(8, 12).toString('latin1') === 'WEBP';
+  return false;
+}
+
+function saveChatImage(data, mime) {
+  const file = `${randomUUID()}.${CHAT_IMAGE_TYPES[mime]}`;
+  fs.writeFileSync(path.join(CHAT_IMAGE_DIR, file), data);
+  chatImages.push({ file, size: data.length });
+  chatImagesBytes += data.length;
+  while (chatImagesBytes > MAX_CHAT_IMAGES_TOTAL_BYTES && chatImages.length > 1) {
+    const old = chatImages.shift();
+    chatImagesBytes -= old.size;
+    fs.rm(path.join(CHAT_IMAGE_DIR, old.file), { force: true }, () => {});
+  }
+  return file;
+}
+
 function isAdminKey(key) {
   if (!ADMIN_KEY || typeof key !== 'string') return false;
   const a = Buffer.from(key);
@@ -354,6 +394,15 @@ function isSameChannel(socket, targetId) {
 
 app.get('/api/channels', (req, res) => {
   res.json(getChannelsSummary());
+});
+
+app.get('/api/chat-image/:file', (req, res) => {
+  const file = req.params.file;
+  if (!CHAT_IMAGE_ID_RE.test(file)) return res.status(404).end();
+  res.set({ 'Cache-Control': 'public, max-age=86400, immutable', 'X-Content-Type-Options': 'nosniff' });
+  res.sendFile(path.join(CHAT_IMAGE_DIR, file), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
 });
 
 app.get('/api/avatar/:userId', (req, res) => {
@@ -860,6 +909,51 @@ io.on('connection', (socket) => {
     }
 
     io.to(user.channelId).emit('chat-message', chatMsg);
+  }));
+
+  // Imagem no chat (com legenda opcional). Uma a cada 2 s por pessoa.
+  let lastChatImageAt = 0;
+  socket.on('chat-image', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    const channel = user.channelId ? channels.get(user.channelId) : null;
+    if (!channel) return cb({ success: false, error: 'Entre num canal pra mandar imagem.' });
+    const now = Date.now();
+    if (now - lastChatImageAt < 2000) return cb({ success: false, error: 'Calma, uma imagem de cada vez.' });
+    const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
+    const data = Buffer.isBuffer(payload.data) ? payload.data : null;
+    if (!CHAT_IMAGE_TYPES[mime] || !data || data.length === 0) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
+    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 8 MB).' });
+    if (!imageMatchesType(data, mime)) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
+    lastChatImageAt = now;
+
+    let file;
+    try {
+      file = saveChatImage(data, mime);
+    } catch (err) {
+      console.error('⚠️ [Chat] Não deu pra salvar a imagem:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu guardar a imagem.' });
+    }
+    // Tamanho só pra reservar o espaço na tela antes de carregar
+    const dim = (v) => (Number.isInteger(v) && v > 0 && v <= 20000 ? v : null);
+    const chatMsg = {
+      id: `msg-${now}-${randomUUID().slice(0, 8)}`,
+      channelId: user.channelId,
+      senderId: socket.id,
+      userId: socket.id,
+      senderName: user.name,
+      userName: user.name,
+      userColor: user.color,
+      userNameColor: user.nameColor || '',
+      userAvatarV: user.avatar ? user.avatarV : 0,
+      text: typeof payload.text === 'string' ? payload.text.trim().slice(0, 600) : '',
+      image: { url: `/api/chat-image/${file}`, width: dim(payload.width), height: dim(payload.height) },
+      timestamp: now
+    };
+    channel.messages.push(chatMsg);
+    if (channel.messages.length > 50) channel.messages.shift();
+    io.to(user.channelId).emit('chat-message', chatMsg);
+    cb({ success: true });
   }));
 
   // Stage reactions (floating emojis)

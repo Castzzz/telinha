@@ -173,6 +173,27 @@ async function runTests() {
     assert.equal(firstScreen.sala, `geral__${bob.id}`, 'tela 1 continua com a sala de sempre');
     console.log('  ✓ Várias telas: estado chega pros outros e cada tela tem a sua sala no SFU');
 
+    // 9. Imagem no chat: vai pro disco, chega pra todos com o link e só aceita imagem de verdade
+    const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    const imageMsg = new Promise((resolve) => alice2.on('chat-message', (m) => { if (m.image) resolve(m); }));
+    const sent = await emit(bob, 'chat-image', { data: png, mime: 'image/png', width: 1, height: 1, text: 'olha https://example.com' });
+    assert.equal(sent.success, true);
+    const msg = await imageMsg;
+    assert.equal(msg.text, 'olha https://example.com');
+    assert.match(msg.image.url, /^\/api\/chat-image\/[a-f0-9-]+\.png$/);
+    const imgRes = await fetch(`${URL_BASE}${msg.image.url}`);
+    assert.equal(imgRes.status, 200);
+    assert.equal(imgRes.headers.get('content-type'), 'image/png');
+    assert.ok(Buffer.from(await imgRes.arrayBuffer()).equals(png));
+    assert.ok(fs.readdirSync(path.join(DATA_DIR, 'chat-images')).length === 1, 'imagem fica no disco, não na memória');
+    await new Promise((r) => setTimeout(r, 2100)); // uma imagem a cada 2 s
+    const fake = await emit(bob, 'chat-image', { data: Buffer.from('<script>alert(1)</script>'), mime: 'image/png' });
+    assert.equal(fake.success, false, 'texto disfarçado de PNG é recusado');
+    const huge = await emit(bob, 'chat-image', { data: Buffer.concat([png, Buffer.alloc(9 * 1024 * 1024)]), mime: 'image/png' });
+    assert.equal(huge.success, false, 'acima de 8 MB é recusado');
+    assert.equal((await fetch(`${URL_BASE}/api/chat-image/..%2Fchannels.json`)).status, 404);
+    console.log('  ✓ Imagem no chat: salva em disco, chega pra todos; arquivo falso, gigante e caminho estranho recusados');
+
     console.log('\n✅ TODOS OS TESTES DE CANAIS E ADMIN PASSARAM\n');
   } finally {
     clients.forEach((c) => c.disconnect());

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, session } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -736,6 +736,12 @@ async function createWindow() {
       nodeIntegration: false,
       backgroundThrottling: false
     }
+  });
+
+  // Links do chat (target=_blank) abrem no navegador, nunca numa janela do app
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
+    return { action: 'deny' };
   });
 
   // Se a sala cair (servidor do amigo desligou, sem internet), volta para a tela inicial

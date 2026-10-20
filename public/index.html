@@ -251,6 +251,10 @@
           maxlength="400"
           autocomplete="off"
         />
+        <label class="btn-chat-attach" title="Mandar imagem (ou cole com Ctrl+V / arraste pro chat)" aria-label="Mandar imagem">
+          📎
+          <input type="file" id="input-chat-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+        </label>
         <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar Mensagem">
           Enviar
         </button>
@@ -259,6 +263,11 @@
   </div>
 
   <!-- ==================== MODALS & OVERLAYS ==================== -->
+
+  <!-- Imagem do chat em tamanho grande (clique fora ou Esc fecha) -->
+  <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-label="Imagem do chat">
+    <img id="image-viewer-img" alt="" />
+  </div>
 
   <!-- 1. MODAL CRIAR NOVO CANAL DE VOZ -->
   <div id="modal-create-channel" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-create-title">
@@ -314,6 +323,9 @@
           <li><strong>Várias telas ao mesmo tempo:</strong> já transmitindo, clique de novo em transmitir → <em>Transmitir outra tela</em> (até 3). O som vai na tela 1.</li>
           <li><strong>Volume da transmissão até 300%.</strong> E a barra de volume lá embaixo só aparece quando você está vendo alguém.</li>
           <li><strong>Reações que aprendem:</strong> os emojis que você mais usa vão tomando o lugar na barra.</li>
+          <li><strong>Imagens no chat:</strong> 📎 do lado do campo, Ctrl+V ou arraste pro chat (GIF continua animado). Clique pra ver grande.</li>
+          <li><strong>Links clicáveis no chat:</strong> abrem no navegador.</li>
+          <li><strong>Esconder sua própria transmissão:</strong> no menu do botão de transmitir ou em ⚙️. Os amigos continuam vendo e o seu PC agradece.</li>
           <li><strong>Visual:</strong> ícones novos lá embaixo, barra de baixo alinhada e os botões da janela com a cor do tema.</li>
         </ul>
         <!-- Só pra quem veio direto de antes da 2.0 -->
@@ -403,6 +415,14 @@
         <div class="form-group">
           <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>
           <select id="select-audio-output" class="form-select"></select>
+        </div>
+
+        <!-- Esconder a própria transmissão -->
+        <div class="form-group">
+          <label class="hotkey-global">
+            <input type="checkbox" id="input-hide-own-stream" />
+            Esconder minha própria transmissão e câmera daqui (os amigos continuam vendo; poupa o PC)
+          </label>
         </div>
 
         <!-- Som de entrada/saída -->

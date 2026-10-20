@@ -1132,15 +1132,158 @@ function appendChatMessage(msg, autoScroll = true) {
         <span class="chat-author" style="color: ${msg.userNameColor ? safeColor(msg.userNameColor) : color};">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
       </div>
-      <div class="chat-text">${escapeHtml(msg.text)}</div>
+      ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}</div>` : ''}
+      ${chatImageHtml(msg.image)}
     </div>
   `;
+  // Imagem que demora a carregar empurra o chat: desce de novo quando ela chegar
+  const img = div.querySelector('.chat-image');
+  if (img && autoScroll) img.addEventListener('load', () => { container.scrollTop = container.scrollHeight; }, { once: true });
 
   container.appendChild(div);
 
   if (autoScroll) {
     container.scrollTop = container.scrollHeight;
   }
+}
+
+// Links do chat viram clicáveis (abrem no navegador). O texto é escapado pedaço por pedaço.
+const URL_IN_TEXT_RE = /\bhttps?:\/\/[^\s<>"']+/gi;
+
+function linkifyText(text) {
+  const raw = String(text || '');
+  let html = '';
+  let last = 0;
+  for (const match of raw.matchAll(URL_IN_TEXT_RE)) {
+    // Pontuação no fim ("veja https://x.com.") fica fora do link
+    const url = match[0].replace(/[.,!?;:)\]]+$/, '');
+    html += escapeHtml(raw.slice(last, match.index));
+    html += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="chat-link">${escapeHtml(url)}</a>`;
+    last = match.index + url.length;
+  }
+  return html + escapeHtml(raw.slice(last));
+}
+
+function chatImageHtml(image) {
+  if (!image || typeof image.url !== 'string' || !/^\/api\/chat-image\/[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(image.url)) return '';
+  const size = image.width && image.height ? ` width="${Number(image.width)}" height="${Number(image.height)}"` : '';
+  return `<img class="chat-image" src="${escapeHtml(SERVER_URL + image.url)}"${size} alt="Imagem" loading="lazy" />`;
+}
+
+// Prepara a imagem pro chat: foto parada é reduzida (lado maior até 1920 px, WebP);
+// GIF vai como está pra continuar animado. Máximo 8 MB.
+const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+const CHAT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+
+async function prepareChatImage(file) {
+  if (!CHAT_IMAGE_TYPES.includes(file.type)) throw new Error('Só dá pra mandar PNG, JPG, WebP ou GIF.');
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('Não consegui abrir essa imagem.'));
+      el.src = url;
+    });
+    const width = img.naturalWidth;
+    const height = img.naturalHeight;
+    if (file.type === 'image/gif') {
+      if (file.size > MAX_CHAT_IMAGE_BYTES) throw new Error('GIF grande demais (máximo 8 MB).');
+      return { data: await file.arrayBuffer(), mime: file.type, width, height };
+    }
+    const scale = Math.min(1, 1920 / Math.max(width, height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(width * scale);
+    canvas.height = Math.round(height * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', 0.85));
+    // Ficou maior que o original (print pequeno, PNG simples)? Manda o original
+    const useOriginal = !blob || (scale === 1 && file.size <= blob.size);
+    const out = useOriginal ? file : blob;
+    if (out.size > MAX_CHAT_IMAGE_BYTES) throw new Error('Imagem grande demais (máximo 8 MB).');
+    return {
+      data: await out.arrayBuffer(),
+      mime: useOriginal ? file.type : 'image/webp',
+      width: useOriginal ? width : canvas.width,
+      height: useOriginal ? height : canvas.height
+    };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+let sendingChatImage = false;
+async function sendChatImage(file) {
+  if (!file) return;
+  if (!appState.currentChannelId) {
+    showToast('Entre num canal pra mandar imagem.');
+    return;
+  }
+  if (sendingChatImage) return;
+  sendingChatImage = true;
+  const input = $('#chat-input');
+  try {
+    const image = await prepareChatImage(file);
+    showToast('📎 Enviando imagem...');
+    // A legenda é o que estiver escrito no campo
+    const res = await socket.timeout(60000).emitWithAck('chat-image', { ...image, text: input?.value.trim() || '' });
+    if (res?.success) {
+      if (input) input.value = '';
+    } else {
+      showToast(`❌ ${res?.error || 'Não deu pra mandar a imagem.'}`, 'error');
+    }
+  } catch (err) {
+    showToast(`❌ ${err?.message || 'Não deu pra mandar a imagem.'}`, 'error');
+  } finally {
+    sendingChatImage = false;
+  }
+}
+
+function setupChatImages() {
+  const fileInput = $('#input-chat-image');
+  fileInput?.addEventListener('change', () => {
+    sendChatImage(fileInput.files?.[0]);
+    fileInput.value = '';
+  });
+  // Ctrl+V com imagem no campo do chat
+  $('#chat-input')?.addEventListener('paste', (e) => {
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    sendChatImage(file);
+  });
+  // Arrastar imagem pro chat
+  const drawer = $('#chat-drawer');
+  drawer?.addEventListener('dragover', (e) => {
+    if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) {
+      e.preventDefault();
+      drawer.classList.add('drag-over');
+    }
+  });
+  drawer?.addEventListener('dragleave', (e) => {
+    if (!drawer.contains(e.relatedTarget)) drawer.classList.remove('drag-over');
+  });
+  drawer?.addEventListener('drop', (e) => {
+    drawer.classList.remove('drag-over');
+    const file = [...(e.dataTransfer?.files || [])].find((f) => f.type.startsWith('image/'));
+    if (!file) return;
+    e.preventDefault();
+    sendChatImage(file);
+  });
+
+  // Clique na imagem: abre grande
+  const viewer = $('#image-viewer');
+  const viewerImg = $('#image-viewer-img');
+  $('#chat-messages')?.addEventListener('click', (e) => {
+    const img = e.target.closest('.chat-image');
+    if (!img || !viewer || !viewerImg) return;
+    viewerImg.src = img.src;
+    viewer.classList.remove('hidden');
+  });
+  viewer?.addEventListener('click', () => viewer.classList.add('hidden'));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') viewer?.classList.add('hidden');
+  });
 }
 
 function addSystemChatMessage(text, channelId = appState.currentChannelId) {
@@ -4154,7 +4297,7 @@ async function onStartScreenShare() {
     appState.myUser.isSharing = true;
 
     // Register local tile
-    registerScreenStream(appState.myId, `${appState.myUser.name} (Você)`, stream, true);
+    showLocalPreview(appState.myId, `${appState.myUser.name} (Você)`, stream);
 
     // Notify peers in channel
     socket.emit('user-state-changed', { isSharing: true, streamQuality: presetKey });
@@ -4223,7 +4366,7 @@ async function toggleCameraShare() {
   appState.localCameraStream = stream;
   appState.myUser.isCameraOn = true;
   document.getElementById('btn-share-camera')?.classList.add('sharing');
-  registerScreenStream(streamKey(appState.myId, 'camera'), streamLabel(streamKey(appState.myId, 'camera')), stream, true);
+  showLocalPreview(streamKey(appState.myId, 'camera'), streamLabel(streamKey(appState.myId, 'camera')), stream);
   socket.emit('user-state-changed', { isCameraOn: true });
 
   if (appState.sfuEnabled) {
@@ -4248,7 +4391,7 @@ function stopCameraShare({ silent = false } = {}) {
     try { pc.close(); } catch (_) {}
     appState.screenPeersOut.delete(key);
   }
-  removeScreenStream(streamKey(appState.myId, 'camera'));
+  dropLocalPreview(streamKey(appState.myId, 'camera'));
   socket.emit('user-state-changed', { isCameraOn: false });
   document.getElementById('btn-share-camera')?.classList.remove('sharing');
   if (!silent) showToast('Câmera desligada.');
@@ -4256,9 +4399,39 @@ function stopCameraShare({ silent = false } = {}) {
   updateVoiceLounge();
 }
 
+// Prévia das minhas transmissões no palco. Dá pra esconder (Configurações ou menu do
+// botão de transmitir): some só daqui, os amigos continuam vendo normalmente.
+appState.localPreviews = new Map(); // chave -> { label, stream }
+
+function showLocalPreview(key, label, stream) {
+  appState.localPreviews.set(key, { label, stream });
+  if (!prefs.hideOwnStream) registerScreenStream(key, label, stream, true);
+}
+
+function dropLocalPreview(key) {
+  appState.localPreviews.delete(key);
+  removeScreenStream(key);
+}
+
+function setHideOwnStream(hide) {
+  savePrefs({ hideOwnStream: hide });
+  for (const [key, { label, stream }] of appState.localPreviews) {
+    if (hide) removeScreenStream(key);
+    else registerScreenStream(key, label, stream, true);
+  }
+  const checkbox = $('#input-hide-own-stream');
+  if (checkbox) checkbox.checked = hide;
+  updateStageLayout();
+  updateVoiceLounge();
+}
+
 // Botão de transmitir aceso enquanto qualquer tela minha estiver no ar
 function updateShareButton() {
-  document.getElementById('btn-share-screen')?.classList.toggle('sharing', appState.myUser.isSharing || appState.extraScreens.size > 0);
+  const live = appState.myUser.isSharing || appState.extraScreens.size > 0;
+  document.getElementById('btn-share-screen')?.classList.toggle('sharing', live);
+  // O botão grande do meio abre o mesmo menu quando já tem tela no ar
+  const lounge = document.getElementById('btn-lounge-start-share');
+  if (lounge) lounge.textContent = live ? '🖥️ Gerenciar minhas telas' : '🖥️ Transmitir Minha Tela';
 }
 
 function extraScreensState() {
@@ -4305,7 +4478,7 @@ async function startExtraScreen() {
   const kind = `screen${n}`;
   const entry = { stream, publisher: null };
   appState.extraScreens.set(n, entry);
-  registerScreenStream(streamKey(appState.myId, kind), streamLabel(streamKey(appState.myId, kind)), stream, true);
+  showLocalPreview(streamKey(appState.myId, kind), streamLabel(streamKey(appState.myId, kind)), stream);
   socket.emit('user-state-changed', { extraScreens: extraScreensState() });
   if (appState.sfuEnabled) {
     entry.publisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind, stream });
@@ -4329,7 +4502,7 @@ function stopExtraScreen(n, { silent = false } = {}) {
     try { appState.screenPeersOut.get(key).close(); } catch (_) {}
     appState.screenPeersOut.delete(key);
   }
-  removeScreenStream(key);
+  dropLocalPreview(key);
   socket.emit('user-state-changed', { extraScreens: extraScreensState() });
   updateShareButton();
   if (!silent) showToast(`Tela ${n} encerrada.`);
@@ -4360,6 +4533,7 @@ function openShareMenu(anchor) {
   if (appState.myUser.isSharing) rows.push(item(appState.extraScreens.size ? '⏹ Parar a tela 1' : '⏹ Parar a transmissão', 'stop-1', true));
   for (const n of extraScreensState()) rows.push(item(`⏹ Parar a tela ${n}`, `stop-${n}`, true));
   if (total > 1) rows.push(item('⏹ Parar todas', 'stop-all', true));
+  rows.push(item(prefs.hideOwnStream ? '👁 Mostrar minha transmissão aqui' : '🙈 Esconder minha transmissão daqui', 'toggle-preview'));
   menu.innerHTML = rows.join('');
 
   menu.classList.remove('hidden');
@@ -4390,6 +4564,9 @@ function setupShareMenu() {
       }
     } else if (action === 'stop-1') {
       onStopScreenShare();
+    } else if (action === 'toggle-preview') {
+      setHideOwnStream(!prefs.hideOwnStream);
+      showToast(prefs.hideOwnStream ? '🙈 Sua transmissão sumiu só daqui; os amigos continuam vendo.' : '👁 Sua transmissão voltou pro palco.');
     } else if (action === 'stop-all') {
       stopAllExtraScreens();
       onStopScreenShare();
@@ -4435,7 +4612,7 @@ function onStopScreenShare() {
     appState.screenPeersOut.delete(key);
   }
 
-  removeScreenStream(appState.myId);
+  dropLocalPreview(appState.myId);
 
   socket.emit('user-state-changed', { isSharing: false });
 
@@ -4591,6 +4768,7 @@ function initApp() {
   updateUserDockProfile();
   setupDockControls();
   setupChatAndReactions();
+  setupChatImages();
   setupModals();
   setupUserPopover();
   setupProfileModal();
@@ -4602,6 +4780,11 @@ function initApp() {
   setupAdminSettings();
   setupShareMenu();
   updateMicButton();
+  const hideOwnInput = $('#input-hide-own-stream');
+  if (hideOwnInput) {
+    hideOwnInput.checked = Boolean(prefs.hideOwnStream);
+    hideOwnInput.addEventListener('change', () => setHideOwnStream(hideOwnInput.checked));
+  }
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {
     callSoundsInput.checked = prefs.callSounds !== false;
