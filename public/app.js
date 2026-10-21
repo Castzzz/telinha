@@ -4144,13 +4144,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.2';
+const WHATS_NEW_VERSION = '3.3';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
   const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
+  $('#whats-new-3-2')?.classList.toggle('hidden', seen >= 3.2);
   $('#whats-new-3-1')?.classList.toggle('hidden', seen >= 3.1);
   $('#whats-new-3-0')?.classList.toggle('hidden', seen >= 3.0);
   $('#whats-new-2-2')?.classList.toggle('hidden', seen >= 2.2);
