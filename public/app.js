@@ -1074,7 +1074,7 @@ function renderChannelsTree() {
     usersUl.className = `channel-users${collapsed ? ' compact' : ''}`;
     usersUl.id = `channel-users-${chId}`;
 
-    ch.users.forEach((u) => {
+    sortedUsers(ch).forEach((u) => {
       const isMe = u.id === appState.myId;
 
       const userLi = document.createElement('li');
@@ -1188,7 +1188,7 @@ function updateVoiceLounge() {
   const loungeUsersGrid = $('#lounge-users-grid');
   if (loungeUsersGrid) {
     loungeUsersGrid.innerHTML = '';
-    const users = ch ? Array.from(ch.users.values()) : [];
+    const users = ch ? sortedUsers(ch) : [];
 
     users.forEach((u) => {
       const isMe = u.id === appState.myId;
@@ -2364,6 +2364,12 @@ async function toggleStagePip() {
 // 8b. VOLUME POR PESSOA (só pra você)
 // Salvo pelo id do perfil do amigo, então vale em qualquer sala e qualquer link.
 // -----------------------------------------------------------------------------
+// Pessoas da call em ordem alfabética (sem diferenciar maiúscula nem acento)
+const NAME_COLLATOR = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
+function sortedUsers(ch) {
+  return [...ch.users.values()].sort((a, b) => NAME_COLLATOR.compare(a.name || '', b.name || ''));
+}
+
 function findUser(userId) {
   for (const ch of appState.channels.values()) {
     const u = ch.users.get(userId);
