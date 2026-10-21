@@ -115,6 +115,9 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |
 | **Mandar imagem no chat** | 📎 do lado do campo, `Ctrl+V` com a imagem copiada, ou arraste pro chat (até 8 MB; GIF continua animado). O que estiver escrito vai junto como legenda. Clique na imagem pra ver grande |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
+| **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
+| **Marcar alguém** | Digite `@` no chat e escolha a pessoa (ou `@todos`). Ela recebe um aviso, mesmo com o Teletela minimizado |
+| **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 8, de até 10 s / 400 KB). Volume e desligar em ⚙️ → *Som* |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
 | **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |

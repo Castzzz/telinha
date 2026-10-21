@@ -224,7 +224,31 @@
         <!-- Seletor com todos os emojis (carregado só na primeira vez que abre) -->
         <div id="emoji-picker-popover" class="emoji-picker-popover hidden"></div>
 
+        <!-- Soundboard: sons pra toda a call (os do app + os que cada um sobe) -->
+        <div id="soundboard-popover" class="soundboard-popover hidden" role="dialog" aria-label="Soundboard">
+          <div class="soundboard-head">
+            <strong>Soundboard</strong>
+            <button type="button" class="btn-secondary" id="btn-soundboard-add-toggle">＋ Adicionar som</button>
+          </div>
+          <form id="soundboard-add-form" class="soundboard-add hidden">
+            <div class="soundboard-add-row">
+              <input type="text" id="input-soundboard-emoji" class="form-input soundboard-emoji-input" maxlength="8" value="🔊" aria-label="Emoji do som" />
+              <input type="text" id="input-soundboard-name" class="form-input" maxlength="30" placeholder="Nome do som" required />
+            </div>
+            <div class="soundboard-add-row">
+              <label class="btn-secondary profile-file-btn">
+                🎵 Escolher áudio
+                <input type="file" id="input-soundboard-file" accept="audio/*" hidden />
+              </label>
+              <span id="soundboard-file-name" class="soundboard-file-name">até 10 s e 400 KB</span>
+              <button type="submit" class="btn-primary" id="btn-soundboard-save">Salvar</button>
+            </div>
+          </form>
+          <div id="soundboard-grid" class="soundboard-grid"></div>
+        </div>
+
         <div class="stage-controls-right">
+          <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
           <button id="btn-stage-pip" class="btn-control-icon" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
@@ -253,6 +277,13 @@
           <p>As mensagens enviadas aqui são visíveis apenas para os amigos conectados neste canal.</p>
         </div>
       </div>
+
+      <!-- Respondendo a alguém / sugestões de @nome -->
+      <div id="chat-reply-bar" class="chat-reply-bar hidden">
+        <span>Respondendo a <strong id="chat-reply-name"></strong></span>
+        <button type="button" id="btn-cancel-reply" class="btn-icon-close" title="Cancelar resposta (Esc)" aria-label="Cancelar resposta">✕</button>
+      </div>
+      <div id="mention-suggest" class="mention-suggest hidden" role="listbox" aria-label="Marcar alguém"></div>
 
       <!-- CHAT INPUT FORM -->
       <form id="chat-form" class="chat-form">
@@ -359,12 +390,21 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.1</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Responder e reagir a mensagens:</strong> passe o mouse numa mensagem do chat: ↩ responde citando, 😊 reage com emoji.</li>
+          <li><strong>Editar e apagar as suas mensagens:</strong> pelos botões ao passar o mouse, ou ↑ com o campo vazio pra editar a última.</li>
+          <li><strong>Marcar alguém com @:</strong> digite @ e escolha a pessoa (ou @todos). Quem foi marcado recebe um aviso, mesmo com o Teletela minimizado.</li>
+          <li><strong>Soundboard:</strong> o 🎵 lá embaixo toca sons pra toda a call. Cada um pode subir os seus (até 8). Volume e desligar em ⚙️ → Som.</li>
+        </ul>
+        <!-- Só pra quem pulou a 3.0 (inclui o que era da 2.3) -->
+        <div id="whats-new-3-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.0</h4>
+          <ul class="whats-new-list">
           <li><strong>Visual novo:</strong> painéis flutuando, cantos redondos e menos linha separando tudo. Os ícones continuam os mesmos.</li>
           <li><strong>Perfil turbinado:</strong> clique no seu nome lá embaixo. Tem banner (imagem, GIF ou cor), moldura da foto (ouro, neon, fogo, gelo, arco-íris…), nome em gradiente e <strong>som de entrada</strong> próprio, que toca pra todo mundo quando você entra na call.</li>
           <li><strong>Clique na foto de alguém</strong> pra abrir o perfil grande; clicando na foto de novo ela abre em tamanho grande (GIF animando).</li>
@@ -377,7 +417,7 @@
           <li><strong>Transmissões lado a lado com tamanho ajustável:</strong> arraste a divisória entre elas (duplo clique deixa igual).</li>
           <li><strong>Configurações separadas por tópico</strong> e envio de mensagem com o aviãozinho.</li>
         </ul>
-        <!-- Só pra quem pulou a 2.3 (nunca foi lançada sozinha, entrou junto) -->
+        <!-- O que era da 2.3 (nunca foi lançada sozinha, entrou junto da 3.0) -->
         <div class="whats-new-older">
           <h4>E também</h4>
           <ul class="whats-new-list">
@@ -386,6 +426,7 @@
           <li><strong>Recolher os canais:</strong> clique em <em>Canais de Voz</em> ou <em>Canais de Texto</em>. Recolhido, fica só o canal em que você está, com as fotos da galera lado a lado.</li>
           <li><strong>Barra de cima mais limpa</strong> e ícones de microfone e fone também no menu de mutar alguém.</li>
         </ul>
+        </div>
         </div>
         <!-- Só pra quem pulou a 2.2 -->
         <div id="whats-new-2-2" class="whats-new-older hidden">
@@ -524,6 +565,19 @@
                 <input type="checkbox" id="input-call-sounds" checked />
                 Tocar um áudio dos amigos quando alguém entra ou sai da call
               </label>
+            </div>
+
+            <!-- Soundboard -->
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-soundboard-on" checked />
+                Ouvir o soundboard (sons que a galera toca pra call)
+              </label>
+              <label for="input-soundboard-volume" class="profile-sublabel">Volume do soundboard</label>
+              <div class="master-volume-row">
+                <input type="range" id="input-soundboard-volume" min="0" max="150" step="5" value="100" />
+                <span id="soundboard-volume-text" class="master-volume-text">100%</span>
+              </div>
             </div>
 
             <!-- Qual áudio toca (só pra você) -->
@@ -715,6 +769,9 @@
 
   <!-- MENU DO BOTÃO DE TRANSMITIR (com tela no ar): pôr outra tela ou parar uma -->
   <div id="share-menu" class="share-menu hidden" role="menu"></div>
+
+  <!-- Reagir a uma mensagem do chat -->
+  <div id="msg-react-popover" class="msg-react-popover hidden"></div>
 
   <!-- POPUP DE UM AMIGO: PERFIL + VOLUME SÓ PRA VOCÊ -->
   <div id="user-popover" class="user-popover hidden" role="dialog" aria-label="Perfil do amigo">

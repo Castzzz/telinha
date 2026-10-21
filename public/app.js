@@ -589,6 +589,17 @@ function callSoundChoiceUrl(kind, soundSeed) {
   return CALL_SOUNDS[index];
 }
 
+// Baixa e decodifica um áudio uma vez só (fica guardado pra próxima)
+async function loadSoundBuffer(ctx, url) {
+  let buffer = callSoundBuffers.get(url);
+  if (buffer) return buffer;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+  callSoundBuffers.set(url, buffer);
+  return buffer;
+}
+
 async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 'join' } = {}) {
   if (!force && (prefs.callSounds === false || appState.myUser.isDeafened)) return;
   // Muita gente entrando junto (servidor reiniciou): um som só
@@ -604,12 +615,10 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
       await new Audio(url).play();
       return;
     }
-    let buffer = callSoundBuffers.get(url);
-    if (!buffer) {
+    let buffer;
+    {
       try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+        buffer = await loadSoundBuffer(ctx, url);
       } catch (err) {
         // Som de entrada de alguém que não veio: toca um dos áudios dos amigos no lugar
         if (customUrl && !force) {
@@ -619,7 +628,6 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
         }
         throw err;
       }
-      callSoundBuffers.set(url, buffer);
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -745,6 +753,7 @@ socket.on('chat-message', (msg) => {
   }
   appState.channelChats.get(msg.channelId).push(msg);
 
+  if (mentionsMe(msg)) notifyMention(msg, 'chat da call', openCallChat);
   if (msg.channelId === appState.currentChannelId) {
     if (!appState.textView) appendChatMessage(msg, true);
     // Chat da call fora da vista: acende a bolinha no balão do canal
@@ -1387,9 +1396,40 @@ function renderChannelChat(channelId) {
 function appendChatMessage(msg, autoScroll = true) {
   const container = $('#chat-messages');
   if (!container) return;
+  const div = buildChatMessage(msg);
+  // Imagem que demora a carregar empurra o chat: desce de novo quando ela chegar
+  const img = div.querySelector('.chat-image');
+  if (img && autoScroll) img.addEventListener('load', () => { container.scrollTop = container.scrollHeight; }, { once: true });
+  container.appendChild(div);
+  if (autoScroll) container.scrollTop = container.scrollHeight;
+}
 
+function isMyMessage(msg) {
+  return Boolean(msg?.profileId) && msg.profileId === myProfile.id;
+}
+
+// Chat aberto agora: um canal de texto ou o chat da call
+function chatScope() {
+  return appState.textView ? { scope: 'text', channelId: appState.textView } : { scope: 'call' };
+}
+
+function currentChatMessages() {
+  return appState.textView
+    ? (appState.textMessages.get(appState.textView)?.messages || [])
+    : (appState.channelChats.get(appState.currentChannelId) || []);
+}
+
+const ACTION_ICONS = {
+  reply: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
+  react: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>',
+  edit: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  delete: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'
+};
+
+function buildChatMessage(msg) {
   const div = document.createElement('div');
-  div.className = 'chat-msg';
+  div.className = `chat-msg${mentionsMe(msg) ? ' mention-me' : ''}`;
+  if (msg.id) div.dataset.msgId = msg.id;
 
   const when = new Date(msg.timestamp || Date.now());
   const hour = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1399,29 +1439,585 @@ function appendChatMessage(msg, autoScroll = true) {
     : `${when.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${hour}`;
   const color = safeColor(msg.userColor);
   const author = { id: msg.senderId || msg.userId, name: msg.userName || msg.senderName, avatarV: msg.userAvatarV };
+  const mine = isMyMessage(msg);
+  // Responder e reagir precisam do servidor novo (mensagem com id e perfil)
+  const actions = msg.id ? [
+    ['reply', 'Responder'],
+    ['react', 'Reagir'],
+    ...(mine && msg.text !== undefined ? [['edit', 'Editar']] : []),
+    ...(mine || appState.isAdmin ? [['delete', 'Apagar']] : [])
+  ] : [];
 
   div.innerHTML = `
     <div class="chat-msg-avatar${frameClass(findUser(author.id))}" data-user-id="${escapeHtml(author.id || '')}" style="background-color: ${color};${frameStyle(findUser(author.id))}">
       ${avatarInnerHtml(author)}
     </div>
     <div class="chat-msg-body">
+      ${replyRefHtml(msg.replyTo)}
       <div class="chat-msg-header">
         <span class="chat-author" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
       </div>
-      ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}</div>` : ''}
+      ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}${msg.editedAt ? ' <span class="chat-edited" title="Editada">(editado)</span>' : ''}</div>` : ''}
       ${chatImageHtml(msg.image)}
+      ${reactionsHtml(msg)}
     </div>
+    ${actions.length ? `<div class="chat-msg-actions">${actions.map(([act, label]) => `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"${act === 'delete' ? ' class="danger"' : ''}>${ACTION_ICONS[act]}</button>`).join('')}</div>` : ''}
   `;
-  // Imagem que demora a carregar empurra o chat: desce de novo quando ela chegar
-  const img = div.querySelector('.chat-image');
-  if (img && autoScroll) img.addEventListener('load', () => { container.scrollTop = container.scrollHeight; }, { once: true });
+  return div;
+}
 
-  container.appendChild(div);
+function replyRefHtml(reply) {
+  if (!reply?.id) return '';
+  const what = reply.text ? escapeHtml(reply.text) : (reply.image ? '🖼️ Imagem' : '');
+  return `<button type="button" class="chat-reply-ref" data-jump="${escapeHtml(reply.id)}" title="Ver a mensagem respondida">
+    ${ACTION_ICONS.reply}<strong>${escapeHtml(reply.userName || '')}</strong><span>${what}</span>
+  </button>`;
+}
 
-  if (autoScroll) {
-    container.scrollTop = container.scrollHeight;
+function reactionsHtml(msg) {
+  const entries = Object.entries(msg.reactions || {}).filter(([, list]) => Array.isArray(list) && list.length);
+  if (!entries.length) return '';
+  return `<div class="chat-reactions">${entries.map(([emoji, list]) => {
+    const mineReacted = list.some((r) => r.p === myProfile.id);
+    const names = list.map((r) => r.n).join(', ');
+    return `<button type="button" class="chat-reaction${mineReacted ? ' mine' : ''}" data-emoji="${escapeHtml(emoji)}" title="${escapeHtml(names)}">${escapeHtml(emoji)}<span>${list.length}</span></button>`;
+  }).join('')}<button type="button" class="chat-reaction chat-reaction-add" data-act="react" title="Reagir" aria-label="Reagir">${ACTION_ICONS.react}</button></div>`;
+}
+
+// Troca/remove a mensagem na tela (se ela estiver no chat aberto)
+function chatMessageEl(id) {
+  return id ? $('#chat-messages')?.querySelector(`[data-msg-id="${CSS.escape(id)}"]`) : null;
+}
+
+function replaceChatMessageEl(msg) {
+  const el = chatMessageEl(msg.id);
+  if (!el || el.querySelector('.chat-edit')) return; // editando: atualiza quando terminar
+  el.replaceWith(buildChatMessage(msg));
+}
+
+function upsertInList(list, msg) {
+  const i = list ? list.findIndex((m) => m.id === msg.id) : -1;
+  if (i !== -1) list[i] = msg;
+}
+
+function removeFromList(list, id) {
+  const i = list ? list.findIndex((m) => m.id === id) : -1;
+  if (i !== -1) list.splice(i, 1);
+}
+
+// ---------- Responder ----------
+appState.replyingTo = null;
+function setReplyTo(msg) {
+  appState.replyingTo = msg ? { id: msg.id, userName: msg.userName || msg.senderName } : null;
+  const bar = $('#chat-reply-bar');
+  if (!bar) return;
+  bar.classList.toggle('hidden', !msg);
+  if (msg) {
+    $('#chat-reply-name').textContent = appState.replyingTo.userName;
+    $('#chat-input')?.focus();
   }
+}
+
+// ---------- Editar ----------
+function startEditMessage(id) {
+  const msg = currentChatMessages().find((m) => m.id === id);
+  const el = chatMessageEl(id);
+  if (!msg || !el || !isMyMessage(msg) || el.querySelector('.chat-edit')) return;
+  const body = el.querySelector('.chat-msg-body');
+  el.querySelector('.chat-text')?.remove();
+  const box = document.createElement('div');
+  box.className = 'chat-edit';
+  box.innerHTML = '<textarea rows="1" maxlength="2000"></textarea><small>Enter salva · Esc cancela</small>';
+  const area = box.querySelector('textarea');
+  area.value = msg.text || '';
+  body.querySelector('.chat-msg-header').after(box);
+  const fit = () => { area.style.height = 'auto'; area.style.height = `${area.scrollHeight}px`; };
+  fit();
+  area.focus();
+  area.setSelectionRange(area.value.length, area.value.length);
+  const finish = () => {
+    const fresh = currentChatMessages().find((m) => m.id === id) || msg;
+    el.replaceWith(buildChatMessage(fresh));
+  };
+  area.addEventListener('input', fit);
+  area.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      finish();
+    } else if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const text = area.value.trim();
+      if (text === (msg.text || '')) return finish();
+      if (!text) {
+        finish();
+        deleteChatMessage(id);
+        return;
+      }
+      socket.emit('message-edit', { ...chatScope(), messageId: id, text }, (res) => {
+        if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra editar.'}`, 'error');
+        finish();
+      });
+    }
+  });
+}
+
+function deleteChatMessage(id) {
+  if (!window.confirm('Apagar essa mensagem?')) return;
+  socket.emit('message-delete', { ...chatScope(), messageId: id }, (res) => {
+    if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra apagar.'}`, 'error');
+  });
+}
+
+function reactToMessage(id, emoji) {
+  socket.emit('message-react', { ...chatScope(), messageId: id, emoji }, (res) => {
+    if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra reagir.'}`, 'error');
+  });
+  countReactionUse(emoji);
+}
+
+// Menu de reação de uma mensagem: os rápidos + "＋" com todos os emojis
+let messagePicker = null;
+async function openMessageReactPicker(anchor, onPick) {
+  const pop = $('#msg-react-popover');
+  if (!pop) return;
+  const close = () => pop.classList.add('hidden');
+  pop.innerHTML = `<div class="msg-react-quick">${quickReactions().map((e) => `<button type="button" data-emoji="${escapeHtml(e)}">${escapeHtml(e)}</button>`).join('')}<button type="button" class="msg-react-more" title="Qualquer emoji">＋</button></div>`;
+  pop.classList.remove('hidden');
+  const place = () => {
+    const r = anchor.getBoundingClientRect();
+    const w = pop.offsetWidth;
+    const h = pop.offsetHeight;
+    pop.style.left = `${Math.max(8, Math.min(r.right - w, window.innerWidth - w - 8))}px`;
+    pop.style.top = `${r.top - h - 6 > 8 ? r.top - h - 6 : Math.min(r.bottom + 6, window.innerHeight - h - 8)}px`;
+  };
+  place();
+  pop.onclick = async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    if (btn.dataset.emoji) {
+      onPick(btn.dataset.emoji);
+      close();
+      return;
+    }
+    if (btn.classList.contains('msg-react-more')) {
+      try {
+        const [{ default: Picker }, { default: i18n }] = await Promise.all([
+          import('./vendor/emoji-picker/picker.js'),
+          import('./vendor/emoji-picker/pt_BR.js')
+        ]);
+        messagePicker ??= new Picker({ locale: 'pt', i18n, dataSource: new URL('vendor/emoji-picker/data-pt.json', window.location.href).href });
+        messagePicker.className = document.documentElement.dataset.theme === 'claro' ? 'light' : 'dark';
+        messagePicker.onemojiclick = null;
+        pop.innerHTML = '';
+        pop.appendChild(messagePicker);
+        messagePicker.addEventListener('emoji-click', (ev) => {
+          if (ev.detail?.unicode) onPick(ev.detail.unicode);
+          close();
+        }, { once: true });
+        place();
+        messagePicker.shadowRoot?.querySelector('input.search')?.focus();
+      } catch (err) {
+        console.error('[Reações] Seletor de emojis não carregou:', err);
+        close();
+      }
+    }
+  };
+}
+
+// ---------- Menções (@nome) ----------
+const MENTION_ALL = ['todos', 'everyone', 'galera'];
+
+function onlineNames() {
+  const names = new Set();
+  for (const ch of appState.channels.values()) for (const u of ch.users.values()) if (u.name) names.add(u.name);
+  if (appState.myUser.name) names.add(appState.myUser.name);
+  return [...names];
+}
+
+function mentionsMe(msg) {
+  if (!msg?.text || isMyMessage(msg)) return false;
+  const text = msg.text.toLocaleLowerCase('pt-BR');
+  const me = (appState.myUser.name || myProfile.name || '').toLocaleLowerCase('pt-BR');
+  if (me && text.includes(`@${me}`)) return true;
+  return MENTION_ALL.some((w) => new RegExp(`(^|\\s)@${w}(?![\\p{L}\\p{N}])`, 'u').test(text));
+}
+
+const escapeRegExp = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Recebe texto já escapado: destaca @nome de quem está online, @todos e você
+function mentionify(escaped) {
+  if (!escaped.includes('@')) return escaped;
+  const names = onlineNames().map((n) => escapeHtml(n)).sort((x, y) => y.length - x.length);
+  const re = new RegExp(`@(${[...names.map(escapeRegExp), ...MENTION_ALL].join('|')})(?![\\p{L}\\p{N}])`, 'giu');
+  const me = escapeHtml(appState.myUser.name || '').toLocaleLowerCase('pt-BR');
+  return escaped.replace(re, (m, name) => {
+    const isMe = name.toLocaleLowerCase('pt-BR') === me || MENTION_ALL.includes(name.toLowerCase());
+    return `<span class="chat-mention${isMe ? ' me' : ''}">${m}</span>`;
+  });
+}
+
+// Marcaram você: som, aviso e notificação do sistema se o Teletela não estiver na frente
+function notifyMention(msg, where, open) {
+  playMentionPing();
+  const who = msg.userName || msg.senderName || 'Alguém';
+  const body = (msg.text || '').slice(0, 140);
+  if (document.hasFocus()) {
+    showToast(`💬 ${who} te marcou em ${where}`);
+    return;
+  }
+  try {
+    const show = () => {
+      const n = new Notification(`${who} te marcou em ${where}`, { body, icon: 'icon.png', silent: true });
+      n.onclick = () => {
+        window.focus();
+        open?.();
+        n.close();
+      };
+    };
+    if (Notification.permission === 'granted') show();
+    else if (Notification.permission !== 'denied') Notification.requestPermission().then((p) => p === 'granted' && show());
+  } catch (_) {}
+}
+
+function playMentionPing() {
+  const ctx = appState.mixerManager?.audioContext;
+  const out = appState.mixerManager?.outputGain;
+  if (!ctx || !out || appState.myUser.isDeafened) return;
+  const now = ctx.currentTime;
+  [880, 1320].forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now + i * 0.12);
+    gain.gain.linearRampToValueAtTime(0.18, now + i * 0.12 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.25);
+    osc.connect(gain).connect(out);
+    osc.start(now + i * 0.12);
+    osc.stop(now + i * 0.12 + 0.3);
+  });
+}
+
+// Autocompletar: digitou "@" no campo, aparecem os nomes de quem está online
+function setupMentionAutocomplete() {
+  const input = $('#chat-input');
+  const box = $('#mention-suggest');
+  if (!input || !box) return;
+  let items = [];
+  let active = 0;
+  const close = () => {
+    box.classList.add('hidden');
+    items = [];
+  };
+  const query = () => {
+    const upto = input.value.slice(0, input.selectionStart);
+    const m = upto.match(/(^|\s)@([^@\n]{0,24})$/u);
+    return m ? { text: m[2], start: upto.length - m[2].length - 1 } : null;
+  };
+  const render = () => {
+    box.innerHTML = items.map((u, i) => `<button type="button" class="mention-item${i === active ? ' active' : ''}" data-i="${i}">
+      <span class="mention-avatar user-avatar" style="background-color: ${safeColor(u.color)};">${u.isAll ? '@' : avatarInnerHtml(u)}</span>
+      <span${u.isAll ? '' : nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAll ? '<small>avisa todo mundo</small>' : ''}</button>`).join('');
+    box.classList.toggle('hidden', !items.length);
+  };
+  const pick = (u) => {
+    const q = query();
+    if (!q) return close();
+    const before = input.value.slice(0, q.start);
+    const after = input.value.slice(input.selectionStart);
+    const insert = `@${u.name} `;
+    input.value = before + insert + after;
+    const pos = before.length + insert.length;
+    input.setSelectionRange(pos, pos);
+    input.focus();
+    close();
+  };
+  input.addEventListener('input', () => {
+    const q = query();
+    if (!q) return close();
+    const needle = q.text.toLocaleLowerCase('pt-BR');
+    const seen = new Set();
+    const people = [];
+    for (const ch of appState.channels.values()) {
+      for (const u of ch.users.values()) {
+        if (u.id === appState.myId || seen.has(u.name) || !u.name?.toLocaleLowerCase('pt-BR').startsWith(needle)) continue;
+        seen.add(u.name);
+        people.push(u);
+      }
+    }
+    people.sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
+    items = [...people.slice(0, 7), ...('todos'.startsWith(needle) ? [{ name: 'todos', isAll: true, color: '#5865F2' }] : [])];
+    active = 0;
+    render();
+  });
+  input.addEventListener('keydown', (e) => {
+    if (box.classList.contains('hidden') || !items.length) return;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      active = (active + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length;
+      render();
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      pick(items[active]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    }
+  });
+  box.addEventListener('mousedown', (e) => {
+    const btn = e.target.closest('.mention-item');
+    if (!btn) return;
+    e.preventDefault();
+    pick(items[Number(btn.dataset.i)]);
+  });
+  input.addEventListener('blur', () => setTimeout(close, 150));
+}
+
+// ---------- Soundboard ----------
+// Os áudios dos amigos que vêm no app + os que cada um sobe (ficam salvos no servidor).
+// Tocar manda pra toda a call; cada um escolhe nas configurações se ouve e o volume.
+appState.soundboard = [];
+const MAX_SOUNDBOARD_BYTES = 400 * 1024;
+const MAX_SOUNDBOARD_SECONDS = 10.5;
+
+function soundboardUrl(id) {
+  const builtIn = /^amigo-([1-9])$/.exec(id);
+  return builtIn ? CALL_SOUNDS[Number(builtIn[1]) - 1] : `${SERVER_URL}/api/soundboard/${encodeURIComponent(id)}`;
+}
+
+async function playSoundboard(id) {
+  if (prefs.soundboardOn === false || appState.myUser.isDeafened) return;
+  const mixer = appState.mixerManager;
+  const ctx = mixer?.audioContext;
+  const url = soundboardUrl(id);
+  try {
+    if (!ctx || !mixer.masterDeafenGain) {
+      const audio = new Audio(url);
+      audio.volume = Math.min(1, (prefs.soundboardVolume ?? 100) / 100);
+      await audio.play();
+      return;
+    }
+    const buffer = await loadSoundBuffer(ctx, url);
+    const source = ctx.createBufferSource();
+    const gain = ctx.createGain();
+    gain.gain.value = (prefs.soundboardVolume ?? 100) / 100;
+    source.buffer = buffer;
+    source.connect(gain).connect(mixer.masterDeafenGain);
+    source.start();
+  } catch (err) {
+    console.warn('[Soundboard] Não tocou:', err);
+  }
+}
+
+function renderSoundboard() {
+  const grid = $('#soundboard-grid');
+  if (!grid) return;
+  const ownerName = (s) => {
+    for (const ch of appState.channels.values()) for (const u of ch.users.values()) if (u.profileId === s.profileId) return u.name;
+    return s.ownerName;
+  };
+  const mine = appState.soundboard.filter((s) => s.profileId === myProfile.id);
+  const others = appState.soundboard.filter((s) => s.profileId !== myProfile.id)
+    .sort((a, b) => NAME_COLLATOR.compare(ownerName(a), ownerName(b)) || NAME_COLLATOR.compare(a.name, b.name));
+  const tile = (s, canDelete) => `<div class="soundboard-tile-wrap"><button type="button" class="soundboard-tile" data-sound-id="${escapeHtml(s.id)}" title="${escapeHtml(s.name)}${s.profileId ? ` · de ${escapeHtml(ownerName(s))}` : ''}">
+      <span class="soundboard-emoji">${escapeHtml(s.emoji || '🔊')}</span><span class="soundboard-name">${escapeHtml(s.name)}</span>
+    </button>${canDelete ? `<button type="button" class="soundboard-delete" data-delete-sound="${escapeHtml(s.id)}" title="Apagar som" aria-label="Apagar ${escapeHtml(s.name)}">✕</button>` : ''}</div>`;
+  const section = (title, list, canDelete) => list.length
+    ? `<div class="soundboard-section"><span class="soundboard-section-title">${title}</span><div class="soundboard-tiles">${list.map((x) => tile(x, canDelete(x))).join('')}</div></div>`
+    : '';
+  const builtIns = CALL_SOUNDS.map((_, i) => ({ id: `amigo-${i + 1}`, name: `Áudio ${i + 1}`, emoji: '🗣️' }));
+  grid.innerHTML = section('Seus sons', mine, () => true)
+    + section('Da galera', others, () => appState.isAdmin)
+    + section('Do app', builtIns, () => false)
+    + (mine.length ? '' : '<p class="soundboard-hint">Clique em <strong>＋ Adicionar som</strong> pra subir os seus (até 8).</p>');
+}
+
+async function readSoundboardFile(file) {
+  if (file.size > MAX_SOUNDBOARD_BYTES) throw new Error('Áudio grande demais: o máximo é 400 KB (corte ou use .ogg/.mp3).');
+  const dataUrl = await readAsDataUrl(file);
+  if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
+    throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
+  }
+  const ctx = appState.mixerManager?.audioContext;
+  if (ctx) {
+    let buffer;
+    try {
+      buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    } catch {
+      throw new Error('Não consegui tocar esse áudio.');
+    }
+    if (buffer.duration > MAX_SOUNDBOARD_SECONDS) throw new Error(`Áudio longo demais (${buffer.duration.toFixed(1)} s): o máximo é 10 s.`);
+  }
+  return dataUrl;
+}
+
+function setupSoundboard() {
+  const btn = $('#btn-soundboard');
+  const pop = $('#soundboard-popover');
+  if (!btn || !pop) return;
+  const close = () => {
+    pop.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  btn.addEventListener('click', () => {
+    const opening = pop.classList.contains('hidden');
+    if (!opening) return close();
+    renderSoundboard();
+    pop.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !btn.contains(e.target)) close();
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+  });
+
+  pop.addEventListener('click', (e) => {
+    const del = e.target.closest('[data-delete-sound]');
+    if (del) {
+      const sound = appState.soundboard.find((x) => x.id === del.dataset.deleteSound);
+      if (!sound || !window.confirm(`Apagar o som "${sound.name}"?`)) return;
+      socket.emit('soundboard-delete', { id: sound.id }, (res) => {
+        if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra apagar.'}`, 'error');
+      });
+      return;
+    }
+    const tile = e.target.closest('[data-sound-id]');
+    if (!tile) return;
+    if (!appState.currentChannelId) return showToast('Entre numa call pra tocar sons.');
+    socket.emit('soundboard-play', { id: tile.dataset.soundId }, (res) => {
+      if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra tocar.'}`, 'error');
+    });
+  });
+
+  // Adicionar som
+  const form = $('#soundboard-add-form');
+  let pendingData = '';
+  $('#btn-soundboard-add-toggle')?.addEventListener('click', () => {
+    form.classList.toggle('hidden');
+    if (!form.classList.contains('hidden')) $('#input-soundboard-name')?.focus();
+  });
+  $('#input-soundboard-file')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      pendingData = await readSoundboardFile(file);
+      $('#soundboard-file-name').textContent = file.name;
+      const name = $('#input-soundboard-name');
+      if (name && !name.value) name.value = file.name.replace(/\.[^.]+$/, '').slice(0, 30);
+      playCallSound(0, pendingData, { force: true });
+    } catch (err) {
+      pendingData = '';
+      $('#soundboard-file-name').textContent = 'até 10 s e 400 KB';
+      showToast(`❌ ${err.message || 'Não consegui abrir esse áudio.'}`, 'error');
+    }
+  });
+  form?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = $('#input-soundboard-name').value.trim();
+    if (!pendingData) return showToast('Escolha um áudio primeiro.');
+    if (!name) return;
+    const save = $('#btn-soundboard-save');
+    save.disabled = true;
+    socket.emit('soundboard-add', { name, emoji: $('#input-soundboard-emoji').value.trim() || '🔊', data: pendingData }, (res) => {
+      save.disabled = false;
+      if (!res?.success) return showToast(`❌ ${res?.error || 'Não deu pra salvar o som.'}`, 'error');
+      pendingData = '';
+      form.reset();
+      $('#input-soundboard-emoji').value = '🔊';
+      $('#soundboard-file-name').textContent = 'até 10 s e 400 KB';
+      form.classList.add('hidden');
+      showToast(`🔊 Som "${name}" adicionado!`, 'success');
+    });
+  });
+
+  // Configurações > Som
+  const on = $('#input-soundboard-on');
+  if (on) {
+    on.checked = prefs.soundboardOn !== false;
+    on.addEventListener('change', () => savePrefs({ soundboardOn: on.checked }));
+  }
+  const vol = $('#input-soundboard-volume');
+  const volText = $('#soundboard-volume-text');
+  if (vol) {
+    vol.value = String(prefs.soundboardVolume ?? 100);
+    if (volText) volText.textContent = `${vol.value}%`;
+    vol.addEventListener('input', () => {
+      if (volText) volText.textContent = `${vol.value}%`;
+    });
+    vol.addEventListener('change', () => savePrefs({ soundboardVolume: Number(vol.value) }));
+  }
+}
+
+socket.on('soundboard-list', (list) => {
+  if (!Array.isArray(list)) return;
+  appState.soundboard = list;
+  if (!$('#soundboard-popover')?.classList.contains('hidden')) renderSoundboard();
+});
+
+socket.on('soundboard-played', ({ id, userName } = {}) => {
+  if (typeof id !== 'string') return;
+  playSoundboard(id);
+  const sound = appState.soundboard.find((x) => x.id === id);
+  spawnFloatingReaction(userName || 'Alguém', sound?.emoji || '🔊');
+});
+
+// Cliques nas mensagens: botões de ação, reações e "ver a respondida"
+function setupChatMessageActions() {
+  const container = $('#chat-messages');
+  if (!container) return;
+  container.addEventListener('click', (e) => {
+    const msgEl = e.target.closest('.chat-msg');
+    const id = msgEl?.dataset.msgId;
+    const jump = e.target.closest('.chat-reply-ref');
+    if (jump) {
+      const target = chatMessageEl(jump.dataset.jump);
+      if (target) {
+        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target.classList.remove('flash');
+        void target.offsetWidth;
+        target.classList.add('flash');
+      } else {
+        showToast('Essa mensagem é antiga demais ou foi apagada.');
+      }
+      return;
+    }
+    const chip = e.target.closest('.chat-reaction[data-emoji]');
+    if (chip && id) return reactToMessage(id, chip.dataset.emoji);
+    const btn = e.target.closest('[data-act]');
+    if (!btn || !id) return;
+    const msg = currentChatMessages().find((m) => m.id === id);
+    if (!msg) return;
+    const act = btn.dataset.act;
+    if (act === 'reply') setReplyTo(msg);
+    else if (act === 'react') openMessageReactPicker(btn, (emoji) => reactToMessage(id, emoji));
+    else if (act === 'edit') startEditMessage(id);
+    else if (act === 'delete') deleteChatMessage(id);
+  });
+  $('#btn-cancel-reply')?.addEventListener('click', () => setReplyTo(null));
+  document.addEventListener('mousedown', (e) => {
+    const pop = $('#msg-react-popover');
+    if (pop && !pop.classList.contains('hidden') && !pop.contains(e.target) && !e.target.closest('[data-act="react"]')) pop.classList.add('hidden');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      $('#msg-react-popover')?.classList.add('hidden');
+      if (appState.replyingTo && document.activeElement === $('#chat-input')) setReplyTo(null);
+    }
+  });
+  // Seta pra cima com o campo vazio: edita a sua última mensagem
+  $('#chat-input')?.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowUp' || e.target.value || !$('#mention-suggest')?.classList.contains('hidden')) return;
+    const last = [...currentChatMessages()].reverse().find((m) => isMyMessage(m) && m.text);
+    if (!last) return;
+    e.preventDefault();
+    startEditMessage(last.id);
+  });
 }
 
 // Links do chat viram clicáveis (abrem no navegador). O texto é escapado pedaço por pedaço.
@@ -1434,11 +2030,11 @@ function linkifyText(text) {
   for (const match of raw.matchAll(URL_IN_TEXT_RE)) {
     // Pontuação no fim ("veja https://x.com.") fica fora do link
     const url = match[0].replace(/[.,!?;:)\]]+$/, '');
-    html += escapeHtml(raw.slice(last, match.index));
+    html += mentionify(escapeHtml(raw.slice(last, match.index)));
     html += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="chat-link">${escapeHtml(url)}</a>`;
     last = match.index + url.length;
   }
-  return html + escapeHtml(raw.slice(last));
+  return html + mentionify(escapeHtml(raw.slice(last)));
 }
 
 function chatImageHtml(image) {
@@ -1505,11 +2101,13 @@ async function sendChatImage(file) {
     showToast('📎 Enviando imagem...');
     // A legenda é o que estiver escrito no campo
     const text = input?.value.trim() || '';
+    const replyTo = appState.replyingTo?.id;
     const res = textChannelId
-      ? await socket.timeout(60000).emitWithAck('text-image', { ...image, text, channelId: textChannelId })
-      : await socket.timeout(60000).emitWithAck('chat-image', { ...image, text });
+      ? await socket.timeout(60000).emitWithAck('text-image', { ...image, text, channelId: textChannelId, replyTo })
+      : await socket.timeout(60000).emitWithAck('chat-image', { ...image, text, replyTo });
     if (res?.success) {
       if (input) input.value = '';
+      setReplyTo(null);
     } else {
       showToast(`❌ ${res?.error || 'Não deu pra mandar a imagem.'}`, 'error');
     }
@@ -1631,6 +2229,7 @@ function setupCategoryCollapse() {
 // -----------------------------------------------------------------------------
 appState.textChannels = new Map(); // id -> { id, name, createdBy, createdAt, lastMessageAt }
 appState.textView = null; // canal de texto aberto no chat (null = chat da call)
+appState.textMentions = new Set(); // canais de texto onde te marcaram e você ainda não viu
 appState.textMessages = new Map(); // id -> { messages: [], hasMore, loading }
 
 function textLastSeen(id) {
@@ -1653,13 +2252,14 @@ function renderTextChannels() {
     const active = appState.textView === ch.id;
     const unread = !active && ch.lastMessageAt > textLastSeen(ch.id);
     // Recolhido: só o canal aberto e os que têm mensagem nova
-    if (prefs.collapsedText && !active && !unread) continue;
+    if (prefs.collapsedText && !active && !unread && !appState.textMentions.has(ch.id)) continue;
     li.className = `channel-item ${active ? 'channel-active' : ''} ${unread ? 'channel-unread' : ''}`;
     li.dataset.textChannelId = ch.id;
     li.innerHTML = `
       <div class="channel-row" role="button" tabindex="0">
         <span class="channel-speaker-icon channel-hash">#</span>
         <span class="channel-name">${escapeHtml(ch.name)}</span>
+        ${appState.textMentions.has(ch.id) && !active ? '<span class="channel-mention-badge" title="Te marcaram aqui">@</span>' : ''}
         ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
       </div>
     `;
@@ -1707,7 +2307,9 @@ function openCallChat() {
 
 function openTextChannel(id) {
   if (!appState.textChannels.has(id)) return;
+  if (appState.textView !== id) setReplyTo(null);
   appState.textView = id;
+  appState.textMentions.delete(id);
   const drawer = $('#chat-drawer');
   drawer?.classList.remove('collapsed');
   $('#btn-toggle-chat')?.classList.add('active');
@@ -1724,6 +2326,7 @@ function openTextChannel(id) {
 function closeTextView() {
   if (!appState.textView) return;
   appState.textView = null;
+  setReplyTo(null);
   markCallChatSeen();
   renderTextChannels();
   updateTopBar();
@@ -1802,6 +2405,10 @@ socket.on('text-message', (msg) => {
   const ch = appState.textChannels.get(msg?.channelId);
   if (!ch) return;
   ch.lastMessageAt = msg.timestamp;
+  if (mentionsMe(msg)) {
+    if (appState.textView !== msg.channelId) appState.textMentions.add(msg.channelId);
+    notifyMention(msg, `#${ch.name}`, () => openTextChannel(msg.channelId));
+  }
   const state = appState.textMessages.get(msg.channelId);
   if (state && !state.messages.some((m) => m.id === msg.id)) state.messages.push(msg);
   if (appState.textView === msg.channelId) {
@@ -1809,6 +2416,28 @@ socket.on('text-message', (msg) => {
     markTextSeen(msg.channelId);
   }
   renderTextChannels();
+});
+
+socket.on('text-message-updated', ({ channelId, message } = {}) => {
+  if (!message?.id) return;
+  upsertInList(appState.textMessages.get(channelId)?.messages, message);
+  if (appState.textView === channelId) replaceChatMessageEl(message);
+});
+
+socket.on('text-message-deleted', ({ channelId, messageId } = {}) => {
+  removeFromList(appState.textMessages.get(channelId)?.messages, messageId);
+  if (appState.textView === channelId) chatMessageEl(messageId)?.remove();
+});
+
+socket.on('chat-message-updated', ({ message } = {}) => {
+  if (!message?.id) return;
+  upsertInList(appState.channelChats.get(message.channelId), message);
+  if (!appState.textView && message.channelId === appState.currentChannelId) replaceChatMessageEl(message);
+});
+
+socket.on('chat-message-deleted', ({ messageId } = {}) => {
+  for (const list of appState.channelChats.values()) removeFromList(list, messageId);
+  if (!appState.textView) chatMessageEl(messageId)?.remove();
 });
 
 socket.on('text-channel-deleted', ({ channelId, channelName, by } = {}) => {
@@ -1950,17 +2579,20 @@ function setupChatAndReactions() {
     const text = chatInput?.value?.trim();
     if (!text) return;
 
+    const replyTo = appState.replyingTo?.id;
     if (appState.textView) {
-      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 2000) }, (res) => {
+      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 2000), replyTo }, (res) => {
         if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra mandar a mensagem.'}`, 'error');
       });
     } else {
       socket.emit('chat-message', {
-        text: text.slice(0, 600)
+        text: text.slice(0, 600),
+        replyTo
       });
     }
 
     chatInput.value = '';
+    setReplyTo(null);
   });
 
   // Toggle Chat Drawer
@@ -3134,13 +3766,14 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.0';
+const WHATS_NEW_VERSION = '3.1';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
   const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
+  $('#whats-new-3-0')?.classList.toggle('hidden', seen >= 3.0);
   $('#whats-new-2-2')?.classList.toggle('hidden', seen >= 2.2);
   $('#whats-new-2-1')?.classList.toggle('hidden', seen >= 2.1);
   $('#whats-new-2-0')?.classList.toggle('hidden', seen >= 2.0);
@@ -5690,6 +6323,9 @@ function initApp() {
   setupChatImages();
   setupTextChannels();
   setupCategoryCollapse();
+  setupChatMessageActions();
+  setupMentionAutocomplete();
+  setupSoundboard();
   setupModals();
   setupUserPopover();
   setupProfileModal();

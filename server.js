@@ -261,7 +261,9 @@ function textFile(id) {
   return path.join(TEXT_DIR, `${id}.jsonl`);
 }
 
-function readTextMessages(id) {
+// O arquivo só cresce: mensagem nova é uma linha, e editar/apagar/reagir vira uma linha
+// com "op" que é aplicada aqui na leitura. De tempos em tempos ele é reescrito limpo.
+function readTextLines(id) {
   try {
     return fs.readFileSync(textFile(id), 'utf8').split('\n').filter(Boolean).flatMap((line) => {
       try { return [JSON.parse(line)]; } catch { return []; }
@@ -272,8 +274,48 @@ function readTextMessages(id) {
   }
 }
 
+function readTextMessages(id) {
+  const list = [];
+  const byId = new Map();
+  for (const item of readTextLines(id)) {
+    if (!item.op) {
+      list.push(item);
+      byId.set(item.id, item);
+      continue;
+    }
+    const msg = byId.get(item.id);
+    if (!msg) continue;
+    if (item.op === 'edit') {
+      msg.text = item.text;
+      msg.editedAt = item.editedAt;
+    } else if (item.op === 'reactions') {
+      msg.reactions = item.reactions;
+    } else if (item.op === 'delete') {
+      msg.deleted = true;
+    }
+  }
+  return list.filter((m) => !m.deleted);
+}
+
+function rewriteTextFile(ch, messages) {
+  const tmp = `${textFile(ch.id)}.tmp`;
+  fs.writeFileSync(tmp, messages.length ? messages.map((m) => JSON.stringify(m)).join('\n') + '\n' : '');
+  fs.renameSync(tmp, textFile(ch.id));
+  ch.opCount = 0;
+}
+
+const MAX_TEXT_OPS_BEFORE_COMPACT = 1000;
+
+function appendTextOp(ch, op) {
+  fs.mkdirSync(TEXT_DIR, { recursive: true });
+  fs.appendFileSync(textFile(ch.id), `${JSON.stringify(op)}\n`);
+  ch.opCount = (ch.opCount || 0) + 1;
+  if (ch.opCount > MAX_TEXT_OPS_BEFORE_COMPACT) rewriteTextFile(ch, readTextMessages(ch.id));
+}
+
 function loadTextChannelHistory(ch) {
   const all = readTextMessages(ch.id);
+  ch.opCount = readTextLines(ch.id).filter((l) => l.op).length;
   ch.count = all.length;
   ch.recent = all.slice(-TEXT_RECENT_IN_MEMORY);
   ch.lastMessageAt = all.length ? all[all.length - 1].timestamp || 0 : 0;
@@ -308,9 +350,7 @@ function appendTextMessage(ch, msg) {
       const file = textImageFileOf(old);
       if (file) removeTextImage(file);
     }
-    const tmp = `${textFile(ch.id)}.tmp`;
-    fs.writeFileSync(tmp, keep.map((m) => JSON.stringify(m)).join('\n') + '\n');
-    fs.renameSync(tmp, textFile(ch.id));
+    rewriteTextFile(ch, keep);
     ch.count = keep.length;
   }
 }
@@ -361,6 +401,60 @@ function getTextChannelsSummary() {
 
 loadSavedChannels();
 loadTextStorage();
+
+// ----------------------------------------------------
+// SOUNDBOARD: sons que cada um sobe (ficam salvos) + os áudios dos amigos que vêm no app
+// ----------------------------------------------------
+const SOUNDBOARD_DIR = DATA_DIR ? path.join(DATA_DIR, 'soundboard') : path.join(os.tmpdir(), `teletela-soundboard-${process.pid}`);
+const SOUNDBOARD_INDEX = path.join(SOUNDBOARD_DIR, 'index.json');
+const MAX_SOUNDBOARD_BYTES = 400 * 1024;
+const MAX_SOUNDS_PER_PROFILE = 8;
+const MAX_SOUNDS_TOTAL = 150;
+const SOUNDBOARD_ID_RE = /^[a-f0-9-]{36}$/;
+const BUILTIN_SOUND_RE = /^amigo-[1-9]$/;
+const SOUND_EXT = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac' };
+let soundboard = []; // [{ id, profileId, ownerName, name, emoji, mime, file, createdAt }]
+
+function loadSoundboard() {
+  try {
+    const list = JSON.parse(fs.readFileSync(SOUNDBOARD_INDEX, 'utf8'));
+    if (Array.isArray(list)) {
+      soundboard = list.filter((s) => s && SOUNDBOARD_ID_RE.test(s.id) && fs.existsSync(path.join(SOUNDBOARD_DIR, s.file || '')));
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('⚠️ [Soundboard] Não deu pra ler:', err.message);
+  }
+}
+
+function saveSoundboard() {
+  fs.mkdirSync(SOUNDBOARD_DIR, { recursive: true });
+  const tmp = `${SOUNDBOARD_INDEX}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(soundboard, null, 2));
+  fs.renameSync(tmp, SOUNDBOARD_INDEX);
+}
+
+function addSoundboardSound({ profileId, ownerName, name, emoji, mime, data }) {
+  fs.mkdirSync(SOUNDBOARD_DIR, { recursive: true });
+  const id = randomUUID();
+  const file = `${id}.${SOUND_EXT[mime] || 'bin'}`;
+  fs.writeFileSync(path.join(SOUNDBOARD_DIR, file), data);
+  const sound = { id, profileId, ownerName, name, emoji, mime, file, createdAt: Date.now() };
+  soundboard.push(sound);
+  saveSoundboard();
+  return sound;
+}
+
+function removeSoundboardSound(sound) {
+  soundboard = soundboard.filter((s) => s.id !== sound.id);
+  saveSoundboard();
+  fs.rm(path.join(SOUNDBOARD_DIR, sound.file), { force: true }, () => {});
+}
+
+function soundboardList() {
+  return soundboard.map(({ id, profileId, ownerName, name, emoji }) => ({ id, profileId, ownerName, name, emoji }));
+}
+
+loadSoundboard();
 
 // Imagens do chat: ficam em disco (não na memória da VM) e vão sendo apagadas as mais
 // antigas quando passam do limite. O histórico do chat não sobrevive a reinício, então
@@ -636,6 +730,19 @@ function serveUserMedia(field) {
     res.send(media.data);
   };
 }
+app.get('/api/soundboard/:id', (req, res) => {
+  const sound = soundboard.find((s) => s.id === req.params.id);
+  if (!sound) return res.status(404).end();
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Content-Type': sound.mime,
+    'Cache-Control': 'public, max-age=86400, immutable',
+    'X-Content-Type-Options': 'nosniff'
+  });
+  res.sendFile(path.join(SOUNDBOARD_DIR, sound.file), (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
 app.get('/api/banner/:userId', serveUserMedia('banner'));
 app.get('/api/join-sound/:userId', serveUserMedia('joinSound'));
 
@@ -1209,6 +1316,8 @@ io.on('connection', (socket) => {
       channelId: user.channelId,
       senderId: socket.id,
       userId: socket.id,
+      profileId: user.profileId,
+      replyTo: replySnippet({ scope: 'call', channel }, rawPayload.replyTo),
       senderName: user.name,
       userName: user.name,
       userColor: user.color,
@@ -1225,6 +1334,186 @@ io.on('connection', (socket) => {
     }
 
     io.to(user.channelId).emit('chat-message', chatMsg);
+  }));
+
+  // ---------------- Responder, editar, apagar e reagir (chat da call e canais de texto) ----------------
+  // target: { scope: 'call', channel } (o canal de voz em que a pessoa está) ou { scope: 'text', ch }
+  const chatTarget = (payload) => {
+    if (payload.scope === 'text') {
+      const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
+      return ch ? { scope: 'text', ch } : null;
+    }
+    const channel = user.channelId ? channels.get(user.channelId) : null;
+    return channel ? { scope: 'call', channel } : null;
+  };
+  const findChatMessage = (target, id) => {
+    if (typeof id !== 'string') return null;
+    if (target.scope === 'call') return target.channel.messages.find((m) => m.id === id) || null;
+    return target.ch.recent.find((m) => m.id === id) || readTextMessages(target.ch.id).find((m) => m.id === id) || null;
+  };
+  function replySnippet(target, id) {
+    const m = findChatMessage(target, id);
+    if (!m) return undefined;
+    return { id: m.id, userName: m.userName, text: (m.text || '').slice(0, 140), image: Boolean(m.image) };
+  }
+  const announceChat = (target, event, data) => {
+    if (target.scope === 'call') io.to(target.channel.id).emit(`chat-${event}`, data);
+    else io.emit(`text-${event}`, { channelId: target.ch.id, ...data });
+  };
+  // A cópia que está na memória (call ou as recentes do canal de texto) também muda
+  const patchChatMessage = (target, message) => {
+    const list = target.scope === 'call' ? target.channel.messages : target.ch.recent;
+    const i = list.findIndex((m) => m.id === message.id);
+    if (i !== -1) list[i] = message;
+  };
+  const chatOpTimes = [];
+  const chatOpRateLimited = () => {
+    const now = Date.now();
+    while (chatOpTimes.length && now - chatOpTimes[0] > 3000) chatOpTimes.shift();
+    if (chatOpTimes.length >= 10) return true;
+    chatOpTimes.push(now);
+    return false;
+  };
+  const chatOpPrelude = (rawPayload, cb) => {
+    const payload = safeObject(rawPayload);
+    const target = chatTarget(payload);
+    if (!target) return cb({ success: false, error: 'Esse chat não existe mais.' }), null;
+    if (!user.profileId) return cb({ success: false, error: 'Atualize o app pra fazer isso.' }), null;
+    if (chatOpRateLimited()) return cb({ success: false, error: 'Calma, muita coisa seguida.' }), null;
+    const msg = findChatMessage(target, payload.messageId);
+    if (!msg) return cb({ success: false, error: 'Essa mensagem não existe mais.' }), null;
+    return { payload, target, msg };
+  };
+
+  socket.on('message-edit', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const ctx = chatOpPrelude(rawPayload, cb);
+    if (!ctx) return;
+    const { payload, target, msg } = ctx;
+    if (!msg.profileId || msg.profileId !== user.profileId) return cb({ success: false, error: 'Só dá pra editar as suas mensagens.' });
+    const max = target.scope === 'text' ? MAX_TEXT_LENGTH : 600;
+    const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, max) : '';
+    if (!text && !msg.image) return cb({ success: false, error: 'Mensagem vazia: use apagar.' });
+    const updated = { ...msg, text, editedAt: Date.now() };
+    try {
+      if (target.scope === 'text') appendTextOp(target.ch, { op: 'edit', id: msg.id, text, editedAt: updated.editedAt });
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra salvar a edição:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
+    }
+    patchChatMessage(target, updated);
+    announceChat(target, 'message-updated', { message: updated });
+    cb({ success: true });
+  }));
+
+  socket.on('message-delete', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const ctx = chatOpPrelude(rawPayload, cb);
+    if (!ctx) return;
+    const { target, msg } = ctx;
+    const mine = msg.profileId && msg.profileId === user.profileId;
+    if (!mine && !user.isAdmin) return cb({ success: false, error: 'Só dá pra apagar as suas mensagens.' });
+    try {
+      if (target.scope === 'text') {
+        appendTextOp(target.ch, { op: 'delete', id: msg.id });
+        const file = textImageFileOf(msg);
+        if (file) removeTextImage(file);
+        target.ch.count = Math.max(0, target.ch.count - 1);
+      }
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra apagar:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu apagar.' });
+    }
+    const list = target.scope === 'call' ? target.channel.messages : target.ch.recent;
+    const i = list.findIndex((m) => m.id === msg.id);
+    if (i !== -1) list.splice(i, 1);
+    announceChat(target, 'message-deleted', { messageId: msg.id });
+    cb({ success: true });
+  }));
+
+  // Reação numa mensagem: clica de novo pra tirar. Guardada pelo perfil (vale reconectando).
+  const MAX_REACTION_EMOJIS = 20;
+  socket.on('message-react', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const ctx = chatOpPrelude(rawPayload, cb);
+    if (!ctx) return;
+    const { payload, target, msg } = ctx;
+    const emoji = typeof payload.emoji === 'string' ? payload.emoji.trim() : '';
+    if (!emoji || emoji.length > 32 || !EMOJI_RE.test(emoji)) return cb({ success: false, error: 'Emoji inválido.' });
+    const reactions = Object.fromEntries(Object.entries(msg.reactions || {}).map(([e, list]) => [e, [...list]]));
+    const list = reactions[emoji] || [];
+    const i = list.findIndex((r) => r.p === user.profileId);
+    if (i !== -1) list.splice(i, 1);
+    else {
+      if (!reactions[emoji] && Object.keys(reactions).length >= MAX_REACTION_EMOJIS) return cb({ success: false, error: 'Emoji demais nessa mensagem.' });
+      list.push({ p: user.profileId, n: user.name });
+    }
+    if (list.length) reactions[emoji] = list;
+    else delete reactions[emoji];
+    const updated = { ...msg, reactions };
+    try {
+      if (target.scope === 'text') appendTextOp(target.ch, { op: 'reactions', id: msg.id, reactions });
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra salvar a reação:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
+    }
+    patchChatMessage(target, updated);
+    announceChat(target, 'message-updated', { message: updated });
+    cb({ success: true });
+  }));
+
+  // ---------------- Soundboard ----------------
+  socket.emit('soundboard-list', soundboardList());
+
+  socket.on('soundboard-add', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const payload = safeObject(rawPayload);
+    if (!user.profileId) return cb({ success: false, error: 'Atualize o app pra fazer isso.' });
+    const name = (typeof payload.name === 'string' ? payload.name.trim() : '').slice(0, 30);
+    if (!name) return cb({ success: false, error: 'Dê um nome pro som.' });
+    const emoji = typeof payload.emoji === 'string' && payload.emoji.trim().length <= 32 && EMOJI_RE.test(payload.emoji.trim())
+      ? payload.emoji.trim() : '🔊';
+    const match = typeof payload.data === 'string' ? payload.data.match(SOUND_RE) : null;
+    const data = match ? Buffer.from(match[2], 'base64') : null;
+    if (!data || !data.length) return cb({ success: false, error: 'Esse arquivo não é um áudio.' });
+    if (data.length > MAX_SOUNDBOARD_BYTES) return cb({ success: false, error: 'Áudio grande demais (máximo 400 KB).' });
+    if (soundboard.filter((s) => s.profileId === user.profileId).length >= MAX_SOUNDS_PER_PROFILE) {
+      return cb({ success: false, error: `Você já tem ${MAX_SOUNDS_PER_PROFILE} sons: apague um pra pôr outro.` });
+    }
+    if (soundboard.length >= MAX_SOUNDS_TOTAL) return cb({ success: false, error: 'O soundboard está cheio.' });
+    try {
+      const sound = addSoundboardSound({ profileId: user.profileId, ownerName: user.name, name, emoji, mime: match[1].toLowerCase(), data });
+      io.emit('soundboard-list', soundboardList());
+      cb({ success: true, id: sound.id });
+    } catch (err) {
+      console.error('⚠️ [Soundboard] Não deu pra salvar:', err.message);
+      cb({ success: false, error: 'O servidor não conseguiu guardar o som.' });
+    }
+  }));
+
+  socket.on('soundboard-delete', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const id = safeObject(rawPayload).id;
+    const sound = soundboard.find((s) => s.id === id);
+    if (!sound) return cb({ success: false, error: 'Esse som não existe mais.' });
+    if (sound.profileId !== user.profileId && !user.isAdmin) return cb({ success: false, error: 'Só quem colocou (ou admin) apaga.' });
+    removeSoundboardSound(sound);
+    io.emit('soundboard-list', soundboardList());
+    cb({ success: true });
+  }));
+
+  let lastSoundboardAt = 0;
+  socket.on('soundboard-play', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const id = safeObject(rawPayload).id;
+    if (!user.channelId) return cb({ success: false, error: 'Entre numa call pra tocar.' });
+    const builtIn = typeof id === 'string' && BUILTIN_SOUND_RE.test(id);
+    if (!builtIn && !soundboard.some((s) => s.id === id)) return cb({ success: false, error: 'Esse som não existe mais.' });
+    const now = Date.now();
+    if (now - lastSoundboardAt < 2500) return cb({ success: false, error: 'Calma, um som de cada vez.' });
+    lastSoundboardAt = now;
+    io.to(user.channelId).emit('soundboard-played', { id, userId: socket.id, userName: user.name });
+    cb({ success: true });
   }));
 
   // ---------------- Canais de texto ----------------
@@ -1323,7 +1612,7 @@ io.on('connection', (socket) => {
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
     if (!text) return cb({ success: false, error: 'Mensagem vazia.' });
     if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
-    publishTextMessage(ch, { ...textMessageBase(ch), text }, cb);
+    publishTextMessage(ch, { ...textMessageBase(ch), replyTo: replySnippet({ scope: 'text', ch }, payload.replyTo), text }, cb);
   }));
 
   socket.on('text-image', safeHandler((rawPayload, maybeCallback) => {
@@ -1348,6 +1637,7 @@ io.on('connection', (socket) => {
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
     publishTextMessage(ch, {
       ...textMessageBase(ch),
+      replyTo: replySnippet({ scope: 'text', ch }, payload.replyTo),
       text,
       image: { url: `/api/text-image/${file}`, width: dim(payload.width), height: dim(payload.height) }
     }, cb);
@@ -1383,6 +1673,8 @@ io.on('connection', (socket) => {
       channelId: user.channelId,
       senderId: socket.id,
       userId: socket.id,
+      profileId: user.profileId,
+      replyTo: replySnippet({ scope: 'call', channel }, payload.replyTo),
       senderName: user.name,
       userName: user.name,
       userColor: user.color,

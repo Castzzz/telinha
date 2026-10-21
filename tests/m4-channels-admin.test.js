@@ -315,6 +315,91 @@ async function runTests() {
     assert.equal((await moved).channelId, 'sala-dois');
     console.log('  ✓ Admin: mutar/ensurdecer pra todos (vale reconectando) e mover de call; quem não é admin não consegue');
 
+    // 12. Chat: responder, editar, apagar e reagir (canal de texto salvo e chat da call)
+    const eve = await connect();
+    const fred = await connect();
+    clients.push(eve, fred);
+    await join(eve, 'geral', 'eve-profile-00005');
+    await join(fred, 'geral', 'fred-profile-0006');
+    await emit(eve, 'create-text-channel', { name: 'Papo', profileId: 'eve-profile-00005' });
+    const firstMsg = new Promise((resolve) => fred.on('text-message', (m) => { if (m.text === 'primeira') resolve(m); }));
+    await emit(eve, 'text-message', { channelId: 'papo', text: 'primeira' });
+    const first = await firstMsg;
+    const replyMsg = new Promise((resolve) => eve.on('text-message', (m) => { if (m.text === 'respondendo') resolve(m); }));
+    await emit(fred, 'text-message', { channelId: 'papo', text: 'respondendo', replyTo: first.id });
+    const reply = await replyMsg;
+    assert.deepEqual(reply.replyTo, { id: first.id, userName: 'eve-profile-00005', text: 'primeira', image: false });
+    // Editar: só a própria
+    assert.equal((await emit(fred, 'message-edit', { scope: 'text', channelId: 'papo', messageId: first.id, text: 'hack' })).success, false);
+    const edited = new Promise((resolve) => fred.once('text-message-updated', resolve));
+    assert.equal((await emit(eve, 'message-edit', { scope: 'text', channelId: 'papo', messageId: first.id, text: 'primeira (editada)' })).success, true);
+    const editedEvt = await edited;
+    assert.equal(editedEvt.message.text, 'primeira (editada)');
+    assert.ok(editedEvt.message.editedAt);
+    // Reagir: liga e desliga, pelo perfil
+    assert.equal((await emit(fred, 'message-react', { scope: 'text', channelId: 'papo', messageId: first.id, emoji: '😂' })).success, true);
+    assert.equal((await emit(eve, 'message-react', { scope: 'text', channelId: 'papo', messageId: first.id, emoji: '😂' })).success, true);
+    assert.equal((await emit(eve, 'message-react', { scope: 'text', channelId: 'papo', messageId: first.id, emoji: '🔥' })).success, true);
+    assert.equal((await emit(eve, 'message-react', { scope: 'text', channelId: 'papo', messageId: first.id, emoji: '🔥' })).success, true);
+    assert.equal((await emit(eve, 'message-react', { scope: 'text', channelId: 'papo', messageId: first.id, emoji: '<b>' })).success, false);
+    // Apagar: só a própria (ou admin)
+    assert.equal((await emit(eve, 'message-delete', { scope: 'text', channelId: 'papo', messageId: reply.id })).success, false);
+    const textDeleted = new Promise((resolve) => eve.once('text-message-deleted', resolve));
+    assert.equal((await emit(fred, 'message-delete', { scope: 'text', channelId: 'papo', messageId: reply.id })).success, true);
+    assert.equal((await textDeleted).messageId, reply.id);
+    // Chat da call também
+    const callMsgP = new Promise((resolve) => fred.on('chat-message', (m) => { if (m.text === 'na call') resolve(m); }));
+    eve.emit('chat-message', { text: 'na call' });
+    const callMsg = await callMsgP;
+    assert.equal(callMsg.profileId, 'eve-profile-00005');
+    const callReplyP = new Promise((resolve) => eve.on('chat-message', (m) => { if (m.text === 'resposta na call') resolve(m); }));
+    fred.emit('chat-message', { text: 'resposta na call', replyTo: callMsg.id });
+    assert.equal((await callReplyP).replyTo.text, 'na call');
+    const callEdited = new Promise((resolve) => fred.once('chat-message-updated', resolve));
+    assert.equal((await emit(eve, 'message-edit', { messageId: callMsg.id, text: 'na call!' })).success, true);
+    assert.equal((await callEdited).message.text, 'na call!');
+    const callDeleted = new Promise((resolve) => fred.once('chat-message-deleted', resolve));
+    assert.equal((await emit(eve, 'message-delete', { messageId: callMsg.id })).success, true);
+    assert.equal((await callDeleted).messageId, callMsg.id);
+
+    // 13. Soundboard: cada um sobe os seus sons (máximo 8, até 400 KB), todo mundo da call ouve
+    const soundData = `data:audio/ogg;base64,${Buffer.alloc(10 * 1024, 3).toString('base64')}`;
+    const listed = new Promise((resolve) => fred.on('soundboard-list', (list) => { if (list.some((x) => x.name === 'risada')) resolve(list); }));
+    const added = await emit(eve, 'soundboard-add', { name: 'risada', emoji: '😂', data: soundData });
+    assert.equal(added.success, true);
+    assert.equal((await listed).find((x) => x.name === 'risada').profileId, 'eve-profile-00005');
+    assert.equal((await emit(eve, 'soundboard-add', { name: 'grande', data: `data:audio/ogg;base64,${Buffer.alloc(500 * 1024).toString('base64')}` })).success, false);
+    assert.equal((await emit(eve, 'soundboard-add', { name: 'falso', data: 'data:text/html;base64,PHNjcmlwdD4=' })).success, false);
+    const soundRes2 = await fetch(`${URL_BASE}/api/soundboard/${added.id}`);
+    assert.equal(soundRes2.headers.get('content-type'), 'audio/ogg');
+    assert.equal(soundRes2.headers.get('access-control-allow-origin'), '*');
+    const played = new Promise((resolve) => fred.once('soundboard-played', resolve));
+    assert.equal((await emit(eve, 'soundboard-play', { id: added.id })).success, true);
+    assert.equal((await played).userName, 'eve-profile-00005');
+    assert.equal((await emit(eve, 'soundboard-play', { id: 'amigo-3' })).success, false, 'um som de cada vez');
+    assert.equal((await emit(fred, 'soundboard-play', { id: 'amigo-3' })).success, true, 'áudios do app também tocam');
+    assert.equal((await emit(fred, 'soundboard-delete', { id: added.id })).success, false, 'só quem colocou apaga');
+
+    // Reinicia: edição, reação, apagada e soundboard continuam
+    clients.forEach((c) => c.disconnect());
+    clients.length = 0;
+    await stopServer(proc);
+    proc = await startServer();
+    const reader2 = await connect();
+    clients.push(reader2);
+    const papo = await emit(reader2, 'text-history', { channelId: 'papo' });
+    assert.equal(papo.messages.length, 1, 'a apagada não volta');
+    assert.equal(papo.messages[0].text, 'primeira (editada)');
+    assert.deepEqual(Object.keys(papo.messages[0].reactions), ['😂']);
+    assert.equal(papo.messages[0].reactions['😂'].length, 2);
+    const sbAfter = await new Promise((resolve) => {
+      const c = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false });
+      clients.push(c);
+      c.once('soundboard-list', resolve);
+    });
+    assert.ok(sbAfter.some((x) => x.id === added.id), 'som continua depois de reiniciar');
+    console.log('  ✓ Chat: responder, editar, apagar e reagir (salvo no canal de texto); soundboard com sons de cada um');
+
     console.log('\n✅ TODOS OS TESTES DE CANAIS E ADMIN PASSARAM\n');
   } finally {
     clients.forEach((c) => c.disconnect());
