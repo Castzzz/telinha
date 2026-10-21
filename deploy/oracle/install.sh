@@ -186,6 +186,38 @@ OnUnitActiveSec=30min
 WantedBy=timers.target
 EOF
 
+# A Oracle pode recuperar VM do Always Free que fica "parada" (CPU abaixo de 20% em 95% do
+# tempo por 7 dias). A cada 2 h, gasta meio núcleo (~25% da VM de 2 vCPUs) por 20 min, com a
+# menor prioridade possível: se a sala precisar de CPU, a sala ganha. Só CPU: é um laço vazio
+# do shell (~1–2 MB de RAM, travado em 16 MB).
+# Desligar: sudo touch /etc/telinha/keepalive.off (ligar de novo: apague o arquivo).
+cat > /etc/systemd/system/telinha-keepalive.service <<'EOF'
+[Unit]
+Description=Teletela - mantém a VM ocupada (regra de VM parada da Oracle)
+ConditionPathExists=!/etc/telinha/keepalive.off
+
+[Service]
+Type=oneshot
+User=nobody
+Nice=19
+CPUSchedulingPolicy=idle
+CPUQuota=50%
+MemoryMax=16M
+ExecStart=/usr/bin/timeout 20m /bin/sh -c 'while :; do :; done'
+SuccessExitStatus=124
+EOF
+cat > /etc/systemd/system/telinha-keepalive.timer <<'EOF'
+[Unit]
+Description=Teletela - VM ocupada a cada 2 horas
+
+[Timer]
+OnCalendar=*-*-* 00/2:10:00
+RandomizedDelaySec=15min
+
+[Install]
+WantedBy=timers.target
+EOF
+
 log "Firewall da VM"
 firewall-cmd -q --permanent --add-service=http
 firewall-cmd -q --permanent --add-service=https
@@ -197,6 +229,7 @@ log "Subindo tudo"
 systemctl daemon-reload
 systemctl enable -q --now telinha-server telinha-sfu caddy
 [ -f /etc/telinha/duckdns.env ] && systemctl enable -q --now duckdns.timer
+systemctl enable -q --now telinha-keepalive.timer
 systemctl restart telinha-server telinha-sfu
 systemctl reload caddy 2>/dev/null || systemctl restart caddy
 sleep 3
