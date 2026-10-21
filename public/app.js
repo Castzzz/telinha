@@ -662,6 +662,24 @@ function setupCallSoundChoices() {
     });
     $(`#btn-preview-${kind}-sound`)?.addEventListener('click', preview);
   }
+
+  // Volume dos sons de entrada e saída (inclusive personalizados)
+  const volInput = $('#input-call-sounds-volume');
+  const volText = $('#call-sounds-volume-text');
+  if (volInput) {
+    const currentPct = typeof prefs.callSoundsVolume === 'number' ? prefs.callSoundsVolume : 100;
+    volInput.value = String(currentPct);
+    if (volText) volText.textContent = `${currentPct}%`;
+    volInput.addEventListener('input', () => {
+      const pct = Number(volInput.value);
+      prefs.callSoundsVolume = pct;
+      if (volText) volText.textContent = `${pct}%`;
+    });
+    volInput.addEventListener('change', () => {
+      const pct = Number(volInput.value);
+      savePrefs({ callSoundsVolume: pct });
+    });
+  }
 }
 
 function callSoundChoiceUrl(kind, soundSeed) {
@@ -686,6 +704,10 @@ async function loadSoundBuffer(ctx, url) {
 
 async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 'join' } = {}) {
   if (!force && (prefs.callSounds === false || appState.myUser.isDeafened)) return;
+  const callVolPct = typeof prefs.callSoundsVolume === 'number' ? prefs.callSoundsVolume : 100;
+  if (!force && callVolPct <= 0) return;
+  const callVolGain = Math.max(0, callVolPct / 100);
+
   // Muita gente entrando junto (servidor reiniciou): um som só
   const now = Date.now();
   if (!force && now - lastCallSoundAt < 1500) return;
@@ -696,7 +718,9 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
   try {
     const ctx = mixer?.audioContext;
     if (!ctx || !mixer.masterDeafenGain) {
-      await new Audio(url).play();
+      const audio = new Audio(url);
+      audio.volume = Math.min(1, Math.max(0, callVolGain));
+      await audio.play();
       return;
     }
     let buffer;
@@ -715,7 +739,10 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(force ? (mixer.outputGain || mixer.masterDeafenGain) : mixer.masterDeafenGain);
+    const gainNode = ctx.createGain();
+    gainNode.gain.value = callVolGain;
+    const dest = force ? (mixer.outputGain || mixer.masterDeafenGain) : mixer.masterDeafenGain;
+    source.connect(gainNode).connect(dest);
     source.start();
   } catch (err) {
     console.warn('[Som] Não tocou o som de entrada/saída:', err);
