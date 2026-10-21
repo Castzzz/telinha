@@ -567,22 +567,61 @@ ul {
 
 /* AO VIVO BADGE */
 .badge-live-stream, .badge-live {
-  background: rgba(242, 63, 67, 0.18);
-  border: 1px solid rgba(242, 63, 67, 0.45);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(242, 63, 67, 0.14);
+  border: none;
   color: #ff6b6e;
   font-size: 10px;
   font-weight: 800;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm);
+  line-height: 1;
+  padding: 4px 8px 4px 7px;
+  border-radius: var(--radius-pill);
   white-space: nowrap;
   cursor: pointer;
-  letter-spacing: 0.3px;
-  transition: all var(--transition-fast);
+  letter-spacing: 0.4px;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.badge-live-stream .icon-svg {
+  width: 11px;
+  height: 11px;
 }
 
 .badge-live-stream:hover, .badge-live:hover {
-  background: rgba(242, 63, 67, 0.35);
+  background: rgba(242, 63, 67, 0.3);
   color: #fff;
+}
+
+/* Bolinha pulsando no lugar do 🔴 */
+.live-pulse {
+  position: relative;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.live-pulse::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: currentColor;
+  animation: live-pulse 1.6s ease-out infinite;
+}
+
+@keyframes live-pulse {
+  from { transform: scale(1); opacity: 0.7; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-pulse::after {
+    animation: none;
+  }
 }
 
 .indicator-icon {
@@ -2106,8 +2145,8 @@ ul {
 /* ==================== ASSISTIR SÓ QUANDO CLICAR NO "AO VIVO" ==================== */
 .badge-live-stream.watching {
   background: var(--accent-red);
-  border-color: var(--accent-red);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(242, 63, 67, 0.35);
 }
 
 /* Abas das transmissões lá em cima: foto, nome e o ✕ alinhados no meio */
@@ -2694,8 +2733,12 @@ ul {
   border-radius: 24px;
 }
 
-#user-popover-avatar img,
-.chat-msg-avatar img {
+#user-popover-avatar,
+.chat-msg-avatar[data-user-id] {
+  cursor: pointer;
+}
+
+#profile-card-avatar.has-photo {
   cursor: zoom-in;
 }
 
@@ -2877,4 +2920,97 @@ ul {
 .profile-frame-sample.user-avatar {
   width: 30px;
   height: 30px;
+}
+
+.call-sound-row {
+  display: flex;
+  gap: 8px;
+}
+
+.call-sound-row .form-select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Perfil grande de alguém */
+.profile-card-big {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--bg-floating);
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.profile-card-banner {
+  height: 150px;
+  background: var(--bg-tertiary);
+}
+
+.profile-card-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+}
+
+.profile-card-main {
+  padding: 0 22px 22px;
+  margin-top: -56px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.profile-card-avatar.user-avatar {
+  width: 108px;
+  height: 108px;
+  font-size: 38px;
+  box-shadow: 0 0 0 6px var(--bg-floating);
+  --frame-width: 4px;
+}
+
+.profile-card-avatar.has-frame {
+  box-shadow: none;
+}
+
+.profile-card-name {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-header);
+  margin-top: 4px;
+}
+
+.profile-card-bio {
+  color: var(--text-normal);
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.profile-card-bio:empty,
+.profile-card-meta:empty {
+  display: none;
+}
+
+.profile-card-meta {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  padding-top: 8px;
+  border-top: 1px solid var(--border-medium);
+  width: 100%;
+}
+
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: block;
 }

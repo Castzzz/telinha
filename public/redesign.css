@@ -29,18 +29,6 @@
   padding-left: 14px;
 }
 
-[data-look="novo"] .brand-logo .logo-emoji {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #5865f2, #7c3aed);
-  font-size: 15px;
-  box-shadow: 0 2px 8px rgba(88, 101, 242, 0.35);
-}
-
 [data-look="novo"] .brand-text {
   letter-spacing: -0.2px;
 }

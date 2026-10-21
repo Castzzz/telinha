@@ -125,6 +125,7 @@ const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" strok
 const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
 const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
 const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
+const CAMERA_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
 // Balão do chat da call (no canal de voz em que você está)
 const CHAT_BUBBLE_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
 // Alto-falante (silenciar alguém só pra você)
@@ -556,15 +557,46 @@ function joinSoundUrl(u) {
   return u.joinSoundV ? `${SERVER_URL}/api/join-sound/${encodeURIComponent(u.id)}?v=${encodeURIComponent(u.joinSoundV)}` : '';
 }
 
-async function playCallSound(soundSeed, customUrl = '', { force = false } = {}) {
+// Cada um escolhe, só pra si, qual áudio dos amigos toca quando alguém entra ou sai:
+// sorteado (padrão, igual pra todo mundo), um fixo, ou nenhum. O som de entrada do
+// perfil de quem entrou continua tocando pra todos.
+function setupCallSoundChoices() {
+  for (const [kind, key] of [['join', 'joinSoundChoice'], ['leave', 'leaveSoundChoice']]) {
+    const select = $(`#select-${kind}-sound`);
+    if (!select) continue;
+    select.innerHTML = '<option value="random">Sorteado (o mesmo que a galera ouve)</option>'
+      + CALL_SOUNDS.map((_, i) => `<option value="${i + 1}">Áudio ${i + 1}</option>`).join('')
+      + '<option value="off">Nenhum</option>';
+    select.value = prefs[key] || 'random';
+    const preview = () => {
+      const url = select.value === 'random' ? CALL_SOUNDS[Math.floor(Math.random() * CALL_SOUNDS.length)] : callSoundChoiceUrl(kind);
+      if (url) playCallSound(0, url, { force: true });
+    };
+    select.addEventListener('change', () => {
+      savePrefs({ [key]: select.value });
+      if (select.value !== 'random') preview();
+    });
+    $(`#btn-preview-${kind}-sound`)?.addEventListener('click', preview);
+  }
+}
+
+function callSoundChoiceUrl(kind, soundSeed) {
+  const choice = kind === 'leave' ? prefs.leaveSoundChoice : prefs.joinSoundChoice;
+  if (choice === 'off') return null;
+  const n = Number.parseInt(choice, 10);
+  if (n >= 1 && n <= CALL_SOUNDS.length) return CALL_SOUNDS[n - 1];
+  const index = Number.isInteger(soundSeed) ? soundSeed % CALL_SOUNDS.length : Math.floor(Math.random() * CALL_SOUNDS.length);
+  return CALL_SOUNDS[index];
+}
+
+async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 'join' } = {}) {
   if (!force && (prefs.callSounds === false || appState.myUser.isDeafened)) return;
   // Muita gente entrando junto (servidor reiniciou): um som só
   const now = Date.now();
   if (!force && now - lastCallSoundAt < 1500) return;
   if (!force) lastCallSoundAt = now;
-  // Servidor antigo (sem soundSeed): sorteia aqui mesmo
-  const index = Number.isInteger(soundSeed) ? soundSeed % CALL_SOUNDS.length : Math.floor(Math.random() * CALL_SOUNDS.length);
-  const url = customUrl || CALL_SOUNDS[index];
+  const url = customUrl || callSoundChoiceUrl(kind, soundSeed);
+  if (!url) return;
   const mixer = appState.mixerManager;
   try {
     const ctx = mixer?.audioContext;
@@ -603,7 +635,7 @@ const handleUserLeft = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`${userName} saiu do canal.`, channelId);
-    playCallSound(data.soundSeed);
+    playCallSound(data.soundSeed, '', { kind: 'leave' });
     updateTopBar();
     updateVoiceLounge();
     cleanupUserConnections(userId);
@@ -650,6 +682,7 @@ const handleUserStateChanged = (state) => {
     }
     if (typeof state.isMicOn === 'boolean') {
       u.isMicOn = state.isMicOn;
+      if (userId !== appState.myId) applyUserVolume(userId);
       if (channelId === appState.currentChannelId && userId !== appState.myId) {
         const audioEl = document.getElementById(`voice-audio-${userId}`);
         if (audioEl) {
@@ -777,7 +810,7 @@ function switchChannel(targetChannelId) {
 function leaveCall() {
   if (!appState.currentChannelId) return;
   // Eu saí: o servidor responde com o áudio que tocou pros outros
-  socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed));
+  socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed, '', { kind: 'leave' }));
   leaveCallLocally();
   showToast('Você saiu da call. Clique num canal pra entrar de novo.');
 }
@@ -803,7 +836,7 @@ function leaveCallLocally() {
 // Admin me tirou da call: o servidor já me tirou do canal
 socket.on('kicked', ({ by } = {}) => {
   leaveCallLocally();
-  playCallSound();
+  playCallSound(undefined, '', { kind: 'leave' });
   showToast(`🚪 ${by || 'Um admin'} tirou você da call. Clique num canal pra entrar de novo.`, 'error');
 });
 
@@ -863,14 +896,27 @@ socket.on('moved-by-admin', ({ channelId, channelName, by } = {}) => {
 socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
   const me = appState.myUser;
   const wasDeafenedByAdmin = me.serverDeafened;
+  const wasLocked = isMicLockedByAdmin();
   me.serverMuted = Boolean(serverMuted);
   me.serverDeafened = Boolean(serverDeafened);
+  // Lembra se o mic estava aberto, pra abrir de novo quando o admin liberar
+  if (!wasLocked && isMicLockedByAdmin()) appState.micOnBeforeAdminLock = me.isMicOn;
   if (isMicLockedByAdmin() && me.isMicOn) {
     me.isMicOn = false;
     onMicrophoneToggle(false);
   }
   if (me.serverDeafened && !me.isDeafened) onDeafenToggle(true);
   else if (wasDeafenedByAdmin && !me.serverDeafened && me.isDeafened) onDeafenToggle(false);
+  // Admin liberou: volta o mic como estava antes (e avisa todo mundo, senão aparece mutado)
+  if (wasLocked && !isMicLockedByAdmin()) {
+    const reopen = Boolean(appState.micOnBeforeAdminLock) && !me.isDeafened;
+    appState.micOnBeforeAdminLock = false;
+    if (reopen !== me.isMicOn) {
+      me.isMicOn = reopen;
+      onMicrophoneToggle(reopen);
+    }
+    socket.emit('user-state-changed', { isMicOn: me.isMicOn, isDeafened: me.isDeafened });
+  }
   updateMicButton();
   renderChannelsTree();
   updateVoiceLounge();
@@ -1345,7 +1391,7 @@ function appendChatMessage(msg, autoScroll = true) {
   const author = { id: msg.senderId || msg.userId, name: msg.userName || msg.senderName, avatarV: msg.userAvatarV };
 
   div.innerHTML = `
-    <div class="chat-msg-avatar${frameClass(findUser(author.id))}" style="background-color: ${color};${frameStyle(findUser(author.id))}">
+    <div class="chat-msg-avatar${frameClass(findUser(author.id))}" data-user-id="${escapeHtml(author.id || '')}" style="background-color: ${color};${frameStyle(findUser(author.id))}">
       ${avatarInnerHtml(author)}
     </div>
     <div class="chat-msg-body">
@@ -1506,18 +1552,33 @@ function setupChatImages() {
     viewer.classList.remove('avatar-view');
     viewer.classList.remove('hidden');
   });
-  // Clique na foto de alguém (popup da pessoa ou chat): mostra a foto/GIF grande
+  // Clique na foto de alguém (popup da pessoa ou chat): abre o perfil grande.
+  // No perfil grande, clicar na foto mostra ela grande (GIF animando).
   document.addEventListener('click', (e) => {
-    const img = e.target.closest('#user-popover-avatar img, .chat-msg-avatar img');
-    if (!img || !viewer || !viewerImg) return;
+    const bigImg = e.target.closest('#profile-card-avatar img');
+    if (bigImg && viewer && viewerImg) {
+      e.stopPropagation();
+      viewerImg.src = bigImg.src;
+      viewer.classList.add('avatar-view');
+      viewer.classList.remove('hidden');
+      return;
+    }
+    const avatar = e.target.closest('#user-popover-avatar, .chat-msg-avatar[data-user-id]');
+    if (!avatar) return;
+    const userId = avatar.id === 'user-popover-avatar' ? popoverUserId : avatar.dataset.userId;
+    if (!findUser(userId)) return;
     e.stopPropagation();
-    viewerImg.src = img.src;
-    viewer.classList.add('avatar-view');
-    viewer.classList.remove('hidden');
+    openProfileCard(userId);
   }, true);
+  $('#modal-user-profile')?.addEventListener('click', (e) => {
+    if (e.target.id === 'modal-user-profile') e.target.classList.add('hidden');
+  });
   viewer?.addEventListener('click', () => viewer.classList.add('hidden'));
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') viewer?.classList.add('hidden');
+    if (e.key !== 'Escape') return;
+    // Esc fecha primeiro a foto grande, depois o perfil
+    if (viewer && !viewer.classList.contains('hidden')) viewer.classList.add('hidden');
+    else $('#modal-user-profile')?.classList.add('hidden');
   });
 }
 
@@ -2327,8 +2388,9 @@ function applyUserVolume(userId) {
   const u = findUser(userId);
   if (!u) return;
   const { volume, muted } = getVolumePref(u);
-  // Mutado pelo admin: ninguém ouve, mesmo que o app dele insista em mandar a voz
-  appState.setUserVolume(userId, muted || u.serverMuted || u.serverDeafened ? 0 : volume);
+  // Mutado (por ele ou pelo admin): ninguém ouve, mesmo que o app dele insista em mandar a
+  // voz (ex: app antigo que não desliga o mic quando o admin muta)
+  appState.setUserVolume(userId, muted || u.serverMuted || u.serverDeafened || u.isMicOn === false ? 0 : volume);
 }
 
 let popoverUserId = null;
@@ -2375,6 +2437,29 @@ function renderUserPopoverVolume() {
   const muteBtn = $('#user-popover-mute');
   muteBtn.classList.toggle('active', muted);
   muteBtn.innerHTML = `${SPEAKER_OFF_SVG} ${muted ? 'Silenciado' : 'Silenciar pra mim'}`;
+}
+
+// Perfil grande no meio da tela: banner, foto com moldura, nome e bio
+function openProfileCard(userId) {
+  const u = findUser(userId);
+  if (!u) return;
+  closeUserPopover();
+  const isMe = userId === appState.myId;
+  const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
+  $('#profile-card-banner').style.cssText = bannerCss(shown);
+  const avatar = $('#profile-card-avatar');
+  avatar.style.backgroundColor = safeColor(shown.color);
+  avatar.innerHTML = avatarInnerHtml(isMe ? { id: userId, name: shown.name } : u);
+  avatar.classList.toggle('has-photo', Boolean(avatar.querySelector('img')));
+  applyFrame(avatar, shown);
+  const name = $('#profile-card-name');
+  name.textContent = shown.name;
+  applyNameStyle(name, shown);
+  $('#profile-card-badges').innerHTML = `${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
+  $('#profile-card-bio').textContent = shown.bio || '';
+  const ch = appState.channels.get(u.channelId);
+  $('#profile-card-meta').textContent = ch ? `🔊 Na call: ${ch.name}` : '';
+  $('#modal-user-profile').classList.remove('hidden');
 }
 
 function closeUserPopover() {
@@ -3138,8 +3223,9 @@ function liveBadgesHtml(u, { compact = false } = {}) {
   const extras = Array.isArray(u.extraScreens) ? u.extraScreens.filter((n) => EXTRA_SCREEN_NUMBERS.includes(n)) : [];
   // Com mais de uma tela, cada selo diz qual é
   const many = extras.length > 0;
-  const screenLabel = (n) => (compact ? `🔴 ${n}` : `🔴 TELA ${n}`);
-  return `${u.isSharing ? badge('screen', many ? screenLabel(1) : '🔴 AO VIVO') : ''}${extras.map((n) => badge(`screen${n}`, screenLabel(n))).join('')}${u.isCameraOn ? badge('camera', compact && many ? '📷' : '📷 CÂMERA') : ''}`;
+  const dot = '<span class="live-pulse" aria-hidden="true"></span>';
+  const screenLabel = (n) => (compact ? `${dot}${n}` : `${dot}TELA ${n}`);
+  return `${u.isSharing ? badge('screen', many ? screenLabel(1) : `${dot}AO VIVO`) : ''}${extras.map((n) => badge(`screen${n}`, screenLabel(n))).join('')}${u.isCameraOn ? badge('camera', compact && many ? CAMERA_SVG : `${CAMERA_SVG}CÂMERA`) : ''}`;
 }
 
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
@@ -5583,6 +5669,7 @@ function initApp() {
       updateStageLayout();
     });
   }
+  setupCallSoundChoices();
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {
     callSoundsInput.checked = prefs.callSounds !== false;

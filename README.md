@@ -108,7 +108,8 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
 | **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (com uma segunda cor vira gradiente), moldura da foto, banner (imagem, GIF até 2 MB ou cor), som de entrada (até 5 s / 300 KB, toca pra todo mundo quando você entra) e bio |
-| **Ver a foto de alguém grande** | Clique na pessoa e depois na foto (ou na foto dela no chat) |
+| **Ver o perfil de alguém** | Clique na pessoa e depois na foto (ou na foto dela no chat): abre o perfil grande. Clique na foto de novo pra ver ela grande |
+| **Escolher os áudios de entrar/sair** | ⚙️ → *Som*: sorteado, um fixo ou nenhum (só pra você). O som de entrada do perfil de cada um continua tocando pra todos |
 | **Sair da call** | Botão vermelho no painel *Voz conectada*, lá embaixo à esquerda |
 | **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
 | **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |

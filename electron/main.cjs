@@ -723,6 +723,7 @@ async function createWindow() {
     minWidth: 940,
     minHeight: 600,
     title: 'Teletela',
+    icon: path.join(__dirname, '..', 'public', 'icon.png'),
     backgroundColor: initialColors.color,
     autoHideMenuBar: true,
     // Sem a barra do sistema: minimizar/maximizar/fechar são desenhados por cima do canto

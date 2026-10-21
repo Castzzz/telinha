@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Teletela</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📺</text></svg>" />
+  <link rel="icon" href="icon.png" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="redesign.css" />
 </head>
@@ -14,7 +14,7 @@
   <header id="app-topbar" class="app-topbar">
     <div class="topbar-left">
       <div class="brand-logo">
-        <span class="logo-emoji">📺</span>
+        <img class="logo-icon" src="icon.png" alt="" />
         <span class="brand-text">Teletela</span>
       </div>
       <button id="btn-leave-call" class="btn-topbar-action btn-leave-call" title="Sair da call (o Teletela continua aberto; clique num canal pra voltar)">
@@ -279,6 +279,20 @@
 
   <!-- ==================== MODALS & OVERLAYS ==================== -->
 
+  <!-- Perfil grande de alguém (clique na foto no popup ou no chat) -->
+  <div id="modal-user-profile" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="profile-card-name">
+    <div class="profile-card-big">
+      <div class="profile-card-banner" id="profile-card-banner"></div>
+      <button class="modal-close-btn profile-card-close" data-close-modal="modal-user-profile" aria-label="Fechar">✕</button>
+      <div class="profile-card-main">
+        <div class="user-avatar profile-card-avatar" id="profile-card-avatar" title="Ver a foto grande"></div>
+        <h3 class="profile-card-name"><span id="profile-card-name"></span><span id="profile-card-badges"></span></h3>
+        <p class="profile-card-bio" id="profile-card-bio"></p>
+        <div class="profile-card-meta" id="profile-card-meta"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- Imagem do chat em tamanho grande (clique fora ou Esc fecha) -->
   <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-label="Imagem do chat">
     <img id="image-viewer-img" alt="" />
@@ -353,7 +367,9 @@
         <ul class="whats-new-list">
           <li><strong>Visual novo:</strong> painéis flutuando, cantos redondos e menos linha separando tudo. Os ícones continuam os mesmos.</li>
           <li><strong>Perfil turbinado:</strong> clique no seu nome lá embaixo. Tem banner (imagem, GIF ou cor), moldura da foto (ouro, neon, fogo, gelo, arco-íris…), nome em gradiente e <strong>som de entrada</strong> próprio, que toca pra todo mundo quando você entra na call.</li>
-          <li><strong>Clique na foto de alguém</strong> pra ver ela grande (GIF animando).</li>
+          <li><strong>Clique na foto de alguém</strong> pra abrir o perfil grande; clicando na foto de novo ela abre em tamanho grande (GIF animando).</li>
+          <li><strong>Escolha os áudios de entrar e sair</strong> que você ouve, em ⚙️ Configurações → Som.</li>
+          <li><strong>Ícone novo</strong> e "AO VIVO" com cara nova.</li>
           <li><strong>Sair da call lá embaixo:</strong> em call aparece o "Voz conectada" com transmitir, câmera e o botão de sair.</li>
           <li><strong>💬 no canal da call:</strong> abre o chat da call no canto (com bolinha quando chega mensagem). Clicar no canal da call volta da tela de texto pra call.</li>
           <li><strong>Quem está assistindo:</strong> as fotinhas aparecem do lado do nome de quem transmite.</li>
@@ -507,6 +523,21 @@
                 <input type="checkbox" id="input-call-sounds" checked />
                 Tocar um áudio dos amigos quando alguém entra ou sai da call
               </label>
+            </div>
+
+            <!-- Qual áudio toca (só pra você) -->
+            <div class="form-group">
+              <label for="select-join-sound">Áudio quando alguém entra <span class="form-help-inline">(só pra você)</span></label>
+              <div class="call-sound-row">
+                <select id="select-join-sound" class="form-select"></select>
+                <button type="button" class="btn-secondary" id="btn-preview-join-sound" title="Ouvir">▶</button>
+              </div>
+              <label for="select-leave-sound" class="profile-sublabel">Áudio quando alguém sai <span class="form-help-inline">(só pra você)</span></label>
+              <div class="call-sound-row">
+                <select id="select-leave-sound" class="form-select"></select>
+                <button type="button" class="btn-secondary" id="btn-preview-leave-sound" title="Ouvir">▶</button>
+              </div>
+              <p class="form-help">Quem tem som de entrada no perfil continua tocando o dele pra todo mundo. O seu você escolhe clicando no seu nome lá embaixo.</p>
             </div>
 
             <!-- Volume geral -->
