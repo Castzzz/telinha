@@ -755,6 +755,7 @@ app.get('/api/avatar/:userId', (req, res) => {
   const user = io.sockets.sockets.get(req.params.userId)?.data?.user;
   if (!user?.avatar) return res.status(404).end();
   res.set({
+    'Access-Control-Allow-Origin': '*',
     'Content-Type': user.avatar.mime,
     'Cache-Control': 'public, max-age=86400, immutable',
     'X-Content-Type-Options': 'nosniff'

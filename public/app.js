@@ -1359,11 +1359,59 @@ function avatarSrc(userId, avatarV) {
   return '';
 }
 
+// Cache de primeiro frame para congelar avatares animados quando o usuário não estiver falando
+const frozenAvatarCache = new Map();
+
+function freezeAvatar(img) {
+  if (!img || !img.src) return;
+  const src = img.src;
+
+  const doFreeze = () => {
+    try {
+      if (!img.naturalWidth || !img.naturalHeight) return;
+      let staticUrl = frozenAvatarCache.get(src);
+      if (!staticUrl) {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.min(img.naturalWidth, 128);
+        canvas.height = Math.min(img.naturalHeight, 128);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        staticUrl = canvas.toDataURL('image/png');
+        frozenAvatarCache.set(src, staticUrl);
+      }
+
+      // Procura o container pai (ex: .user-avatar)
+      const wrap = img.parentElement;
+      if (wrap && !wrap.querySelector('.avatar-static')) {
+        const staticImg = document.createElement('img');
+        staticImg.className = 'avatar-static';
+        staticImg.src = staticUrl;
+        staticImg.alt = '';
+        wrap.appendChild(staticImg);
+        wrap.classList.add('has-frozen');
+      }
+    } catch (_) {
+      // Ignora silenciosamente se o canvas não puder ser lido
+    }
+  };
+
+  if (img.complete && img.naturalWidth > 0) {
+    doFreeze();
+  } else {
+    img.addEventListener('load', doFreeze, { once: true });
+  }
+}
+window.freezeAvatar = freezeAvatar;
+
 function avatarInnerHtml(u) {
   const initials = avatarInitials(u?.name);
   const src = avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
-  return `<img src="${escapeHtml(src)}" alt="" data-initials="${initials}" />`;
+  const staticUrl = frozenAvatarCache.get(src);
+  if (staticUrl) {
+    return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" crossorigin="anonymous" /><img class="avatar-static" src="${escapeHtml(staticUrl)}" alt="" data-initials="${initials}" />`;
+  }
+  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" crossorigin="anonymous" onload="window.freezeAvatar?.(this)" />`;
 }
 
 document.addEventListener('error', (e) => {
@@ -1371,7 +1419,13 @@ document.addEventListener('error', (e) => {
   if (img?.tagName === 'IMG' && img.dataset.initials !== undefined) {
     const span = document.createElement('span');
     span.textContent = img.dataset.initials;
-    img.replaceWith(span);
+    const parent = img.parentElement;
+    if (parent) {
+      parent.querySelectorAll('.avatar-static, .avatar-animated').forEach((el) => el.remove());
+      parent.appendChild(span);
+    } else {
+      img.replaceWith(span);
+    }
   }
 }, true);
 
