@@ -294,10 +294,18 @@ export class VoiceActivityDetector {
 
   setEnabled(enabled) {
     this.isEnabled = Boolean(enabled);
-    if (!this.isEnabled && this.isSpeaking) {
-      this.isSpeaking = false;
-      this.onSpeakingChange(false);
+    if (!this.isEnabled) {
+      if (this.rafId && typeof cancelAnimationFrame !== 'undefined') {
+        cancelAnimationFrame(this.rafId);
+        this.rafId = null;
+      }
+      if (this.isSpeaking) {
+        this.isSpeaking = false;
+        this.onSpeakingChange(false);
+      }
       if (this.onVolumeLevel) this.onVolumeLevel(0, -100);
+    } else if (!this.rafId) {
+      this.startLoop();
     }
   }
 

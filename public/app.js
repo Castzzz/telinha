@@ -1408,10 +1408,11 @@ function avatarInnerHtml(u) {
   const src = avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
   const staticUrl = frozenAvatarCache.get(src);
+  const corsAttr = src.startsWith('data:') ? '' : ' crossorigin="anonymous"';
   if (staticUrl) {
-    return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" crossorigin="anonymous" /><img class="avatar-static" src="${escapeHtml(staticUrl)}" alt="" data-initials="${initials}" />`;
+    return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}"${corsAttr} /><img class="avatar-static" src="${escapeHtml(staticUrl)}" alt="" data-initials="${initials}" />`;
   }
-  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" crossorigin="anonymous" onload="window.freezeAvatar?.(this)" />`;
+  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}"${corsAttr} onload="window.freezeAvatar?.(this)" />`;
 }
 
 document.addEventListener('error', (e) => {
@@ -5617,7 +5618,7 @@ async function onMicrophoneToggle(isMicOn) {
           },
           onVolumeLevel: (norm) => {
             const meter = document.getElementById('vad-meter-bar');
-            if (meter) {
+            if (meter && meter.offsetParent !== null) {
               meter.style.width = `${Math.round(norm * 100)}%`;
               meter.style.background = norm > 0.35 ? 'var(--accent-green)' : 'var(--text-muted)';
             }
