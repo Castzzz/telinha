@@ -2270,7 +2270,7 @@ function setupModals() {
   // Atalhos de mutar/ensurdecer (configuráveis em Configurações → Atalhos de teclado)
   window.addEventListener('keydown', (e) => {
     if (hotkeyCapture) return;
-    const accelerator = eventToAccelerator(e);
+    const accelerator = SOLO_KEY_CODES[e.code] ? (e.repeat ? null : SOLO_KEY_CODES[e.code]) : eventToAccelerator(e);
     if (!accelerator) return;
     // Campo escondido (modal fechado) com foco não conta como digitando
     const typing =
@@ -2867,8 +2867,22 @@ const HOTKEY_KEY_NAMES = {
   Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\',
   Semicolon: ';', Quote: "'", Comma: ',', Period: '.', Slash: '/', Backquote: '`',
   NumpadAdd: 'numadd', NumpadSubtract: 'numsub', NumpadMultiply: 'nummult',
-  NumpadDivide: 'numdiv', NumpadDecimal: 'numdec'
+  NumpadDivide: 'numdiv', NumpadDecimal: 'numdec', NumpadEnter: 'Enter',
+  Backspace: 'Backspace', CapsLock: 'Capslock', NumLock: 'Numlock', PrintScreen: 'PrintScreen',
+  IntlBackslash: '\\', IntlRo: '/', AudioVolumeMute: 'VolumeMute', MediaPlayPause: 'MediaPlayPause',
+  MediaTrackNext: 'MediaNextTrack', MediaTrackPrevious: 'MediaPreviousTrack', MediaStop: 'MediaStop'
 };
+
+// Modificador apertado sozinho (ex: o Ctrl da direita) também vale como atalho
+const SOLO_KEY_CODES = {
+  ControlLeft: 'LeftCtrl', ControlRight: 'RightCtrl', ShiftLeft: 'LeftShift', ShiftRight: 'RightShift',
+  AltLeft: 'LeftAlt', AltRight: 'RightAlt', MetaLeft: 'LeftSuper', MetaRight: 'RightSuper'
+};
+const SOLO_KEY_LABELS = {
+  LeftCtrl: 'Ctrl esquerdo', RightCtrl: 'Ctrl direito', LeftShift: 'Shift esquerdo', RightShift: 'Shift direito',
+  LeftAlt: 'Alt esquerdo', RightAlt: 'Alt direito (AltGr)', LeftSuper: 'Windows esquerdo', RightSuper: 'Windows direito'
+};
+const SOLO_KEYS = new Set(Object.values(SOLO_KEY_CODES));
 
 function eventToAccelerator(e) {
   const code = e.code || '';
@@ -2891,14 +2905,18 @@ function eventToAccelerator(e) {
 // Atalho global rouba a tecla de todos os programas: só combinações ou teclas que ninguém digita
 function canBeGlobalHotkey(accelerator) {
   if (!accelerator) return false;
+  if (SOLO_KEYS.has(accelerator)) return true; // só observado, não rouba a tecla de ninguém
   const parts = accelerator.split('+');
   const key = parts[parts.length - 1];
   return parts.some((p) => p === 'Ctrl' || p === 'Alt' || p === 'Super') ||
-    /^F([1-9]|1[0-9]|2[0-4])$/.test(key) || ['Pause', 'Scrolllock', 'Insert'].includes(key);
+    /^F([1-9]|1[0-9]|2[0-4])$/.test(key) ||
+    ['Pause', 'Scrolllock', 'Insert', 'Capslock', 'Numlock', 'PrintScreen', 'VolumeMute', 'MediaPlayPause',
+      'MediaNextTrack', 'MediaPreviousTrack', 'MediaStop'].includes(key);
 }
 
 function formatHotkey(accelerator) {
   if (!accelerator) return 'Nenhum';
+  if (SOLO_KEY_LABELS[accelerator]) return SOLO_KEY_LABELS[accelerator];
   return accelerator
     .split('+')
     .map((p) => p.replace(/^num(\d)$/, 'Num $1').replace(/^num(add|sub|mult|div|dec)$/, (_m, k) => `Num ${{ add: '+', sub: '-', mult: '*', div: '/', dec: '.' }[k]}`))
@@ -2981,7 +2999,9 @@ function setupHotkeys() {
     });
   });
 
-  // Captura antes de todo mundo, pra tecla nova não mutar/fechar nada
+  // Captura antes de todo mundo, pra tecla nova não mutar/fechar nada.
+  // Esc tira o atalho. Ctrl/Shift/Alt: se soltar sem apertar outra tecla, vale ele sozinho.
+  let pendingSolo = null;
   window.addEventListener('keydown', (e) => {
     if (!hotkeyCapture) return;
     e.preventDefault();
@@ -2989,18 +3009,28 @@ function setupHotkeys() {
     const action = hotkeyCapture;
     if (e.key === 'Escape') {
       hotkeyCapture = null;
-      renderHotkeys();
-      return;
-    }
-    if (e.key === 'Backspace') {
-      hotkeyCapture = null;
+      pendingSolo = null;
       saveHotkey(action, null);
       return;
     }
+    if (SOLO_KEY_CODES[e.code]) {
+      if (!e.repeat) pendingSolo = SOLO_KEY_CODES[e.code];
+      return;
+    }
+    pendingSolo = null;
     const accelerator = eventToAccelerator(e);
-    if (!accelerator) return; // só apertou Ctrl/Shift: espera a tecla
+    if (!accelerator) return;
     hotkeyCapture = null;
     saveHotkey(action, accelerator);
+  }, true);
+  window.addEventListener('keyup', (e) => {
+    if (!hotkeyCapture || !pendingSolo || SOLO_KEY_CODES[e.code] !== pendingSolo) return;
+    e.preventDefault();
+    const action = hotkeyCapture;
+    const solo = pendingSolo;
+    hotkeyCapture = null;
+    pendingSolo = null;
+    saveHotkey(action, solo);
   }, true);
 
   renderHotkeys();

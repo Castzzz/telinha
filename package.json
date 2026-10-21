@@ -37,6 +37,7 @@
     "productName": "Teletela",
     "electronVersion": "42.11.11",
     "asar": false,
+    "npmRebuild": false,
     "directories": {
       "output": "dist"
     },
@@ -81,5 +82,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/Castzzz/telinha.git"
+  },
+  "optionalDependencies": {
+    "uiohook-napi": "^1.5.5"
   }
 }

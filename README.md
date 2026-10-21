@@ -124,7 +124,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
 | **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
-| **Trocar os atalhos** | ⚙️ → *Atalhos de teclado* → clique no botão e aperte a tecla nova |
+| **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
 | **Tela cheia** | Botão ⛶ no canto de baixo, tecla `F` ou duplo clique na transmissão |
 | **Janela flutuante** | Botão ⧉ no canto de baixo ou tecla `P`: a transmissão fica numa janelinha por cima do jogo/outros programas |
@@ -156,7 +156,7 @@ Em ⚙️ → *Cancelamento de ruído do microfone*:
 Só afeta a sua voz, nunca o som da transmissão.
 
 ### ⌨️ Atalhos com o jogo aberto
-Os atalhos funcionam mesmo com o Teletela minimizado, se forem uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.
+Os atalhos funcionam mesmo com o Teletela minimizado se forem `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita; a tecla continua indo pro jogo), uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.
 
 No **Linux com Wayland** (Hyprland, Sway…) quem segura a tecla no meio do jogo é o sistema: crie o atalho na config dele chamando o Teletela. No Hyprland:
 

@@ -82,11 +82,69 @@ function savePrefs(patch) {
 }
 
 // Atalhos que funcionam mesmo com o Telinha em segundo plano (ex: mutar no meio do jogo)
+// Teclas sozinhas que o globalShortcut não aceita (Ctrl da direita, Shift, Alt...): quem
+// escuta é o uiohook, que só observa o teclado (a tecla continua indo pro jogo).
+const SOLO_KEYS = {
+  LeftCtrl: 'Ctrl', RightCtrl: 'CtrlRight', LeftShift: 'Shift', RightShift: 'ShiftRight',
+  LeftAlt: 'Alt', RightAlt: 'AltRight', LeftSuper: 'Meta', RightSuper: 'MetaRight'
+};
+let uiohook = null;
+let uiohookFailed = false;
+let soloHotkeys = new Map(); // keycode -> ação
+let soloSender = null;
+
+function loadUiohook() {
+  if (uiohook || uiohookFailed) return uiohook;
+  try {
+    const { uIOhook, UiohookKey } = require('uiohook-napi');
+    uIOhook.on('keydown', (e) => {
+      const action = soloHotkeys.get(e.keycode);
+      if (action && soloSender && !soloSender.isDestroyed()) soloSender.send('global-hotkey', action);
+    });
+    uiohook = { hook: uIOhook, keys: UiohookKey, running: false };
+  } catch (err) {
+    uiohookFailed = true;
+    console.warn('[Electron] uiohook indisponível (teclas sozinhas só com a janela na frente):', err.message);
+  }
+  return uiohook;
+}
+
+function setSoloHotkeys(sender, solo) {
+  soloSender = sender;
+  soloHotkeys = new Map();
+  const registered = {};
+  const hook = solo.length ? loadUiohook() : uiohook;
+  for (const [action, name] of solo) {
+    const code = hook?.keys[SOLO_KEYS[name]];
+    registered[action] = Boolean(code);
+    if (code) soloHotkeys.set(code, action);
+  }
+  if (!hook) return registered;
+  try {
+    if (soloHotkeys.size && !hook.running) {
+      hook.hook.start();
+      hook.running = true;
+    } else if (!soloHotkeys.size && hook.running) {
+      hook.hook.stop();
+      hook.running = false;
+    }
+  } catch (err) {
+    console.warn('[Electron] uiohook não iniciou:', err.message);
+    for (const [action] of solo) registered[action] = false;
+  }
+  return registered;
+}
+
 function setGlobalHotkeys(sender, hotkeys) {
   globalShortcut.unregisterAll();
   const registered = {};
+  const solo = [];
   for (const [action, accelerator] of Object.entries(hotkeys || {})) {
     if (typeof accelerator !== 'string' || !accelerator) continue;
+    if (SOLO_KEYS[accelerator]) {
+      solo.push([action, accelerator]);
+      continue;
+    }
     try {
       registered[action] = globalShortcut.register(accelerator, () => {
         if (!sender.isDestroyed()) sender.send('global-hotkey', action);
@@ -95,7 +153,7 @@ function setGlobalHotkeys(sender, hotkeys) {
       registered[action] = false;
     }
   }
-  return registered;
+  return { ...registered, ...setSoloHotkeys(sender, solo) };
 }
 
 // No Wayland o atalho global de verdade é do compositor (o portal do Electron dá o mesmo
@@ -774,6 +832,9 @@ app.on('will-quit', () => {
   unrouteAppAudio();
   stopWinAudio();
   globalShortcut.unregisterAll();
+  if (uiohook?.running) {
+    try { uiohook.hook.stop(); } catch {}
+  }
   stopHotkeySocket();
 });
 
