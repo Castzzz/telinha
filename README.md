@@ -194,6 +194,8 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 
 ## 👩‍💻 Para quem mantém o projeto
 
+📘 **Documentação completa do projeto (arquitetura, deploy, release, dados, armadilhas): [docs/PROJETO.md](docs/PROJETO.md).** Pra agentes de IA: [AGENTS.md](AGENTS.md).
+
 <details>
 <summary>Rodar pelo código, publicar versões e estrutura</summary>
 
@@ -216,8 +218,9 @@ npm start       # só o servidor web em http://localhost:8080
 
 ### Publicar uma versão nova
 1. Aumente o `version` no `package.json` (ex: `1.1.0` → `1.2.0`). **Sem aumentar, ninguém recebe a atualização.**
-2. Envie o código: `git add -A && git commit -m "O que mudou" && git push`
-3. Publique: `npm run release` (usa o login do `gh`; leva uns 3–5 minutos).
+2. Atualize o popup de novidades (`WHATS_NEW_VERSION` no `public/app.js` e o texto em `#modal-whats-new` no `public/index.html`).
+3. Envie o código **sem os áudios dos amigos**: `git add -A -- . ':!public/sounds' && git commit -m "O que mudou" && git push`
+4. Publique: `npm run release` (usa o login do `gh`; leva uns 3–5 minutos).
 
 Os links de download deste README apontam sempre pra versão mais nova, então não precisa mudar nada aqui.
 
