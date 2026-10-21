@@ -10,7 +10,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { randomUUID, createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 // Process-Level Defensive Error Boundaries
@@ -292,6 +292,9 @@ function readTextMessages(id) {
       msg.reactions = item.reactions;
     } else if (item.op === 'delete') {
       msg.deleted = true;
+    } else if (item.op === 'pin') {
+      if (item.pinned) msg.pinned = item.pinned;
+      else delete msg.pinned;
     }
   }
   return list.filter((m) => !m.deleted);
@@ -694,6 +697,8 @@ function isSameChannel(socket, targetId) {
 // ----------------------------------------------------
 
 app.get('/api/channels', (req, res) => {
+  // Sala com senha: a lista de quem está online não fica aberta pra qualquer um
+  if (roomPassword) return res.status(401).json({ error: 'Sala com senha' });
   res.json(getChannelsSummary());
 });
 
@@ -814,6 +819,90 @@ io.engine.on('connection_error', (err) => {
 });
 
 // ----------------------------------------------------
+// SENHA DA SALA: o admin define pelo app. Sem ela (ou sem a senha de admin) o Socket.IO
+// não conecta. Fica em DATA_DIR/room.json só o hash (scrypt), nunca a senha.
+// ----------------------------------------------------
+// Quem já entrou uma vez ganha uma "chave de membro" (HMAC do profileId) que o app guarda:
+// com ela não precisa digitar a senha. Trocar o memberSecret faz todo mundo precisar de novo.
+const ROOM_FILE = DATA_DIR ? path.join(DATA_DIR, 'room.json') : null;
+let roomPassword = null; // { salt, hash } ou null (sala aberta)
+let memberSecret = randomBytes(32).toString('hex');
+
+function hashRoomPassword(password, salt) {
+  return scryptSync(password, Buffer.from(salt, 'hex'), 32).toString('hex');
+}
+
+function loadRoomPassword() {
+  if (!ROOM_FILE) return;
+  try {
+    const data = JSON.parse(fs.readFileSync(ROOM_FILE, 'utf8'));
+    if (data?.password?.salt && data?.password?.hash) roomPassword = data.password;
+    if (typeof data?.memberSecret === 'string' && data.memberSecret.length >= 32) memberSecret = data.memberSecret;
+    else saveRoomFile();
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('⚠️ [Sala] Não deu pra ler a senha da sala:', err.message);
+    else saveRoomFile();
+  }
+}
+
+function saveRoomFile() {
+  if (!ROOM_FILE) return;
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${ROOM_FILE}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ password: roomPassword, memberSecret }, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, ROOM_FILE);
+  } catch (err) {
+    console.error('⚠️ [Sala] Não deu pra salvar room.json:', err.message);
+  }
+}
+
+function memberKeyFor(profileId) {
+  return createHmac('sha256', memberSecret).update(String(profileId)).digest('hex');
+}
+
+function isMemberKey(profileId, key) {
+  if (typeof profileId !== 'string' || !PROFILE_ID_RE.test(profileId) || typeof key !== 'string' || key.length !== 64) return false;
+  const a = Buffer.from(memberKeyFor(profileId));
+  const b = Buffer.from(key);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+function resetMembers() {
+  memberSecret = randomBytes(32).toString('hex');
+  saveRoomFile();
+}
+
+function setRoomPassword(password) {
+  if (password) {
+    const salt = randomBytes(16).toString('hex');
+    roomPassword = { salt, hash: hashRoomPassword(password, salt) };
+  } else {
+    roomPassword = null;
+  }
+  saveRoomFile();
+}
+
+function isRoomPassword(password) {
+  if (!roomPassword) return true;
+  if (typeof password !== 'string' || !password || password.length > 100) return false;
+  const a = Buffer.from(hashRoomPassword(password, roomPassword.salt), 'hex');
+  const b = Buffer.from(roomPassword.hash, 'hex');
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+loadRoomPassword();
+
+// Quem não tem a senha nem chega a entrar (a senha de admin também abre a porta)
+io.use((socket, next) => {
+  const auth = socket.handshake.auth || {};
+  if (isRoomPassword(auth.roomPassword) || isAdminKey(auth.adminKey) || isMemberKey(auth.profileId, auth.memberKey)) return next();
+  const err = new Error('room-password');
+  err.data = { reason: auth.roomPassword ? 'wrong' : 'required' };
+  next(err);
+});
+
+// ----------------------------------------------------
 // Socket.IO Real-time Signaling
 // ----------------------------------------------------
 
@@ -878,6 +967,40 @@ io.on('connection', (socket) => {
       broadcastChannels();
     }
     cb({ success: ok, error: ok ? undefined : (ADMIN_KEY ? 'Senha errada.' : 'Essa sala não tem admin.') });
+  }));
+
+  // Entrou (com senha, chave de membro ou sala aberta): ganha a chave pra próxima vez
+  const sendMemberKey = (s) => {
+    const pid = s.handshake.auth?.profileId;
+    if (typeof pid === 'string' && PROFILE_ID_RE.test(pid)) s.emit('member-key', { profileId: pid, key: memberKeyFor(pid) });
+  };
+  sendMemberKey(socket);
+
+  // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword) });
+  socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
+    resetMembers();
+    // Quem está online agora continua sendo de confiança: ganha a chave nova
+    for (const s of io.sockets.sockets.values()) sendMemberKey(s);
+    cb({ success: true });
+  }));
+  socket.on('admin-set-room-password', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode mudar a senha da sala.' });
+    const raw = safeObject(rawPayload).password;
+    const password = typeof raw === 'string' ? raw.trim() : '';
+    if (password && (password.length < 4 || password.length > 100)) return cb({ success: false, error: 'A senha precisa ter de 4 a 100 caracteres.' });
+    try {
+      setRoomPassword(password);
+    } catch (err) {
+      console.error('⚠️ [Sala] Não deu pra salvar a senha da sala:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
+    }
+    io.emit('room-password-changed', { password, by: user.name });
+    io.emit('room-info', { hasPassword: Boolean(password) });
+    cb({ success: true });
   }));
 
   // Admin: tira alguém da call (a pessoa continua no app e pode entrar de novo)
@@ -1460,6 +1583,57 @@ io.on('connection', (socket) => {
     patchChatMessage(target, updated);
     announceChat(target, 'message-updated', { message: updated });
     cb({ success: true });
+  }));
+
+  // Fixar mensagem (só canal de texto): qualquer um fixa e desfixa
+  const MAX_PINS_PER_CHANNEL = 50;
+  socket.on('message-pin', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const ctx = chatOpPrelude({ ...safeObject(rawPayload), scope: 'text' }, cb);
+    if (!ctx) return;
+    const { payload, target, msg } = ctx;
+    const pin = payload.pinned === true;
+    if (pin && !msg.pinned && readTextMessages(target.ch.id).filter((m) => m.pinned).length >= MAX_PINS_PER_CHANNEL) {
+      return cb({ success: false, error: `Esse canal já tem ${MAX_PINS_PER_CHANNEL} fixadas: desfixe alguma.` });
+    }
+    const pinned = pin ? { by: user.name, at: Date.now() } : null;
+    const updated = { ...msg };
+    if (pinned) updated.pinned = pinned;
+    else delete updated.pinned;
+    try {
+      appendTextOp(target.ch, { op: 'pin', id: msg.id, pinned });
+    } catch (err) {
+      console.error('⚠️ [Texto] Não deu pra fixar:', err.message);
+      return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
+    }
+    patchChatMessage(target, updated);
+    announceChat(target, 'message-updated', { message: updated });
+    cb({ success: true });
+  }));
+
+  socket.on('text-pins', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    const id = safeObject(rawPayload).channelId;
+    const ch = typeof id === 'string' ? textChannels.get(id) : null;
+    if (!ch) return cb({ success: false, messages: [] });
+    const messages = readTextMessages(ch.id).filter((m) => m.pinned).sort((a, b) => b.pinned.at - a.pinned.at);
+    cb({ success: true, messages });
+  }));
+
+  // "Fulano está digitando…": o app manda a cada ~3 s enquanto a pessoa digita
+  let lastTypingAt = 0;
+  socket.on('typing', safeHandler((rawPayload) => {
+    const now = Date.now();
+    if (now - lastTypingAt < 1500) return;
+    lastTypingAt = now;
+    const payload = safeObject(rawPayload);
+    const data = { userId: socket.id, name: user.name };
+    if (payload.scope === 'text') {
+      if (typeof payload.channelId !== 'string' || !textChannels.has(payload.channelId)) return;
+      socket.broadcast.emit('typing', { ...data, scope: 'text', channelId: payload.channelId });
+    } else if (user.channelId) {
+      socket.to(user.channelId).emit('typing', { ...data, scope: 'call', channelId: user.channelId });
+    }
   }));
 
   // ---------------- Soundboard ----------------

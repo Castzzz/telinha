@@ -266,9 +266,12 @@
           <span class="chat-hash">💬</span>
           <span id="chat-channel-label">#geral-chat</span>
         </div>
+        <button id="btn-chat-pins" class="btn-icon-close btn-chat-pins hidden" title="Mensagens fixadas" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
         <button id="btn-chat-back-voice" class="btn-chat-back hidden" title="Voltar pro chat da call">🔊 Chat da call</button>
         <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
       </div>
+
+      <div id="pins-popover" class="pins-popover hidden" role="dialog" aria-label="Mensagens fixadas"></div>
 
       <!-- SCROLLABLE MESSAGES LIST -->
       <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
@@ -278,6 +281,7 @@
         </div>
       </div>
 
+      <div id="typing-indicator" class="typing-indicator hidden" aria-live="polite"></div>
       <!-- Respondendo a alguém / sugestões de @nome -->
       <div id="chat-reply-bar" class="chat-reply-bar hidden">
         <span>Respondendo a <strong id="chat-reply-name"></strong></span>
@@ -309,6 +313,25 @@
   </div>
 
   <!-- ==================== MODALS & OVERLAYS ==================== -->
+
+  <!-- Sala com senha -->
+  <div id="modal-room-password" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-room-password-title">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-room-password-title">🔒 Sala com senha</h3>
+      </div>
+      <form id="form-room-password" class="modal-body">
+        <p class="form-help">Essa sala tem senha. Peça pra um amigo ou pro admin; o Teletela guarda e não pede de novo.</p>
+        <p class="form-help room-password-error hidden" id="room-password-error">Senha errada, tenta de novo.</p>
+        <div class="form-group">
+          <input type="password" id="input-room-password" class="form-input" placeholder="Senha da sala" autocomplete="off" maxlength="100" required />
+        </div>
+        <div class="modal-actions">
+          <button type="submit" class="btn-primary">Entrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Perfil grande de alguém (clique na foto no popup ou no chat) -->
   <div id="modal-user-profile" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="profile-card-name">
@@ -390,17 +413,27 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.1</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.2</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Fixar mensagens</strong> nos canais de texto: passe o mouse e clique no 📌. O 📌 lá em cima do chat mostra todas as fixadas.</li>
+          <li><strong>"Fulano está digitando…"</strong> aparece em cima do campo do chat.</li>
+          <li><strong>Levar o perfil pra outro PC:</strong> clique no seu nome → Exportar perfil (e Importar no outro PC). Vai tudo junto: foto, banner, som e quem você é nas salas.</li>
+          <li><strong>Sala com senha:</strong> o admin pode colocar senha na sala. Quem já usa o app continua entrando direto, sem digitar nada.</li>
+        </ul>
+        <!-- Só pra quem pulou a 3.1 -->
+        <div id="whats-new-3-1" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.1</h4>
+          <ul class="whats-new-list">
           <li><strong>Responder e reagir a mensagens:</strong> passe o mouse numa mensagem do chat: ↩ responde citando, 😊 reage com emoji.</li>
           <li><strong>Editar e apagar as suas mensagens:</strong> pelos botões ao passar o mouse, ou ↑ com o campo vazio pra editar a última.</li>
           <li><strong>Marcar alguém com @:</strong> digite @ e escolha a pessoa (ou @todos). Quem foi marcado recebe um aviso, mesmo com o Teletela minimizado.</li>
           <li><strong>Soundboard:</strong> o 🎵 lá embaixo toca sons pra toda a call. Cada um pode subir os seus (até 8). Volume e desligar em ⚙️ → Som.</li>
         </ul>
+        </div>
         <!-- Só pra quem pulou a 3.0 (inclui o que era da 2.3) -->
         <div id="whats-new-3-0" class="whats-new-older hidden">
           <h4>E o que chegou na 3.0</h4>
@@ -670,6 +703,21 @@
               </div>
               <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
             </div>
+
+            <!-- Senha da sala (só admin vê) -->
+            <div class="form-group hidden" id="admin-room-password">
+              <label for="input-room-password-new">Senha da sala 🔒</label>
+              <p class="form-help" id="room-password-status"></p>
+              <div class="admin-row">
+                <input type="text" id="input-room-password-new" class="form-input" placeholder="Senha nova (mínimo 4 letras)" maxlength="100" autocomplete="off" />
+                <button type="button" class="btn-primary" id="btn-room-password-save">Salvar</button>
+              </div>
+              <div class="admin-row">
+                <button type="button" class="btn-secondary" id="btn-room-password-remove">Tirar a senha</button>
+                <button type="button" class="btn-secondary" id="btn-room-reset-members">Pedir senha de novo pra todos</button>
+              </div>
+              <p class="form-help">Quem já usa o app (e quem está online quando você salva) continua entrando direto: o app guarda uma chave. Só gente nova precisa da senha. "Pedir senha de novo" faz quem não estiver online agora precisar digitar.</p>
+            </div>
           </section>
         </div>
       </div>
@@ -753,6 +801,18 @@
             <button type="button" class="btn-secondary" id="btn-profile-remove-sound">Tirar</button>
           </div>
           <p class="form-help" id="profile-sound-status"></p>
+        </div>
+
+        <div class="form-group">
+          <label>Levar o perfil pra outro PC</label>
+          <div class="profile-avatar-actions">
+            <button type="button" class="btn-secondary" id="btn-profile-export">💾 Exportar perfil</button>
+            <label class="btn-secondary profile-file-btn">
+              📂 Importar perfil
+              <input type="file" id="input-profile-import" accept="application/json,.json" hidden />
+            </label>
+          </div>
+          <p class="form-help">O arquivo leva tudo (foto, banner, som, cores) e quem você é nas salas: seus canais, sons do soundboard e mensagens continuam sendo seus. Não mande pra ninguém.</p>
         </div>
 
         <div class="form-group">

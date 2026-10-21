@@ -81,7 +81,8 @@ test('M2.3: System Audio & Microphone Capture Constraints', () => {
   assert.equal(micConstraints.audio.deviceId.exact, 'device-mic-456');
   assert.equal(micConstraints.audio.echoCancellation, true);
   assert.equal(micConstraints.audio.noiseSuppression, true);
-  assert.equal(micConstraints.audio.autoGainControl, true);
+  // AGC desligado de propósito: ele abaixava o mic sozinho (e no Windows mexia no volume do sistema)
+  assert.equal(micConstraints.audio.autoGainControl, false);
   assert.equal(micConstraints.audio.channelCount, 1);
 });
 

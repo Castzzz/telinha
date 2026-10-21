@@ -400,6 +400,71 @@ async function runTests() {
     assert.ok(sbAfter.some((x) => x.id === added.id), 'som continua depois de reiniciar');
     console.log('  ✓ Chat: responder, editar, apagar e reagir (salvo no canal de texto); soundboard com sons de cada um');
 
+    // 14. Fixar mensagem (salvo) e "digitando…"
+    const pinner = await connect();
+    const watcher = await connect();
+    clients.push(pinner, watcher);
+    await join(pinner, 'geral', 'gabi-profile-0007');
+    await join(watcher, 'geral', 'hugo-profile-0008');
+    const pinTarget = papo.messages[0].id;
+    const pinSeen = new Promise((resolve) => watcher.once('text-message-updated', resolve));
+    assert.equal((await emit(pinner, 'message-pin', { channelId: 'papo', messageId: pinTarget, pinned: true })).success, true);
+    assert.equal((await pinSeen).message.pinned.by, 'gabi-profile-0007');
+    const pins = await emit(watcher, 'text-pins', { channelId: 'papo' });
+    assert.deepEqual(pins.messages.map((m) => m.id), [pinTarget]);
+    const typingText = new Promise((resolve) => watcher.once('typing', resolve));
+    pinner.emit('typing', { scope: 'text', channelId: 'papo' });
+    assert.deepEqual(await typingText, { userId: pinner.id, name: 'gabi-profile-0007', scope: 'text', channelId: 'papo' });
+
+    // 15. Senha da sala: só admin define; sem ela não conecta (a senha de admin também entra)
+    const tryConnect = (auth) => new Promise((resolve) => {
+      const c = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false, auth });
+      clients.push(c);
+      c.once('connect', () => resolve({ ok: true }));
+      c.once('connect_error', (err) => resolve({ ok: false, message: err.message, data: err.data }));
+    });
+    // Quem já entrou uma vez ganha a chave de membro (o app guarda e não precisa da senha)
+    const memberKeyMsg = await new Promise((resolve) => {
+      const c = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false, auth: { profileId: 'ivan-profile-0009' } });
+      clients.push(c);
+      c.once('member-key', resolve);
+    });
+    assert.equal(memberKeyMsg.profileId, 'ivan-profile-0009');
+    assert.equal(memberKeyMsg.key.length, 64);
+    clients.at(-1).disconnect();
+    assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, false, 'só admin');
+    assert.equal((await emit(pinner, 'admin-login', { key: ADMIN_KEY })).success, true);
+    const told = new Promise((resolve) => watcher.once('room-password-changed', resolve));
+    assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, true);
+    assert.equal((await told).password, 'pipoca', 'quem já está dentro recebe a senha nova');
+    const noPass = await tryConnect({});
+    assert.equal(noPass.ok, false);
+    assert.equal(noPass.message, 'room-password');
+    assert.equal(noPass.data.reason, 'required');
+    assert.equal((await tryConnect({ roomPassword: 'errada' })).data.reason, 'wrong');
+    assert.equal((await tryConnect({ roomPassword: 'pipoca' })).ok, true);
+    assert.equal((await tryConnect({ adminKey: ADMIN_KEY })).ok, true);
+    assert.equal((await tryConnect({ profileId: 'ivan-profile-0009', memberKey: memberKeyMsg.key })).ok, true, 'quem já tinha entrado não precisa da senha');
+    assert.equal((await tryConnect({ profileId: 'outro-profile-01', memberKey: memberKeyMsg.key })).ok, false, 'a chave é de um perfil só');
+    assert.equal((await fetch(`${URL_BASE}/api/channels`)).status, 401);
+    assert.ok(!fs.readFileSync(path.join(DATA_DIR, 'room.json'), 'utf8').includes('pipoca'), 'guarda só o hash');
+    // Continua depois de reiniciar
+    clients.forEach((c) => c.disconnect());
+    clients.length = 0;
+    await stopServer(proc);
+    proc = await startServer();
+    assert.equal((await tryConnect({})).ok, false);
+    assert.equal((await tryConnect({ profileId: 'ivan-profile-0009', memberKey: memberKeyMsg.key })).ok, true, 'chave vale reiniciando');
+    const roomAdmin = await tryConnect({ roomPassword: 'pipoca' });
+    assert.equal(roomAdmin.ok, true);
+    const adminSock = clients.at(-1);
+    assert.equal((await emit(adminSock, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(adminSock, 'admin-reset-members', {})).success, true);
+    assert.equal((await tryConnect({ profileId: 'ivan-profile-0009', memberKey: memberKeyMsg.key })).ok, false, 'admin esqueceu as chaves: precisa da senha');
+    assert.equal((await emit(adminSock, 'admin-set-room-password', { password: '' })).success, true);
+    assert.equal((await tryConnect({})).ok, true, 'sem senha, sala aberta de novo');
+    console.log('  ✓ Fixar mensagem e "digitando…"; senha da sala (hash, chave de membro pra quem já entrou, vale reiniciando)');
+
     console.log('\n✅ TODOS OS TESTES DE CANAIS E ADMIN PASSARAM\n');
   } finally {
     clients.forEach((c) => c.disconnect());

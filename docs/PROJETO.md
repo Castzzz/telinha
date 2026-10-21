@@ -108,7 +108,8 @@ electron/
 native/win-audio/          Auxiliar do Windows que captura o som de UM programa só (C++)
 build/                     Ícone do app pro electron-builder (icon.svg é a fonte; png/ico gerados)
 deploy/oracle/
-  deploy.sh                Roda no SEU PC: compila, empacota, manda pra VM e chama o install
+  deploy.sh                Roda no SEU PC: backup, compila, empacota, manda pra VM e chama o install
+  backup.sh / restore.sh   npm run backup / npm run restore (dados da sala ↔ ~/Teletela-backups)
   install.sh               Roda NA VM: instala Node/Caddy, serviços systemd, firewall, segredos
 
 tests/
@@ -164,12 +165,13 @@ node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js
 node tests/m4-channels-admin.test.js       # integração: sobe o server.js de verdade
 ```
 
-- **O `M2.3` (System Audio & Microphone Capture Constraints) já falha há muito tempo** e não
-  tem a ver com as mudanças recentes. Todo o resto tem que passar.
+- Todos os testes têm que passar. (O `M2.3` falhou por muito tempo porque esperava o AGC do
+  microfone ligado; ele foi desligado de propósito e o teste foi corrigido na 3.2.)
 - O `m4` cobre: canais salvos, apagar canal, admin (login, tirar da call, mutar/ensurdecer pra
   todos, mover de call), cor do nome, GIF de perfil, várias telas, imagens no chat, canais de
   texto (inclusive sobrevivendo a reinício), perfil 3.0 (banner, moldura, som de entrada),
-  responder/editar/apagar/reagir e soundboard. **Quando mexer no servidor, acrescente um caso
+  responder/editar/apagar/reagir, soundboard, fixar, "digitando" e senha da sala (com chave
+  de membro). **Quando mexer no servidor, acrescente um caso
   lá.**
 - Pra conferir a interface sem abrir o app na mão, o jeito usado até agora foi um script
   Electron "headless" (janelas `offscreen: true`) com dois ou três clientes conectados num
@@ -298,6 +300,7 @@ trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `text/<canal>.jsonl` | histórico de cada canal de texto (veja abaixo) |
 | `text/images/` | imagens dos canais de texto (até 5 GB; passando, apaga as mais antigas) |
 | `soundboard/index.json` + arquivos | sons do soundboard (8 por pessoa, até 400 KB, 150 no total) |
+| `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
 | `chat-images/` | imagens do chat da call (300 MB; **apagadas a cada reinício**) |
 
 Formato do `text/<canal>.jsonl`: uma linha por mensagem. Editar, apagar e reagir **não
@@ -305,6 +308,14 @@ reescrevem** o arquivo: viram uma linha nova com `op` (`{"op":"edit",...}`,
 `{"op":"delete",...}`, `{"op":"reactions",...}`) que é aplicada na leitura
 (`readTextMessages`). A cada 1000 ops, ou passando de 20 mil mensagens (fica com 90%), o
 arquivo é reescrito limpo. As últimas 100 mensagens de cada canal ficam na memória.
+
+Mensagem fixada também é uma op (`{"op":"pin",...}`), guardada no campo `pinned: { by, at }`.
+
+**Backup:** `npm run backup` (`deploy/oracle/backup.sh`) baixa essa pasta (menos `chat-images/`)
+pra `~/Teletela-backups` no seu PC e guarda os 15 mais novos. O deploy faz um backup antes de
+mexer na VM (pule com `SKIP_BACKUP=1`). Pra voltar: `npm run restore -- <arquivo.tar.gz>`
+(`deploy/oracle/restore.sh` pede confirmação, faz backup do estado atual, para o servidor,
+troca a pasta e sobe de novo).
 
 **Só na memória** (somem quando o servidor reinicia):
 
@@ -320,9 +331,27 @@ as preferências ficam no `localStorage` (`telinha_prefs`). O perfil (nome, foto
 de entrada, cor, moldura) fica nas preferências e é mandado pra sala a cada conexão.
 
 Identidade: cada pessoa tem um `profileId` aleatório gerado no primeiro uso e guardado nas
-preferências. É ele que identifica "quem criou o canal", "de quem é a mensagem", reações,
+preferências. Dá pra levar pra outro PC com *Exportar/Importar perfil* (no modal do perfil):
+o arquivo JSON tem o perfil inteiro, inclusive o `profileId`. É ele que identifica "quem criou o canal", "de quem é a mensagem", reações,
 moderação do admin e o volume que você deu pra cada amigo. **Não existe conta nem senha
 pessoal.**
+
+### Senha da sala e chave de membro
+
+- O admin define a senha pelo app (`admin-set-room-password`; vazio tira). O servidor guarda
+  só o hash (scrypt + sal) em `room.json`.
+- Um middleware do Socket.IO (`io.use`) barra a conexão sem uma destas, mandadas no
+  `auth` do handshake: `roomPassword`, `adminKey` ou `profileId` + `memberKey`. O erro é
+  `room-password` (com `data.reason` `required` ou `wrong`), e o app abre o modal de senha.
+- **Chave de membro:** toda conexão aceita recebe `member-key` = HMAC-SHA256(`memberSecret`,
+  `profileId`). O app guarda por sala (`prefs.roomAccess[servidor]`). Por isso quem já usou o
+  app, ou estava online quando a senha foi colocada, não precisa digitar nada.
+- `admin-reset-members` troca o `memberSecret`: quem não estiver online precisa da senha de
+  novo (quem está online ganha a chave nova na hora).
+- Com senha, `/api/channels` responde 401. As outras rotas de mídia usam ids difíceis de
+  adivinhar.
+- App antigo (antes da 3.2) não sabe pedir senha: **só coloque senha depois que todo mundo
+  atualizar**, senão quem estiver desatualizado fica preso.
 
 ## 10. Protocolo: eventos do Socket.IO
 
@@ -338,6 +367,9 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `create-text-channel` / `delete-text-channel` / `text-history` / `text-message` / `text-image` | canais de texto |
 | `chat-message` / `chat-image` | chat da call (aceitam `replyTo`) |
 | `message-edit` / `message-delete` / `message-react` | `{ scope: 'call'|'text', channelId?, messageId, ... }` |
+| `message-pin` / `text-pins` | fixar/desfixar e listar as fixadas (só canal de texto) |
+| `typing` `{ scope, channelId? }` | "está digitando" (o app manda a cada ~3 s enquanto digita) |
+| `admin-set-room-password` / `admin-reset-members` | senha da sala e chaves de membro |
 | `soundboard-add` / `soundboard-delete` / `soundboard-play` | soundboard |
 | `reaction` | emoji flutuando na call |
 | `sfu-token` | senha temporária pra entrar numa sala do SFU |
@@ -349,6 +381,7 @@ app antigo), `channel-state`, `user-joined`, `user-left`, `user-state-changed` (
 `user-state-updated`), `user-profile-updated`, `chat-message`, `chat-message-updated`,
 `chat-message-deleted`, `text-channels`, `text-message`, `text-message-updated`,
 `text-message-deleted`, `text-channel-deleted`, `soundboard-list`, `soundboard-played`,
+`typing`, `member-key`, `room-info`, `room-password-changed`,
 `server-moderation`, `moved-by-admin`, `kicked`, `reaction`.
 
 Rotas HTTP: `/api/health`, `/api/channels`, `/api/avatar/:userId`, `/api/banner/:userId`,
@@ -369,6 +402,10 @@ de ruído, e 11 inicialização (`initApp`).
 | Canais de texto | `renderTextChannels`, `openTextChannel`, `loadTextHistory`; servidor: `readTextMessages`, `appendTextMessage` |
 | Chat (responder, reagir, editar, apagar) | `buildChatMessage`, `setupChatMessageActions`, `startEditMessage`; servidor: `message-edit/delete/react` |
 | @menção | `mentionify`, `mentionsMe`, `notifyMention`, `setupMentionAutocomplete` |
+| Fixar mensagem | `pinMessage`, `renderPins`, `setupPins`; servidor: `message-pin`, `text-pins` |
+| "Está digitando" | `setupTyping`, `renderTyping`; servidor: `typing` |
+| Senha da sala | cliente: `roomAccess`, `openRoomPasswordModal`, `setupRoomPasswordAdmin`; servidor: `io.use`, `isMemberKey`, `setRoomPassword` |
+| Exportar/importar perfil | `setupProfileTransfer` |
 | Soundboard | `setupSoundboard`, `renderSoundboard`, `playSoundboard`; servidor: bloco `SOUNDBOARD` |
 | Sons de entrar/sair | `playCallSound`, `callSoundChoiceUrl`, `joinSoundUrl` (som do perfil) |
 | Perfil (banner, moldura, gradiente, perfil grande) | `renderProfileDraft`, `frameClass`, `nameCss`, `bannerCss`, `openProfileCard`; servidor: `applyProfile` |
@@ -433,7 +470,8 @@ Coisas que já deram problema e o motivo:
     marca a opção em Configurações → Som (`prefs.deafenStreams`).
 12. **Mic aparecendo mutado mas falando:** quem ouve zera o volume de quem está com
     `isMicOn: false` (proteção contra app antigo). Se mexer em `applyUserVolume`, mantenha isso.
-13. **O teste `M2.3` falha desde antes**: não é regressão.
+13. **Senha da sala com app antigo:** quem está numa versão antes da 3.2 não consegue digitar
+    a senha. Coloque senha só depois que todo mundo atualizar.
 14. **Arquivo `channels.json`/`text/*.jsonl` corrompido:** o servidor ignora linhas inválidas
     em vez de cair; o arquivo é reescrito via `.tmp` + `rename` pra não corromper no meio.
 

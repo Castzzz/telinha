@@ -116,6 +116,8 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mandar imagem no chat** | 📎 do lado do campo, `Ctrl+V` com a imagem copiada, ou arraste pro chat (até 8 MB; GIF continua animado). O que estiver escrito vai junto como legenda. Clique na imagem pra ver grande |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
+| **Fixar mensagem** | Canal de texto: passe o mouse na mensagem e clique no 📌. O 📌 no topo do chat lista as fixadas |
+| **Levar o perfil pra outro PC** | Clique no seu nome → *Exportar perfil*; no outro PC, *Importar perfil*. Não mande o arquivo pra ninguém: ele é a sua identidade nas salas |
 | **Marcar alguém** | Digite `@` no chat e escolha a pessoa (ou `@todos`). Ela recebe um aviso, mesmo com o Teletela minimizado |
 | **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 8, de até 10 s / 400 KB). Volume e desligar em ⚙️ → *Som* |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
@@ -225,6 +227,12 @@ npm start       # só o servidor web em http://localhost:8080
 Os links de download deste README apontam sempre pra versão mais nova, então não precisa mudar nada aqui.
 
 > O app desktop usa a interface da sala (`public/`) **que vem instalada com ele** (`telinha://app`); do servidor só vem a conexão. Então mudou `public/`: publique versão (`npm run release`) **e** atualize o servidor (`npm run deploy:oracle`, pra quem entra pelo navegador). Mudou só `server.js` ou `sfu/`: basta o deploy.
+
+### Backup dos dados da sala
+`npm run backup` baixa os canais, o histórico dos canais de texto e o soundboard da VM pra `~/Teletela-backups` (fica com os 15 mais novos). O `npm run deploy:oracle` faz um backup sozinho antes de mexer. Pra voltar um backup: `npm run restore -- ~/Teletela-backups/<arquivo>.tar.gz`.
+
+### Senha da sala
+O admin coloca em ⚙️ → *Admin* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.
 
 ### Senha de admin
 A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e mostrada no fim do `npm run deploy:oracle` (fica em `/etc/telinha/telinha.env` na VM). Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.

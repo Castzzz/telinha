@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -16,7 +16,9 @@
     "dist": "npm run build:win-audio && electron-builder --linux --win",
     "build:win-audio": "sh native/win-audio/build.sh",
     "release": "npm run build:win-audio && GH_TOKEN=$(gh auth token) electron-builder --linux --win --publish always",
-    "deploy:oracle": "bash deploy/oracle/deploy.sh"
+    "deploy:oracle": "bash deploy/oracle/deploy.sh",
+    "backup": "bash deploy/oracle/backup.sh",
+    "restore": "bash deploy/oracle/restore.sh"
   },
   "dependencies": {
     "electron-updater": "^6.8.9",

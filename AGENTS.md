@@ -35,10 +35,11 @@ npm run app                 # app desktop (Electron do SISTEMA; não use npx ele
 npm start                   # servidor em http://localhost:8080
 PORT=3999 ADMIN_KEY=segredo1 TELINHA_DATA_DIR=/tmp/teletela-data node server.js   # servidor de teste completo
 npm test                    # 62 testes (todos passam)
-node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js   # o M2.3 já falhava antes
+node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js   # todos passam
 node tests/m4-channels-admin.test.js                                   # integração do servidor
 npm run release             # publica versão nova (só se o dono pedir)
-npm run deploy:oracle       # atualiza a VM (só se o dono pedir; precisa de ~/.ssh/oracle_telinha)
+npm run deploy:oracle       # atualiza a VM (só se o dono pedir; precisa de ~/.ssh/oracle_telinha; faz backup antes)
+npm run backup              # baixa os dados da sala pra ~/Teletela-backups (só leitura na VM)
 ```
 
 ## Ao terminar uma mudança

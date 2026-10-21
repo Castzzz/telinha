@@ -31,6 +31,11 @@ NODE_VERSION=$(curl -fsSL https://nodejs.org/dist/index.json | python3 -c "impor
 CADDY_VERSION=$(curl -fsSL https://api.github.com/repos/caddyserver/caddy/releases/latest | python3 -c "import json,sys; print(json.load(sys.stdin)['tag_name'].lstrip('v'))")
 echo "   Node $NODE_VERSION, Caddy $CADDY_VERSION"
 
+echo "== Backup dos dados da sala antes de mexer (pule com SKIP_BACKUP=1)"
+if [ -z "${SKIP_BACKUP:-}" ]; then
+  VM="$VM" SSH_KEY="$SSH_KEY" bash deploy/oracle/backup.sh || echo "   ⚠️ Backup falhou (primeira instalação?); seguindo com o deploy."
+fi
+
 echo "== Enviando pra $VM"
 "${SSH[@]}" 'rm -rf /tmp/telinha-deploy && mkdir -p /tmp/telinha-deploy'
 scp -q -i "$SSH_KEY" -o BatchMode=yes "$stage/app.tar.gz" "$stage/telinha-sfu" deploy/oracle/install.sh "$VM:/tmp/telinha-deploy/"

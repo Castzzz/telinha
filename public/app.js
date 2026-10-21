@@ -103,12 +103,12 @@ applyTheme(prefs.theme);
 function savePrefs(patch) {
   Object.assign(prefs, patch);
   if (window.electronAPI?.setPrefs) {
-    window.electronAPI.setPrefs(patch).catch(() => {});
-    return;
+    return window.electronAPI.setPrefs(patch).catch(() => {});
   }
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch (_) {}
+  return Promise.resolve();
 }
 
 // randomUUID só existe em https/localhost; o link de rede local (http://192.168…) não é
@@ -294,7 +294,27 @@ const SERVER_URL = (() => {
   return fromQuery && /^https?:\/\//.test(fromQuery) ? fromQuery.replace(/\/+$/, '') : window.location.origin;
 })();
 
+// Sala com senha: manda a senha guardada, a chave de membro (quem já entrou uma vez não
+// precisa digitar) ou a senha de admin. Tudo guardado por sala, nas preferências.
+function roomAccess() {
+  return (prefs.roomAccess || {})[SERVER_URL] || {};
+}
+
+function saveRoomAccess(patch) {
+  const all = { ...(prefs.roomAccess || {}) };
+  const next = { ...(all[SERVER_URL] || {}), ...patch };
+  for (const k of Object.keys(next)) if (!next[k]) delete next[k];
+  all[SERVER_URL] = next;
+  savePrefs({ roomAccess: all });
+}
+
 const socket = io(SERVER_URL, {
+  auth: (cb) => cb({
+    profileId: myProfile.id,
+    memberKey: roomAccess().memberKey || '',
+    roomPassword: roomAccess().password || '',
+    adminKey: prefs.adminKeys?.[SERVER_URL] || ''
+  }),
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: Infinity,
@@ -348,6 +368,50 @@ function adminLogin(key, onDone) {
     onDone?.(res || {});
   });
 }
+
+// Barrado pela senha da sala: pede a senha (o Socket.IO não tenta de novo sozinho)
+socket.on('connect_error', (err) => {
+  if (err?.message !== 'room-password') return;
+  const wrong = err.data?.reason === 'wrong';
+  if (wrong) saveRoomAccess({ password: '' });
+  openRoomPasswordModal(wrong);
+});
+
+function openRoomPasswordModal(wrong) {
+  const modal = $('#modal-room-password');
+  if (!modal) return;
+  $('#room-password-error').classList.toggle('hidden', !wrong);
+  modal.classList.remove('hidden');
+  const input = $('#input-room-password');
+  input.value = '';
+  input.focus();
+}
+
+function setupRoomPassword() {
+  $('#form-room-password')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const password = $('#input-room-password').value.trim();
+    if (!password) return;
+    saveRoomAccess({ password });
+    $('#modal-room-password').classList.add('hidden');
+    socket.connect();
+  });
+}
+
+socket.on('member-key', ({ profileId, key } = {}) => {
+  if (profileId === myProfile.id && typeof key === 'string') saveRoomAccess({ memberKey: key });
+});
+
+socket.on('room-password-changed', ({ password, by } = {}) => {
+  saveRoomAccess({ password: password || '' });
+  if (appState.isAdmin) return;
+  showToast(password ? `🔒 ${by || 'O admin'} colocou senha na sala (o seu app já guardou).` : `🔓 ${by || 'O admin'} tirou a senha da sala.`);
+});
+
+socket.on('room-info', ({ hasPassword } = {}) => {
+  appState.roomHasPassword = Boolean(hasPassword);
+  renderAdminSettings();
+});
 
 socket.on('connect', () => {
   appState.myId = socket.id;
@@ -753,6 +817,7 @@ socket.on('chat-message', (msg) => {
   }
   appState.channelChats.get(msg.channelId).push(msg);
 
+  clearTyping(msg.userId);
   if (mentionsMe(msg)) notifyMention(msg, 'chat da call', openCallChat);
   if (msg.channelId === appState.currentChannelId) {
     if (!appState.textView) appendChatMessage(msg, true);
@@ -1161,6 +1226,9 @@ function updateTopBar() {
   const chatLabel = $('#chat-channel-label');
   if (chatLabel) chatLabel.textContent = textCh ? `#${textCh.name}` : `#${name}-chat`;
   $('#btn-chat-back-voice')?.classList.toggle('hidden', !textCh || !inCall);
+  $('#btn-chat-pins')?.classList.toggle('hidden', !textCh);
+  if (!textCh) $('#pins-popover')?.classList.add('hidden');
+  renderTyping();
 
   const chatInput = $('#chat-input');
   if (chatInput) {
@@ -1423,7 +1491,8 @@ const ACTION_ICONS = {
   reply: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>',
   react: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>',
   edit: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
-  delete: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>'
+  delete: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+  pin: '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg>'
 };
 
 function buildChatMessage(msg) {
@@ -1444,6 +1513,7 @@ function buildChatMessage(msg) {
   const actions = msg.id ? [
     ['reply', 'Responder'],
     ['react', 'Reagir'],
+    ...(appState.textView ? [['pin', msg.pinned ? 'Desfixar' : 'Fixar']] : []),
     ...(mine && msg.text !== undefined ? [['edit', 'Editar']] : []),
     ...(mine || appState.isAdmin ? [['delete', 'Apagar']] : [])
   ] : [];
@@ -1457,6 +1527,7 @@ function buildChatMessage(msg) {
       <div class="chat-msg-header">
         <span class="chat-author" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
+        ${msg.pinned ? `<span class="chat-pinned" title="Fixada por ${escapeHtml(msg.pinned.by || '')}">${ACTION_ICONS.pin}</span>` : ''}
       </div>
       ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}${msg.editedAt ? ' <span class="chat-edited" title="Editada">(editado)</span>' : ''}</div>` : ''}
       ${chatImageHtml(msg.image)}
@@ -1967,6 +2038,174 @@ socket.on('soundboard-played', ({ id, userName } = {}) => {
   spawnFloatingReaction(userName || 'Alguém', sound?.emoji || '🔊');
 });
 
+// ---------- Mensagens fixadas (canais de texto) ----------
+function pinMessage(id, pinned) {
+  if (!appState.textView) return;
+  socket.emit('message-pin', { channelId: appState.textView, messageId: id, pinned }, (res) => {
+    if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra fixar.'}`, 'error');
+    else showToast(pinned ? '📌 Mensagem fixada.' : 'Mensagem desfixada.');
+  });
+}
+
+function jumpToMessage(id) {
+  const target = chatMessageEl(id);
+  if (!target) {
+    showToast('Essa mensagem é antiga: role o chat pra cima pra carregar.');
+    return false;
+  }
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.classList.remove('flash');
+  void target.offsetWidth;
+  target.classList.add('flash');
+  return true;
+}
+
+function renderPins() {
+  const pop = $('#pins-popover');
+  const id = appState.textView;
+  if (!pop || pop.classList.contains('hidden') || !id) return;
+  socket.emit('text-pins', { channelId: id }, (res) => {
+    if (appState.textView !== id) return;
+    const list = res?.messages || [];
+    pop.innerHTML = `<div class="pins-head"><strong>Fixadas</strong><span>${list.length}</span></div>` + (list.length
+      ? list.map((m) => `<div class="pin-item" data-pin-id="${escapeHtml(m.id)}">
+          <div class="pin-item-head"><strong${nameStyle({ nameColor: m.userNameColor, nameColor2: m.userNameColor2 })}>${escapeHtml(m.userName || '')}</strong>
+            <button type="button" class="pin-unpin" data-unpin="${escapeHtml(m.id)}" title="Desfixar" aria-label="Desfixar">✕</button></div>
+          <div class="pin-item-text">${m.text ? linkifyText(m.text.slice(0, 300)) : (m.image ? '🖼️ Imagem' : '')}</div>
+          <small>Fixada por ${escapeHtml(m.pinned?.by || '')}</small>
+        </div>`).join('')
+      : '<p class="pins-empty">Nada fixado ainda. Passe o mouse numa mensagem e clique no 📌.</p>');
+  });
+}
+
+function setupPins() {
+  const btn = $('#btn-chat-pins');
+  const pop = $('#pins-popover');
+  if (!btn || !pop) return;
+  btn.addEventListener('click', () => {
+    pop.classList.toggle('hidden');
+    renderPins();
+  });
+  pop.addEventListener('click', (e) => {
+    const unpin = e.target.closest('[data-unpin]');
+    if (unpin) return pinMessage(unpin.dataset.unpin, false);
+    const item = e.target.closest('[data-pin-id]');
+    if (item && !e.target.closest('a') && jumpToMessage(item.dataset.pinId)) pop.classList.add('hidden');
+  });
+  document.addEventListener('mousedown', (e) => {
+    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !btn.contains(e.target)) pop.classList.add('hidden');
+  });
+}
+
+// ---------- "Fulano está digitando…" ----------
+const TYPING_SHOW_MS = 4500;
+const typingNow = new Map(); // "call:<canal>" ou "text:<canal>" -> Map(userId -> { name, until })
+let lastTypingSentAt = 0;
+
+function typingKey(scope, channelId) {
+  return `${scope}:${channelId}`;
+}
+
+function currentTypingKey() {
+  return appState.textView ? typingKey('text', appState.textView) : typingKey('call', appState.currentChannelId);
+}
+
+function clearTyping(userId) {
+  for (const map of typingNow.values()) map.delete(userId);
+  renderTyping();
+}
+
+function renderTyping() {
+  const el = $('#typing-indicator');
+  if (!el) return;
+  const now = Date.now();
+  const map = typingNow.get(currentTypingKey());
+  const names = [];
+  for (const [uid, t] of map || []) {
+    if (t.until < now) map.delete(uid);
+    else names.push(t.name);
+  }
+  el.classList.toggle('hidden', !names.length);
+  if (!names.length) return;
+  const who = names.length === 1 ? `<strong>${escapeHtml(names[0])}</strong> está`
+    : names.length === 2 ? `<strong>${escapeHtml(names[0])}</strong> e <strong>${escapeHtml(names[1])}</strong> estão`
+      : 'Várias pessoas estão';
+  el.innerHTML = `<span class="typing-dots"><i></i><i></i><i></i></span>${who} digitando…`;
+}
+
+function setupTyping() {
+  $('#chat-input')?.addEventListener('input', (e) => {
+    if (!e.target.value.trim()) return;
+    const now = Date.now();
+    if (now - lastTypingSentAt < 3000) return;
+    if (!appState.textView && !appState.currentChannelId) return;
+    lastTypingSentAt = now;
+    socket.emit('typing', chatScope());
+  });
+  setInterval(renderTyping, 1000);
+}
+
+socket.on('typing', ({ userId, name, scope, channelId } = {}) => {
+  if (!userId || userId === appState.myId) return;
+  const key = typingKey(scope, channelId);
+  if (!typingNow.has(key)) typingNow.set(key, new Map());
+  typingNow.get(key).set(userId, { name: name || 'Alguém', until: Date.now() + TYPING_SHOW_MS });
+  renderTyping();
+});
+
+// ---------- Exportar / importar perfil (trocar de PC sem perder nada) ----------
+function setupProfileTransfer() {
+  $('#btn-profile-export')?.addEventListener('click', () => {
+    const data = { app: 'teletela', tipo: 'perfil', versao: 1, exportadoEm: new Date().toISOString(), profile: { ...myProfile } };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    const safeName = (myProfile.name || 'perfil').normalize('NFD').replace(/[^\w-]+/g, '-').replace(/^-+|-+$/g, '') || 'perfil';
+    a.download = `teletela-perfil-${safeName}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    showToast('💾 Perfil exportado. Guarde o arquivo: ele também é a sua "identidade" nas salas.');
+  });
+  $('#input-profile-import')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      if (file.size > 6 * 1024 * 1024) throw new Error('Arquivo grande demais.');
+      const data = JSON.parse(await file.text());
+      const p = data?.profile;
+      if (data?.app !== 'teletela' || !p || typeof p.id !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(p.id) || typeof p.name !== 'string') {
+        throw new Error('Esse arquivo não é um perfil do Teletela.');
+      }
+      if (!window.confirm(`Trocar o seu perfil pelo de "${p.name}"? O app vai recarregar.`)) return;
+      const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+      const profile = {
+        id: p.id,
+        name: str(p.name, 24) || myProfile.name,
+        color: HEX_RE.test(p.color || '') ? p.color : myProfile.color,
+        bio: str(p.bio, 140),
+        avatar: /^data:image\//.test(p.avatar || '') ? p.avatar : '',
+        nameColor: HEX_RE.test(p.nameColor || '') ? p.nameColor : '',
+        nameColor2: HEX_RE.test(p.nameColor2 || '') ? p.nameColor2 : '',
+        frame: FRAME_IDS.has(p.frame) ? p.frame : '',
+        frameColor: HEX_RE.test(p.frameColor || '') ? p.frameColor : '',
+        bannerColor: HEX_RE.test(p.bannerColor || '') ? p.bannerColor : '',
+        banner: /^data:image\//.test(p.banner || '') ? p.banner : '',
+        joinSound: /^data:audio\//.test(p.joinSound || '') ? p.joinSound : ''
+      };
+      // A chave de membro é do perfil antigo: a do novo vem ao conectar
+      const roomAccessAll = { ...(prefs.roomAccess || {}) };
+      for (const k of Object.keys(roomAccessAll)) roomAccessAll[k] = { ...roomAccessAll[k], memberKey: undefined };
+      await savePrefs({ profile, roomAccess: roomAccessAll });
+      location.reload();
+    } catch (err) {
+      showToast(`❌ ${err.message || 'Não consegui ler esse arquivo.'}`, 'error');
+    }
+  });
+}
+
 // Cliques nas mensagens: botões de ação, reações e "ver a respondida"
 function setupChatMessageActions() {
   const container = $('#chat-messages');
@@ -1976,15 +2215,7 @@ function setupChatMessageActions() {
     const id = msgEl?.dataset.msgId;
     const jump = e.target.closest('.chat-reply-ref');
     if (jump) {
-      const target = chatMessageEl(jump.dataset.jump);
-      if (target) {
-        target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        target.classList.remove('flash');
-        void target.offsetWidth;
-        target.classList.add('flash');
-      } else {
-        showToast('Essa mensagem é antiga demais ou foi apagada.');
-      }
+      jumpToMessage(jump.dataset.jump);
       return;
     }
     const chip = e.target.closest('.chat-reaction[data-emoji]');
@@ -1996,6 +2227,7 @@ function setupChatMessageActions() {
     const act = btn.dataset.act;
     if (act === 'reply') setReplyTo(msg);
     else if (act === 'react') openMessageReactPicker(btn, (emoji) => reactToMessage(id, emoji));
+    else if (act === 'pin') pinMessage(id, !msg.pinned);
     else if (act === 'edit') startEditMessage(id);
     else if (act === 'delete') deleteChatMessage(id);
   });
@@ -2405,6 +2637,7 @@ socket.on('text-message', (msg) => {
   const ch = appState.textChannels.get(msg?.channelId);
   if (!ch) return;
   ch.lastMessageAt = msg.timestamp;
+  clearTyping(msg.userId);
   if (mentionsMe(msg)) {
     if (appState.textView !== msg.channelId) appState.textMentions.add(msg.channelId);
     notifyMention(msg, `#${ch.name}`, () => openTextChannel(msg.channelId));
@@ -2421,7 +2654,10 @@ socket.on('text-message', (msg) => {
 socket.on('text-message-updated', ({ channelId, message } = {}) => {
   if (!message?.id) return;
   upsertInList(appState.textMessages.get(channelId)?.messages, message);
-  if (appState.textView === channelId) replaceChatMessageEl(message);
+  if (appState.textView === channelId) {
+    replaceChatMessageEl(message);
+    renderPins();
+  }
 });
 
 socket.on('text-message-deleted', ({ channelId, messageId } = {}) => {
@@ -3726,9 +3962,39 @@ function renderAdminSettings() {
   $('#settings-tab-admin')?.classList.toggle('hidden', !appState.serverHasAdmin);
   $('#admin-login-row')?.classList.toggle('hidden', appState.isAdmin);
   $('#admin-logged-row')?.classList.toggle('hidden', !appState.isAdmin);
+  $('#admin-room-password')?.classList.toggle('hidden', !appState.isAdmin);
+  const status = $('#room-password-status');
+  if (status) status.textContent = appState.roomHasPassword ? '🔒 A sala tem senha.' : '🔓 A sala está aberta (sem senha).';
+  $('#btn-room-password-remove')?.classList.toggle('hidden', !appState.roomHasPassword);
+}
+
+function setupRoomPasswordAdmin() {
+  const input = $('#input-room-password-new');
+  const done = (msg) => (res) => {
+    if (res?.success) {
+      if (input) input.value = '';
+      showToast(msg, 'success');
+    } else {
+      showToast(`❌ ${res?.error || 'Não deu.'}`, 'error');
+    }
+  };
+  $('#btn-room-password-save')?.addEventListener('click', () => {
+    const password = input?.value.trim();
+    if (!password) return showToast('Digite a senha nova.');
+    socket.emit('admin-set-room-password', { password }, done('🔒 Senha da sala salva. Quem já usa o app continua entrando direto.'));
+  });
+  $('#btn-room-password-remove')?.addEventListener('click', () => {
+    if (!window.confirm('Tirar a senha da sala? Qualquer um com o endereço vai poder entrar.')) return;
+    socket.emit('admin-set-room-password', { password: '' }, done('🔓 Senha da sala tirada.'));
+  });
+  $('#btn-room-reset-members')?.addEventListener('click', () => {
+    if (!window.confirm('Quem não estiver online agora vai precisar digitar a senha da sala na próxima vez. Continuar?')) return;
+    socket.emit('admin-reset-members', {}, done('Pronto: quem não está online vai precisar da senha.'));
+  });
 }
 
 function setupAdminSettings() {
+  setupRoomPasswordAdmin();
   const input = $('#input-admin-key');
   const loginBtn = $('#btn-admin-login');
   const login = () => {
@@ -3766,13 +4032,14 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.1';
+const WHATS_NEW_VERSION = '3.2';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
   const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
+  $('#whats-new-3-1')?.classList.toggle('hidden', seen >= 3.1);
   $('#whats-new-3-0')?.classList.toggle('hidden', seen >= 3.0);
   $('#whats-new-2-2')?.classList.toggle('hidden', seen >= 2.2);
   $('#whats-new-2-1')?.classList.toggle('hidden', seen >= 2.1);
@@ -6324,6 +6591,10 @@ function initApp() {
   setupTextChannels();
   setupCategoryCollapse();
   setupChatMessageActions();
+  setupRoomPassword();
+  setupTyping();
+  setupPins();
+  setupProfileTransfer();
   setupMentionAutocomplete();
   setupSoundboard();
   setupModals();
