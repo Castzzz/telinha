@@ -1,6 +1,6 @@
 /* ==========================================================================
-   TELETELA — VISUAL NOVO (em teste)
-   Só vale com <html data-look="novo">; ⚙️ Configurações > Visual volta pro clássico.
+   TELETELA — VISUAL 3.0
+   Vale com <html data-look="novo"> (fixo no index.html); sem ele volta o visual antigo.
    Painéis flutuando em cima do fundo, cantos redondos e menos linhas separando tudo.
    Os ícones e as cores dos temas continuam os mesmos.
    ========================================================================== */
@@ -392,13 +392,6 @@
 
 [data-look="novo"] .btn-chat-back {
   border-radius: var(--radius-pill);
-}
-
-/* Canal de texto em tela cheia: as mensagens não esticam até a borda */
-[data-look="novo"] .app-layout.text-full .chat-messages,
-[data-look="novo"] .app-layout.text-full .chat-form {
-  padding-left: max(10px, calc((100% - 960px) / 2));
-  padding-right: max(10px, calc((100% - 960px) / 2));
 }
 
 /* ---------- Janelas e menus ---------- */

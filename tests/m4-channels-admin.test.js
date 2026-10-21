@@ -157,6 +157,36 @@ async function runTests() {
     assert.equal(Buffer.from(await stillOld.arrayBuffer()).length, gif.length, 'GIF acima de 1 MB é recusado');
     console.log('  ✓ Cor do nome chega pros outros; GIF até 1 MB aceito, acima recusado');
 
+    // 7b. Perfil 3.0: gradiente, moldura, banner (GIF até 2 MB) e som de entrada
+    const fancySeen = once(alice2, 'user-profile-updated');
+    const bannerGif = Buffer.alloc(1500 * 1024, 1);
+    bannerGif.write('GIF89a');
+    const sound = Buffer.alloc(20 * 1024, 2);
+    bob.emit('update-profile', {
+      nameColor2: '#00A8FC', frame: 'arco-iris', frameColor: '#123456', bannerColor: '#7C3AED',
+      banner: `data:image/gif;base64,${bannerGif.toString('base64')}`,
+      joinSound: `data:audio/ogg;base64,${sound.toString('base64')}`
+    });
+    const fancy = (await fancySeen).user;
+    assert.equal(fancy.nameColor2, '#00A8FC');
+    assert.equal(fancy.frame, 'arco-iris');
+    assert.equal(fancy.bannerColor, '#7C3AED');
+    assert.ok(fancy.bannerV && fancy.joinSoundV);
+    const bannerRes = await fetch(`${URL_BASE}/api/banner/${bob.id}`);
+    assert.equal(bannerRes.headers.get('content-type'), 'image/gif');
+    const soundRes = await fetch(`${URL_BASE}/api/join-sound/${bob.id}`);
+    assert.equal(soundRes.headers.get('content-type'), 'audio/ogg');
+    // Lixo é ignorado: moldura inventada, áudio que não é áudio, som grande demais
+    bob.emit('update-profile', {
+      frame: 'hack', joinSound: `data:text/html;base64,${Buffer.from('<script>').toString('base64')}`, bio: 'mudou de novo'
+    });
+    const junk = (await once(alice2, 'user-profile-updated')).user;
+    assert.equal(junk.frame, 'arco-iris');
+    assert.equal(junk.joinSoundV, fancy.joinSoundV);
+    bob.emit('update-profile', { joinSound: `data:audio/ogg;base64,${Buffer.alloc(400 * 1024).toString('base64')}`, bio: 'som grande' });
+    assert.equal((await once(alice2, 'user-profile-updated')).user.joinSoundV, fancy.joinSoundV, 'som acima de 300 KB é recusado');
+    console.log('  ✓ Nome em gradiente, moldura, banner GIF e som de entrada; lixo e arquivo grande recusados');
+
     // 8. Várias telas: extras 2 e 3 chegam pros outros (lixo é ignorado) e cada uma tem sala no SFU
     const screensSeen = new Promise((resolve) => {
       alice2.on('user-state-changed', (st) => { if (st.userId === bob.id && st.extraScreens?.length) resolve(st); });

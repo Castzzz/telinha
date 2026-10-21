@@ -435,6 +435,12 @@ function publicUser(u) {
     name: u.name,
     color: u.color,
     nameColor: u.nameColor || '',
+    nameColor2: u.nameColor2 || '',
+    frame: u.frame || '',
+    frameColor: u.frameColor || '',
+    bannerColor: u.bannerColor || '',
+    bannerV: u.banner ? u.bannerV : 0,
+    joinSoundV: u.joinSound ? u.joinSoundV : 0,
     bio: u.bio,
     profileId: u.profileId,
     isAdmin: Boolean(u.isAdmin),
@@ -462,6 +468,11 @@ const AVATAR_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([a-z0-9+/=]+)$/i
 const MAX_AVATAR_BYTES = 200 * 1024;
 // GIF vai sem redimensionar (senão para de mexer), então pode ser maior
 const MAX_GIF_AVATAR_BYTES = 1024 * 1024;
+const MAX_BANNER_BYTES = 400 * 1024;
+const MAX_GIF_BANNER_BYTES = 2 * 1024 * 1024; // só é baixado quando clicam na pessoa
+const SOUND_RE = /^data:(audio\/(?:ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac));base64,([a-z0-9+/=]+)$/i;
+const MAX_JOIN_SOUND_BYTES = 300 * 1024;
+const FRAME_PRESETS = ['', 'cor', 'ouro', 'neon', 'fogo', 'gelo', 'arco-iris'];
 
 // Aplica os campos válidos do perfil; retorna true se algo mudou
 function applyProfile(user, raw) {
@@ -481,6 +492,48 @@ function applyProfile(user, raw) {
     && profile.nameColor !== user.nameColor) {
     user.nameColor = profile.nameColor;
     changed = true;
+  }
+  if (typeof profile.nameColor2 === 'string' && (profile.nameColor2 === '' || HEX_COLOR_RE.test(profile.nameColor2))
+    && profile.nameColor2 !== user.nameColor2) {
+    user.nameColor2 = profile.nameColor2;
+    changed = true;
+  }
+  if (typeof profile.frame === 'string' && FRAME_PRESETS.includes(profile.frame) && profile.frame !== user.frame) {
+    user.frame = profile.frame;
+    changed = true;
+  }
+  for (const key of ['frameColor', 'bannerColor']) {
+    if (typeof profile[key] === 'string' && (profile[key] === '' || HEX_COLOR_RE.test(profile[key])) && profile[key] !== user[key]) {
+      user[key] = profile[key];
+      changed = true;
+    }
+  }
+  // Banner do perfil: imagem igual à foto (GIF pode ser maior)
+  if (profile.banner === '' && user.banner) {
+    user.banner = null;
+    changed = true;
+  } else if (typeof profile.banner === 'string' && profile.banner) {
+    const match = profile.banner.match(AVATAR_RE);
+    const data = match ? Buffer.from(match[2], 'base64') : null;
+    const maxBytes = match?.[1].toLowerCase() === 'image/gif' ? MAX_GIF_BANNER_BYTES : MAX_BANNER_BYTES;
+    if (data && data.length <= maxBytes && !(user.banner && user.banner.data.equals(data))) {
+      user.banner = { mime: match[1].toLowerCase(), data };
+      user.bannerV = Date.now();
+      changed = true;
+    }
+  }
+  // Som de entrada
+  if (profile.joinSound === '' && user.joinSound) {
+    user.joinSound = null;
+    changed = true;
+  } else if (typeof profile.joinSound === 'string' && profile.joinSound) {
+    const match = profile.joinSound.match(SOUND_RE);
+    const data = match ? Buffer.from(match[2], 'base64') : null;
+    if (data && data.length <= MAX_JOIN_SOUND_BYTES && !(user.joinSound && user.joinSound.data.equals(data))) {
+      user.joinSound = { mime: match[1].toLowerCase(), data };
+      user.joinSoundV = Date.now();
+      changed = true;
+    }
   }
   if (typeof profile.bio === 'string') {
     const bio = profile.bio.trim().slice(0, 140);
@@ -568,6 +621,22 @@ app.get('/api/text-image/:file', (req, res) => {
   });
 });
 
+// Banner e som de entrada: mesmo esquema da foto (some quando a pessoa sai da sala)
+function serveUserMedia(field) {
+  return (req, res) => {
+    const media = io.sockets.sockets.get(req.params.userId)?.data?.user?.[field];
+    if (!media) return res.status(404).end();
+    res.set({
+      'Content-Type': media.mime,
+      'Cache-Control': 'public, max-age=86400, immutable',
+      'X-Content-Type-Options': 'nosniff'
+    });
+    res.send(media.data);
+  };
+}
+app.get('/api/banner/:userId', serveUserMedia('banner'));
+app.get('/api/join-sound/:userId', serveUserMedia('joinSound'));
+
 app.get('/api/avatar/:userId', (req, res) => {
   const user = io.sockets.sockets.get(req.params.userId)?.data?.user;
   if (!user?.avatar) return res.status(404).end();
@@ -650,6 +719,14 @@ io.on('connection', (socket) => {
     color: USER_COLORS[colorIndex],
     bio: '',
     nameColor: '',
+    nameColor2: '', // com as duas cores o nome vira gradiente
+    frame: '', // moldura da foto (FRAME_PRESETS)
+    frameColor: '',
+    bannerColor: '',
+    banner: null,
+    bannerV: 0,
+    joinSound: null, // áudio que toca pra todo mundo quando a pessoa entra na call
+    joinSoundV: 0,
     profileId: null,
     isAdmin: false,
     serverMuted: false,
@@ -1134,6 +1211,7 @@ io.on('connection', (socket) => {
       userName: user.name,
       userColor: user.color,
       userNameColor: user.nameColor || '',
+      userNameColor2: user.nameColor2 || '',
       userAvatarV: user.avatar ? user.avatarV : 0,
       text: rawText.slice(0, 600),
       timestamp: Date.now()
@@ -1219,6 +1297,7 @@ io.on('connection', (socket) => {
     userName: user.name,
     userColor: user.color,
     userNameColor: user.nameColor || '',
+    userNameColor2: user.nameColor2 || '',
     userAvatarV: user.avatar ? user.avatarV : 0,
     timestamp: Date.now()
   });
@@ -1306,6 +1385,7 @@ io.on('connection', (socket) => {
       userName: user.name,
       userColor: user.color,
       userNameColor: user.nameColor || '',
+      userNameColor2: user.nameColor2 || '',
       userAvatarV: user.avatar ? user.avatarV : 0,
       text: typeof payload.text === 'string' ? payload.text.trim().slice(0, 600) : '',
       image: { url: `/api/chat-image/${file}`, width: dim(payload.width), height: dim(payload.height) },

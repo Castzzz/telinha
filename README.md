@@ -107,7 +107,11 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
-| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (todo mundo vê) e bio |
+| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (com uma segunda cor vira gradiente), moldura da foto, banner (imagem, GIF até 2 MB ou cor), som de entrada (até 5 s / 300 KB, toca pra todo mundo quando você entra) e bio |
+| **Ver a foto de alguém grande** | Clique na pessoa e depois na foto (ou na foto dela no chat) |
+| **Sair da call** | Botão vermelho no painel *Voz conectada*, lá embaixo à esquerda |
+| **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
+| **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |
 | **Mandar imagem no chat** | 📎 do lado do campo, `Ctrl+V` com a imagem copiada, ou arraste pro chat (até 8 MB; GIF continua animado). O que estiver escrito vai junto como legenda. Clique na imagem pra ver grande |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |

@@ -99,11 +99,6 @@ function applyTheme(theme) {
 }
 applyTheme(prefs.theme);
 
-// Visual: novo (em teste) ou clássico
-function applyLook(look) {
-  document.documentElement.dataset.look = look === 'classico' ? 'classico' : 'novo';
-}
-applyLook(prefs.look);
 
 function savePrefs(patch) {
   Object.assign(prefs, patch);
@@ -161,7 +156,13 @@ const myProfile = {
   color: prefs.profile?.color || localStorage.getItem('telinha_user_color') || PROFILE_COLORS[0],
   bio: prefs.profile?.bio || '',
   avatar: prefs.profile?.avatar || '',
-  nameColor: prefs.profile?.nameColor || ''
+  nameColor: prefs.profile?.nameColor || '',
+  nameColor2: prefs.profile?.nameColor2 || '',
+  frame: prefs.profile?.frame || '',
+  frameColor: prefs.profile?.frameColor || '',
+  bannerColor: prefs.profile?.bannerColor || '',
+  banner: prefs.profile?.banner || '',
+  joinSound: prefs.profile?.joinSound || ''
 };
 if (isFirstRun) savePrefs({ profile: { ...myProfile } });
 
@@ -172,7 +173,13 @@ function profilePayload() {
     color: myProfile.color,
     bio: myProfile.bio,
     avatar: myProfile.avatar,
-    nameColor: myProfile.nameColor
+    nameColor: myProfile.nameColor,
+    nameColor2: myProfile.nameColor2,
+    frame: myProfile.frame,
+    frameColor: myProfile.frameColor,
+    bannerColor: myProfile.bannerColor,
+    banner: myProfile.banner,
+    joinSound: myProfile.joinSound
   };
 }
 
@@ -445,7 +452,7 @@ socket.on('channels-list', handleChannelsSummary);
 
 socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages, soundSeed }) => {
   // Eu entrei: ouço o mesmo áudio que tocou pra quem já estava no canal
-  playCallSound(soundSeed);
+  playCallSound(soundSeed, joinSoundUrl(myProfile));
   if (me) {
     if (me.id) appState.myId = me.id;
     if (me.name) appState.myUser.name = me.name;
@@ -520,7 +527,7 @@ const handleUserJoined = (data) => {
 
   if (channelId === appState.currentChannelId) {
     addSystemChatMessage(`👋 ${user.name} entrou no canal.`, channelId);
-    playCallSound(data.soundSeed);
+    playCallSound(data.soundSeed, joinSoundUrl(user));
     updateTopBar();
     updateVoiceLounge();
 
@@ -542,15 +549,22 @@ const CALL_SOUNDS = Array.from({ length: 9 }, (_, i) => `/sounds/amigo-${i + 1}.
 const callSoundBuffers = new Map();
 let lastCallSoundAt = 0;
 
-async function playCallSound(soundSeed) {
-  if (prefs.callSounds === false || appState.myUser.isDeafened) return;
+// Som de entrada próprio de quem entrou (perfil), senão um dos áudios dos amigos
+function joinSoundUrl(u) {
+  if (!u) return '';
+  if (u.id === appState.myId || u === myProfile) return myProfile.joinSound || '';
+  return u.joinSoundV ? `${SERVER_URL}/api/join-sound/${encodeURIComponent(u.id)}?v=${encodeURIComponent(u.joinSoundV)}` : '';
+}
+
+async function playCallSound(soundSeed, customUrl = '', { force = false } = {}) {
+  if (!force && (prefs.callSounds === false || appState.myUser.isDeafened)) return;
   // Muita gente entrando junto (servidor reiniciou): um som só
   const now = Date.now();
-  if (now - lastCallSoundAt < 1500) return;
-  lastCallSoundAt = now;
+  if (!force && now - lastCallSoundAt < 1500) return;
+  if (!force) lastCallSoundAt = now;
   // Servidor antigo (sem soundSeed): sorteia aqui mesmo
   const index = Number.isInteger(soundSeed) ? soundSeed % CALL_SOUNDS.length : Math.floor(Math.random() * CALL_SOUNDS.length);
-  const url = CALL_SOUNDS[index];
+  const url = customUrl || CALL_SOUNDS[index];
   const mixer = appState.mixerManager;
   try {
     const ctx = mixer?.audioContext;
@@ -567,7 +581,7 @@ async function playCallSound(soundSeed) {
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(mixer.masterDeafenGain);
+    source.connect(force ? (mixer.outputGain || mixer.masterDeafenGain) : mixer.masterDeafenGain);
     source.start();
   } catch (err) {
     console.warn('[Som] Não tocou o som de entrada/saída:', err);
@@ -984,11 +998,16 @@ function renderChannelsTree() {
       if (ch.users.has(userId)) return;
       moveUserToChannel(userId, chId);
     });
-    row.addEventListener('click', () => switchChannel(chId));
+    // Clicar no canal em que você já está, vendo um canal de texto: volta pra tela da call
+    const openVoice = () => {
+      if (chId === appState.currentChannelId && appState.textView) closeTextView();
+      else switchChannel(chId);
+    };
+    row.addEventListener('click', openVoice);
     row.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        switchChannel(chId);
+        openVoice();
       }
     });
 
@@ -1009,7 +1028,7 @@ function renderChannelsTree() {
 
       userLi.innerHTML = `
         <div class="user-avatar-wrap ${u.isSpeaking ? 'is-speaking' : ''}">
-          <div class="user-avatar" style="background-color: ${safeColor(u.color)};">
+          <div class="user-avatar${frameClass(u)}" style="background-color: ${safeColor(u.color)};${frameStyle(u)}">
             ${avatarInnerHtml(u)}
           </div>
           <span class="speaking-halo"></span>
@@ -1122,7 +1141,7 @@ function updateVoiceLounge() {
       card.className = 'lounge-user-card';
       card.innerHTML = `
         <div class="user-avatar-wrap ${u.isSpeaking ? 'is-speaking' : ''}">
-          <div class="user-avatar" style="background-color: ${safeColor(u.color)};">
+          <div class="user-avatar${frameClass(u)}" style="background-color: ${safeColor(u.color)};${frameStyle(u)}">
             ${avatarInnerHtml(u)}
           </div>
           <span class="speaking-halo"></span>
@@ -1164,12 +1183,13 @@ function updateUserDockProfile() {
   const nameEl = $('#dock-user-name');
   if (nameEl) {
     nameEl.textContent = appState.myUser.name;
-    nameEl.style.color = nameStyle(myProfile) ? myProfile.nameColor : '';
+    applyNameStyle(nameEl, myProfile);
   }
 
   const avatar = $('#dock-user-avatar');
   if (avatar) {
     avatar.style.backgroundColor = safeColor(appState.myUser.color);
+    applyFrame(avatar, myProfile);
     avatar.innerHTML = avatarInnerHtml({ id: appState.myId, name: appState.myUser.name });
   }
 }
@@ -1208,8 +1228,75 @@ function safeColor(color) {
 }
 
 // Cor do nome escolhida no perfil (sem ela, a cor normal do tema)
+const HEX_RE = /^#[0-9a-f]{6}$/i;
+
+// Cor do nome; com a segunda cor vira gradiente
+function nameCss(u) {
+  if (!HEX_RE.test(u?.nameColor || '')) return '';
+  if (HEX_RE.test(u?.nameColor2 || '')) {
+    return `background: linear-gradient(90deg, ${u.nameColor}, ${u.nameColor2}); -webkit-background-clip: text; background-clip: text; color: transparent;`;
+  }
+  return `color: ${u.nameColor};`;
+}
+
 function nameStyle(u) {
-  return /^#[0-9a-f]{6}$/i.test(u?.nameColor || '') ? ` style="color: ${u.nameColor};"` : '';
+  const css = nameCss(u);
+  return css ? ` style="${css}"` : '';
+}
+
+function applyNameStyle(el, u) {
+  if (!el) return;
+  el.style.background = '';
+  el.style.webkitBackgroundClip = '';
+  el.style.backgroundClip = '';
+  el.style.color = '';
+  el.style.cssText += nameCss(u);
+}
+
+// Moldura da foto: classe + a cor (pra moldura "cor")
+const FRAME_PRESETS = [
+  { id: '', label: 'Nenhuma' },
+  { id: 'cor', label: 'Cor' },
+  { id: 'ouro', label: 'Ouro' },
+  { id: 'neon', label: 'Neon' },
+  { id: 'fogo', label: 'Fogo' },
+  { id: 'gelo', label: 'Gelo' },
+  { id: 'arco-iris', label: 'Arco-íris' }
+];
+const FRAME_IDS = new Set(FRAME_PRESETS.map((f) => f.id).filter(Boolean));
+
+function frameOf(u) {
+  const src = u?.id === appState.myId ? myProfile : u;
+  return FRAME_IDS.has(src?.frame) ? src : null;
+}
+
+function frameClass(u) {
+  const f = frameOf(u);
+  return f ? ` has-frame frame-${f.frame}` : '';
+}
+
+function frameStyle(u) {
+  const f = frameOf(u);
+  return f?.frame === 'cor' && HEX_RE.test(f.frameColor || '') ? ` --frame-color: ${f.frameColor};` : '';
+}
+
+function applyFrame(el, u) {
+  if (!el) return;
+  el.className = el.className.replace(/\s*has-frame|\s*frame-[a-z-]+/g, '');
+  el.className += frameClass(u);
+  el.style.removeProperty('--frame-color');
+  const f = frameOf(u);
+  if (f?.frame === 'cor' && HEX_RE.test(f.frameColor || '')) el.style.setProperty('--frame-color', f.frameColor);
+}
+
+// Banner do perfil: imagem, senão a cor escolhida, senão a cor da bolinha
+function bannerCss(u) {
+  const src = u?.id === appState.myId ? myProfile : u;
+  const color = safeColor(HEX_RE.test(src?.bannerColor || '') ? src.bannerColor : u?.color);
+  let img = '';
+  if (u?.id === appState.myId || src === myProfile) img = myProfile.banner || '';
+  else if (u?.bannerV) img = `${SERVER_URL}/api/banner/${encodeURIComponent(u.id)}?v=${encodeURIComponent(u.bannerV)}`;
+  return img ? `background: ${color} url("${img.replace(/"/g, '%22')}") center / cover no-repeat;` : `background: ${color};`;
 }
 
 // -----------------------------------------------------------------------------
@@ -1258,12 +1345,12 @@ function appendChatMessage(msg, autoScroll = true) {
   const author = { id: msg.senderId || msg.userId, name: msg.userName || msg.senderName, avatarV: msg.userAvatarV };
 
   div.innerHTML = `
-    <div class="chat-msg-avatar" style="background-color: ${color};">
+    <div class="chat-msg-avatar${frameClass(findUser(author.id))}" style="background-color: ${color};${frameStyle(findUser(author.id))}">
       ${avatarInnerHtml(author)}
     </div>
     <div class="chat-msg-body">
       <div class="chat-msg-header">
-        <span class="chat-author" style="color: ${msg.userNameColor ? safeColor(msg.userNameColor) : color};">${escapeHtml(msg.userName || msg.senderName)}</span>
+        <span class="chat-author" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
       </div>
       ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}</div>` : ''}
@@ -2256,7 +2343,10 @@ function openUserPopover(userId, anchorEvent) {
   avatar.style.backgroundColor = safeColor(u.color);
   avatar.innerHTML = avatarInnerHtml(u);
   $('#user-popover-name').textContent = u.name;
-  $('#user-popover-name').style.color = nameStyle(u) ? u.nameColor : '';
+  applyNameStyle($('#user-popover-name'), u);
+  applyFrame(avatar, u);
+  const banner = $('#user-popover-banner');
+  if (banner) banner.style.cssText = bannerCss(u);
   $('#user-popover-bio').textContent = u.bio || '';
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
@@ -2373,80 +2463,102 @@ function openProfileModal() {
   $('#input-profile-name')?.focus();
 }
 
-function renderProfileDraft() {
-  const preview = $('#profile-avatar-preview');
-  preview.style.backgroundColor = safeColor(profileDraft.color);
-  preview.innerHTML = profileDraft.avatar
-    ? `<img src="${escapeHtml(profileDraft.avatar)}" alt="" />`
-    : `<span>${avatarInitials($('#input-profile-name').value || profileDraft.name)}</span>`;
-  $('#btn-profile-remove-avatar').classList.toggle('hidden', !profileDraft.avatar);
-
-  const colors = $('#profile-colors');
-  colors.innerHTML = '';
-  for (const color of PROFILE_COLORS) {
+// Linha de bolinhas de cor (+ "Normal"/"Nenhuma" quando dá pra deixar sem, + cor livre)
+function renderColorRow(container, colors, current, onPick, emptyLabel = '') {
+  if (!container) return;
+  container.innerHTML = '';
+  const cur = (current || '').toLowerCase();
+  if (emptyLabel) {
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = `btn-secondary profile-name-color-reset ${cur ? '' : 'selected'}`;
+    reset.textContent = emptyLabel;
+    reset.addEventListener('click', () => onPick(''));
+    container.appendChild(reset);
+  }
+  for (const color of colors) {
     const swatch = document.createElement('button');
     swatch.type = 'button';
-    swatch.className = `profile-color-swatch ${color.toLowerCase() === profileDraft.color.toLowerCase() ? 'selected' : ''}`;
+    swatch.className = `profile-color-swatch ${color.toLowerCase() === cur ? 'selected' : ''}`;
     swatch.style.backgroundColor = color;
     swatch.title = color;
-    swatch.addEventListener('click', () => {
-      profileDraft.color = color;
-      renderProfileDraft();
-    });
-    colors.appendChild(swatch);
+    swatch.addEventListener('click', () => onPick(color));
+    container.appendChild(swatch);
   }
   const custom = document.createElement('input');
   custom.type = 'color';
   custom.className = 'profile-color-custom';
   custom.title = 'Outra cor';
-  custom.value = safeColor(profileDraft.color);
-  custom.addEventListener('change', () => {
-    profileDraft.color = custom.value;
-    renderProfileDraft();
-  });
-  colors.appendChild(custom);
+  custom.value = safeColor(current);
+  custom.addEventListener('change', () => onPick(custom.value));
+  container.appendChild(custom);
+}
 
-  // Cor do nome: aparece pra todo mundo na lista, na call e no chat
-  const nameColors = $('#profile-name-colors');
-  if (nameColors) {
-    nameColors.innerHTML = '';
-    const current = (profileDraft.nameColor || '').toLowerCase();
-    const reset = document.createElement('button');
-    reset.type = 'button';
-    reset.className = `btn-secondary profile-name-color-reset ${current ? '' : 'selected'}`;
-    reset.textContent = 'Normal';
-    reset.addEventListener('click', () => {
-      profileDraft.nameColor = '';
-      renderProfileDraft();
-    });
-    nameColors.appendChild(reset);
-    for (const color of NAME_COLORS) {
-      const swatch = document.createElement('button');
-      swatch.type = 'button';
-      swatch.className = `profile-color-swatch ${color.toLowerCase() === current ? 'selected' : ''}`;
-      swatch.style.backgroundColor = color;
-      swatch.title = color;
-      swatch.addEventListener('click', () => {
-        profileDraft.nameColor = color;
+const BANNER_COLORS = ['#5865F2', '#7C3AED', '#EB459E', '#ED4245', '#F47B67', '#FEE75C', '#57F287', '#1ABC9C', '#111214'];
+
+function renderProfileDraft() {
+  const pick = (key) => (value) => {
+    profileDraft[key] = value;
+    renderProfileDraft();
+  };
+  const preview = $('#profile-avatar-preview');
+  preview.style.backgroundColor = safeColor(profileDraft.color);
+  preview.innerHTML = profileDraft.avatar
+    ? `<img src="${escapeHtml(profileDraft.avatar)}" alt="" />`
+    : `<span>${avatarInitials($('#input-profile-name').value || profileDraft.name)}</span>`;
+  applyFrame(preview, { ...profileDraft, id: null });
+  $('#btn-profile-remove-avatar').classList.toggle('hidden', !profileDraft.avatar);
+  const bannerPreview = $('#profile-banner-preview');
+  if (bannerPreview) {
+    const color = safeColor(HEX_RE.test(profileDraft.bannerColor || '') ? profileDraft.bannerColor : profileDraft.color);
+    bannerPreview.style.cssText = profileDraft.banner
+      ? `background: ${color} url("${profileDraft.banner.replace(/"/g, '%22')}") center / cover no-repeat;`
+      : `background: ${color};`;
+  }
+  $('#btn-profile-remove-banner')?.classList.toggle('hidden', !profileDraft.banner);
+  $('#btn-profile-remove-sound')?.classList.toggle('hidden', !profileDraft.joinSound);
+  $('#btn-profile-play-sound')?.classList.toggle('hidden', !profileDraft.joinSound);
+  const soundStatus = $('#profile-sound-status');
+  if (soundStatus) soundStatus.textContent = profileDraft.joinSound ? '✅ Você tem um som de entrada.' : 'Sem som próprio: toca um dos áudios dos amigos.';
+
+  renderColorRow($('#profile-colors'), PROFILE_COLORS, profileDraft.color, pick('color'));
+  renderColorRow($('#profile-name-colors'), NAME_COLORS, profileDraft.nameColor, pick('nameColor'), 'Normal');
+  renderColorRow($('#profile-name-colors2'), NAME_COLORS, profileDraft.nameColor2, pick('nameColor2'), 'Nenhuma');
+  $('#profile-name-colors2')?.classList.toggle('disabled', !profileDraft.nameColor);
+  renderColorRow($('#profile-banner-colors'), BANNER_COLORS, profileDraft.bannerColor, pick('bannerColor'), 'Cor da bolinha');
+
+  // Molduras: cada opção mostra uma bolinha com a moldura
+  const frames = $('#profile-frames');
+  if (frames) {
+    frames.innerHTML = '';
+    for (const f of FRAME_PRESETS) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `profile-frame-option ${(profileDraft.frame || '') === f.id ? 'selected' : ''}`;
+      const sample = { frame: f.id, frameColor: profileDraft.frameColor || profileDraft.nameColor || profileDraft.color };
+      btn.innerHTML = `<span class="profile-frame-sample user-avatar${frameClass(sample)}" style="background-color: ${safeColor(profileDraft.color)};${frameStyle(sample)}"></span><span>${f.label}</span>`;
+      btn.addEventListener('click', () => {
+        profileDraft.frame = f.id;
+        if (f.id === 'cor' && !profileDraft.frameColor) profileDraft.frameColor = sample.frameColor;
         renderProfileDraft();
       });
-      nameColors.appendChild(swatch);
+      frames.appendChild(btn);
     }
-    const customName = document.createElement('input');
-    customName.type = 'color';
-    customName.className = 'profile-color-custom';
-    customName.title = 'Outra cor';
-    customName.value = safeColor(profileDraft.nameColor);
-    customName.addEventListener('change', () => {
-      profileDraft.nameColor = customName.value;
-      renderProfileDraft();
-    });
-    nameColors.appendChild(customName);
+    if (profileDraft.frame === 'cor') {
+      const custom = document.createElement('input');
+      custom.type = 'color';
+      custom.className = 'profile-color-custom';
+      custom.title = 'Cor da moldura';
+      custom.value = safeColor(profileDraft.frameColor);
+      custom.addEventListener('change', () => pick('frameColor')(custom.value));
+      frames.appendChild(custom);
+    }
   }
+
   const namePreview = $('#profile-name-preview');
   if (namePreview) {
     namePreview.textContent = $('#input-profile-name').value || profileDraft.name;
-    namePreview.style.color = profileDraft.nameColor || '';
+    applyNameStyle(namePreview, profileDraft);
   }
 }
 
@@ -2495,6 +2607,68 @@ async function resizeAvatar(file) {
   }
 }
 
+// Banner: corta pra 3:1 e reduz pra 600×200 (GIF vai como está, até 2 MB)
+const MAX_GIF_BANNER_BYTES = 2 * 1024 * 1024;
+async function resizeBanner(file) {
+  if (file.type === 'image/gif') {
+    if (file.size > MAX_GIF_BANNER_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true, limit: '2 MB' });
+    return readAsDataUrl(file);
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const w = 600;
+    const h = 200;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const sw = w / scale;
+    const sh = h / scale;
+    canvas.getContext('2d').drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, w, h);
+    const webp = canvas.toDataURL('image/webp', 0.85);
+    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.85);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function readAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
+// Som de entrada: curtinho e leve, porque vai pra todo mundo da sala
+const MAX_JOIN_SOUND_BYTES = 300 * 1024;
+const MAX_JOIN_SOUND_SECONDS = 5.5;
+async function readJoinSound(file) {
+  if (file.size > MAX_JOIN_SOUND_BYTES) throw new Error('Áudio grande demais: o máximo é 300 KB (corte ou use .ogg/.mp3).');
+  const dataUrl = await readAsDataUrl(file);
+  if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
+    throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
+  }
+  const ctx = appState.mixerManager?.audioContext;
+  if (ctx) {
+    let buffer;
+    try {
+      buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+    } catch {
+      throw new Error('Não consegui tocar esse áudio.');
+    }
+    if (buffer.duration > MAX_JOIN_SOUND_SECONDS) throw new Error(`Áudio longo demais (${buffer.duration.toFixed(1)} s): o máximo é 5 s.`);
+  }
+  return dataUrl;
+}
+
 function setupProfileModal() {
   $('#user-profile')?.addEventListener('click', openProfileModal);
   $('#user-profile')?.addEventListener('keydown', (e) => {
@@ -2524,6 +2698,45 @@ function setupProfileModal() {
   $('#btn-profile-remove-avatar')?.addEventListener('click', () => {
     if (!profileDraft) return;
     profileDraft.avatar = '';
+    renderProfileDraft();
+  });
+
+  $('#input-profile-banner')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !profileDraft) return;
+    try {
+      profileDraft.banner = await resizeBanner(file);
+      renderProfileDraft();
+    } catch (err) {
+      console.warn('[Perfil] Não consegui ler o banner:', err);
+      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo pro banner é 2 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
+    }
+  });
+  $('#btn-profile-remove-banner')?.addEventListener('click', () => {
+    if (!profileDraft) return;
+    profileDraft.banner = '';
+    renderProfileDraft();
+  });
+
+  $('#input-profile-sound')?.addEventListener('change', async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !profileDraft) return;
+    try {
+      profileDraft.joinSound = await readJoinSound(file);
+      renderProfileDraft();
+      playCallSound(0, profileDraft.joinSound, { force: true });
+    } catch (err) {
+      showToast(`❌ ${err.message || 'Não consegui abrir esse áudio.'}`, 'error');
+    }
+  });
+  $('#btn-profile-play-sound')?.addEventListener('click', () => {
+    if (profileDraft?.joinSound) playCallSound(0, profileDraft.joinSound, { force: true });
+  });
+  $('#btn-profile-remove-sound')?.addEventListener('click', () => {
+    if (!profileDraft) return;
+    profileDraft.joinSound = '';
     renderProfileDraft();
   });
 
@@ -2780,14 +2993,6 @@ function setupAdminSettings() {
 }
 
 function setupThemeSelect() {
-  const lookSelect = $('#select-look');
-  if (lookSelect) {
-    lookSelect.value = document.documentElement.dataset.look;
-    lookSelect.addEventListener('change', () => {
-      applyLook(lookSelect.value);
-      savePrefs({ look: lookSelect.value });
-    });
-  }
   const select = $('#select-theme');
   if (!select) return;
   select.value = document.documentElement.dataset.theme;
@@ -2798,7 +3003,7 @@ function setupThemeSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '2.3';
+const WHATS_NEW_VERSION = '3.0';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)

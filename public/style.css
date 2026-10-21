@@ -2698,3 +2698,183 @@ ul {
 .chat-msg-avatar img {
   cursor: zoom-in;
 }
+
+/* ==================== PERFIL: MOLDURA, BANNER, NOME EM GRADIENTE ==================== */
+@property --frame-angle {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+
+@keyframes frame-spin {
+  to { --frame-angle: 360deg; }
+}
+
+/* A moldura é um anel por fora da foto (a foto continua do mesmo tamanho) */
+.has-frame {
+  position: relative;
+  overflow: visible !important;
+  --frame-width: 2px;
+}
+
+.has-frame::after {
+  content: '';
+  position: absolute;
+  inset: calc(-1 * var(--frame-width) - 1px);
+  border-radius: 50%;
+  padding: var(--frame-width);
+  background: var(--frame-bg, var(--accent-brand));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.frame-cor { --frame-bg: var(--frame-color, var(--accent-brand)); }
+.frame-ouro { --frame-bg: linear-gradient(135deg, #fff3b0, #d4a017 35%, #8a6200 60%, #f7d774); }
+.frame-fogo { --frame-bg: linear-gradient(135deg, #ffe259, #ff7a00 45%, #e10600); }
+.frame-gelo { --frame-bg: linear-gradient(135deg, #ffffff, #9be7ff 45%, #3b82f6); }
+.frame-neon { --frame-bg: conic-gradient(from var(--frame-angle), #00f0ff, #7c3aed, #ff00e5, #00f0ff); }
+.frame-arco-iris { --frame-bg: conic-gradient(from var(--frame-angle), #ff3b3b, #ff9f1a, #ffe600, #2bd96b, #19c3ff, #7a5cff, #ff3bd4, #ff3b3b); }
+
+.frame-neon::after,
+.frame-arco-iris::after {
+  animation: frame-spin 4s linear infinite;
+}
+
+.frame-neon::after {
+  filter: drop-shadow(0 0 3px rgba(124, 58, 237, 0.8));
+}
+
+/* Fotos grandes ganham moldura mais grossa */
+.lounge-user-card .has-frame,
+.user-popover-avatar.has-frame,
+.profile-avatar-preview.has-frame {
+  --frame-width: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .frame-neon::after,
+  .frame-arco-iris::after {
+    animation: none;
+  }
+}
+
+/* Banner no topo do popup da pessoa */
+.user-popover {
+  overflow: hidden;
+}
+
+.user-popover-banner {
+  height: 64px;
+  margin: -14px -14px -36px;
+  background: var(--bg-tertiary);
+}
+
+/* Foto por cima do banner, nome e bio embaixo dela */
+.user-popover-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.form-group .profile-file-btn {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.user-popover-avatar.user-avatar {
+  box-shadow: 0 0 0 4px var(--bg-floating);
+}
+
+.user-popover-avatar.has-frame {
+  box-shadow: none;
+}
+
+/* Editor de perfil: prévia em cima, opções rolando embaixo */
+.modal-profile-card {
+  max-height: calc(100vh - 32px);
+}
+
+#form-profile {
+  overflow-y: auto;
+  margin-right: -12px;
+  padding-right: 12px;
+}
+
+.profile-card-preview {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--bg-floating);
+  margin-bottom: 16px;
+}
+
+.profile-banner-preview {
+  height: 90px;
+}
+
+.profile-card-body {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 0 16px 14px;
+  margin-top: -40px;
+}
+
+.profile-card-body .profile-avatar-preview {
+  box-shadow: 0 0 0 5px var(--bg-floating);
+}
+
+.profile-card-body .profile-avatar-preview.has-frame {
+  box-shadow: none;
+}
+
+.profile-card-body .profile-name-preview {
+  font-size: 18px;
+  padding-bottom: 6px;
+}
+
+.profile-sublabel {
+  margin-top: 10px;
+}
+
+.profile-colors.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.profile-frames {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.profile-frame-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px;
+  min-width: 64px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-medium);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.profile-frame-option:hover {
+  background: var(--bg-hover);
+}
+
+.profile-frame-option.selected {
+  border-color: var(--accent-brand);
+  color: var(--text-header);
+  background: var(--bg-active);
+}
+
+.profile-frame-sample.user-avatar {
+  width: 30px;
+  height: 30px;
+}

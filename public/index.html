@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-look="novo">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -345,17 +345,31 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 2.3</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Visual novo:</strong> painéis flutuando, cantos redondos e menos linha separando tudo. Os ícones continuam os mesmos.</li>
+          <li><strong>Perfil turbinado:</strong> clique no seu nome lá embaixo. Tem banner (imagem, GIF ou cor), moldura da foto (ouro, neon, fogo, gelo, arco-íris…), nome em gradiente e <strong>som de entrada</strong> próprio, que toca pra todo mundo quando você entra na call.</li>
+          <li><strong>Clique na foto de alguém</strong> pra ver ela grande (GIF animando).</li>
+          <li><strong>Sair da call lá embaixo:</strong> em call aparece o "Voz conectada" com transmitir, câmera e o botão de sair.</li>
+          <li><strong>💬 no canal da call:</strong> abre o chat da call no canto (com bolinha quando chega mensagem). Clicar no canal da call volta da tela de texto pra call.</li>
+          <li><strong>Quem está assistindo:</strong> as fotinhas aparecem do lado do nome de quem transmite.</li>
+          <li><strong>Transmissões lado a lado com tamanho ajustável:</strong> arraste a divisória entre elas (duplo clique deixa igual).</li>
+          <li><strong>Configurações separadas por tópico</strong> e envio de mensagem com o aviãozinho.</li>
+        </ul>
+        <!-- Só pra quem pulou a 2.3 (nunca foi lançada sozinha, entrou junto) -->
+        <div class="whats-new-older">
+          <h4>E também</h4>
+          <ul class="whats-new-list">
           <li><strong>Ensurdecido ainda ouve as transmissões:</strong> o 🎧 agora cala só as vozes. Se quiser calar tudo como antes, tem a opção em ⚙️ Configurações.</li>
           <li><strong>Canal de texto em tela cheia:</strong> abre ocupando a tela toda (se você estiver vendo uma transmissão, fica no cantinho).</li>
           <li><strong>Recolher os canais:</strong> clique em <em>Canais de Voz</em> ou <em>Canais de Texto</em>. Recolhido, fica só o canal em que você está, com as fotos da galera lado a lado.</li>
           <li><strong>Barra de cima mais limpa</strong> e ícones de microfone e fone também no menu de mutar alguém.</li>
         </ul>
+        </div>
         <!-- Só pra quem pulou a 2.2 -->
         <div id="whats-new-2-2" class="whats-new-older hidden">
           <h4>E o que chegou na 2.2</h4>
@@ -431,14 +445,6 @@
               </select>
             </div>
 
-            <!-- Visual novo (em teste) -->
-            <div class="form-group">
-              <label for="select-look">Visual</label>
-              <select id="select-look" class="form-select">
-                <option value="novo">Novo (em teste)</option>
-                <option value="classico">Clássico</option>
-              </select>
-            </div>
           </section>
           <section class="settings-section hidden" data-settings-section="microfone">
             <h4 class="settings-section-title">Microfone</h4>
@@ -595,8 +601,22 @@
         <button class="modal-close-btn" data-close-modal="modal-profile">✕</button>
       </div>
       <form id="form-profile">
-        <div class="profile-editor-top">
-          <div class="profile-avatar-preview user-avatar" id="profile-avatar-preview"></div>
+        <!-- Prévia: como os outros te veem quando clicam em você -->
+        <div class="profile-card-preview">
+          <div class="profile-banner-preview" id="profile-banner-preview"></div>
+          <div class="profile-card-body">
+            <div class="profile-avatar-preview user-avatar" id="profile-avatar-preview"></div>
+            <strong id="profile-name-preview" class="profile-name-preview"></strong>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="input-profile-name">Nome</label>
+          <input type="text" id="input-profile-name" class="form-input" placeholder="Ex: Castzin" maxlength="24" required autocomplete="off" />
+        </div>
+
+        <div class="form-group">
+          <label>Foto <span class="form-help-inline">(pode ser GIF, até 1 MB)</span></label>
           <div class="profile-avatar-actions">
             <label class="btn-secondary profile-file-btn">
               📷 Escolher foto
@@ -607,18 +627,45 @@
         </div>
 
         <div class="form-group">
-          <label for="input-profile-name">Nome</label>
-          <input type="text" id="input-profile-name" class="form-input" placeholder="Ex: Castzin" maxlength="24" required autocomplete="off" />
-        </div>
-
-        <div class="form-group">
           <label>Cor da bolinha <span class="form-help-inline">(atrás da foto, ou com suas iniciais)</span></label>
           <div class="profile-colors" id="profile-colors"></div>
         </div>
 
         <div class="form-group">
-          <label>Cor do nome <span class="form-help-inline">(todo mundo vê: <strong id="profile-name-preview" class="profile-name-preview"></strong>)</span></label>
+          <label>Moldura da foto</label>
+          <div class="profile-frames" id="profile-frames"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Cor do nome <span class="form-help-inline">(todo mundo vê)</span></label>
           <div class="profile-colors" id="profile-name-colors"></div>
+          <label class="profile-sublabel">Segunda cor <span class="form-help-inline">(o nome vira gradiente)</span></label>
+          <div class="profile-colors" id="profile-name-colors2"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Banner <span class="form-help-inline">(o fundo de cima quando clicam em você; pode ser GIF até 2 MB)</span></label>
+          <div class="profile-colors" id="profile-banner-colors"></div>
+          <div class="profile-avatar-actions">
+            <label class="btn-secondary profile-file-btn">
+              🖼️ Imagem de banner
+              <input type="file" id="input-profile-banner" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            </label>
+            <button type="button" class="btn-secondary" id="btn-profile-remove-banner">Tirar imagem</button>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Som de entrada <span class="form-help-inline">(toca pra todo mundo quando você entra na call; até 5 s e 300 KB)</span></label>
+          <div class="profile-avatar-actions">
+            <label class="btn-secondary profile-file-btn">
+              🔊 Escolher áudio
+              <input type="file" id="input-profile-sound" accept="audio/*" hidden />
+            </label>
+            <button type="button" class="btn-secondary" id="btn-profile-play-sound">▶ Ouvir</button>
+            <button type="button" class="btn-secondary" id="btn-profile-remove-sound">Tirar</button>
+          </div>
+          <p class="form-help" id="profile-sound-status"></p>
         </div>
 
         <div class="form-group">
@@ -638,6 +685,7 @@
 
   <!-- POPUP DE UM AMIGO: PERFIL + VOLUME SÓ PRA VOCÊ -->
   <div id="user-popover" class="user-popover hidden" role="dialog" aria-label="Perfil do amigo">
+    <div class="user-popover-banner" id="user-popover-banner"></div>
     <div class="user-popover-head">
       <div class="user-avatar user-popover-avatar" id="user-popover-avatar"></div>
       <div class="user-popover-names">
