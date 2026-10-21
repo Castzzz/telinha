@@ -1359,39 +1359,22 @@ function avatarSrc(userId, avatarV) {
   return '';
 }
 
-// Cache de primeiro frame para congelar avatares animados quando o usuário não estiver falando
-const frozenAvatarCache = new Map();
-
 function freezeAvatar(img) {
   if (!img || !img.src) return;
-  const src = img.src;
 
   const doFreeze = () => {
     try {
-      if (!img.naturalWidth || !img.naturalHeight) return;
-      let staticUrl = frozenAvatarCache.get(src);
-      if (!staticUrl) {
-        const canvas = document.createElement('canvas');
-        canvas.width = Math.min(img.naturalWidth, 128);
-        canvas.height = Math.min(img.naturalHeight, 128);
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        staticUrl = canvas.toDataURL('image/png');
-        frozenAvatarCache.set(src, staticUrl);
-      }
-
-      // Procura o container pai (ex: .user-avatar)
       const wrap = img.parentElement;
-      if (wrap && !wrap.querySelector('.avatar-static')) {
-        const staticImg = document.createElement('img');
-        staticImg.className = 'avatar-static';
-        staticImg.src = staticUrl;
-        staticImg.alt = '';
-        wrap.appendChild(staticImg);
+      if (!wrap) return;
+      const canvas = wrap.querySelector('canvas.avatar-static');
+      if (canvas && img.naturalWidth > 0 && img.naturalHeight > 0) {
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         wrap.classList.add('has-frozen');
       }
     } catch (_) {
-      // Ignora silenciosamente se o canvas não puder ser lido
+      // Ignora silenciosamente
     }
   };
 
@@ -1407,12 +1390,7 @@ function avatarInnerHtml(u) {
   const initials = avatarInitials(u?.name);
   const src = avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
-  const staticUrl = frozenAvatarCache.get(src);
-  const corsAttr = src.startsWith('data:') ? '' : ' crossorigin="anonymous"';
-  if (staticUrl) {
-    return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}"${corsAttr} /><img class="avatar-static" src="${escapeHtml(staticUrl)}" alt="" data-initials="${initials}" />`;
-  }
-  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}"${corsAttr} onload="window.freezeAvatar?.(this)" />`;
+  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" onload="window.freezeAvatar?.(this)" /><canvas class="avatar-static" width="64" height="64"></canvas>`;
 }
 
 document.addEventListener('error', (e) => {

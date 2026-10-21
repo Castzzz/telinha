@@ -1817,7 +1817,9 @@ ul {
 
 /* ==================== PERFIL, FOTOS E VOLUME POR PESSOA ==================== */
 .user-avatar img,
-.chat-msg-avatar img {
+.user-avatar canvas,
+.chat-msg-avatar img,
+.chat-msg-avatar canvas {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1825,49 +1827,47 @@ ul {
   display: block;
 }
 
-/* Avatares animados (GIFs): congelam no primeiro frame por padrão pra economizar CPU */
-.user-avatar:has(.avatar-static) > .avatar-animated,
+/* Antes de carregar o frame congelado, esconde o canvas vazio */
+.user-avatar:not(.has-frozen) > canvas.avatar-static,
+.chat-msg-avatar:not(.has-frozen) > canvas.avatar-static {
+  display: none !important;
+}
+
+/* Quando tem o frame congelado pronto: esconde o GIF animado e mostra o canvas estático */
 .user-avatar.has-frozen > .avatar-animated,
-.chat-msg-avatar:has(.avatar-static) > .avatar-animated,
 .chat-msg-avatar.has-frozen > .avatar-animated {
   display: none;
 }
 
-.user-avatar:has(.avatar-static) > .avatar-static,
-.user-avatar.has-frozen > .avatar-static,
-.chat-msg-avatar:has(.avatar-static) > .avatar-static,
-.chat-msg-avatar.has-frozen > .avatar-static {
+.user-avatar.has-frozen > canvas.avatar-static,
+.chat-msg-avatar.has-frozen > canvas.avatar-static {
   display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
 }
 
 /* O GIF roda quando a pessoa está falando OU quando passa o mouse por cima */
-.user-avatar-wrap.is-speaking .user-avatar > .avatar-animated,
-.channel-user.is-speaking .user-avatar > .avatar-animated,
-.channel-user:hover .user-avatar > .avatar-animated,
-.lounge-user-card.is-speaking .user-avatar > .avatar-animated,
-.lounge-user-card:hover .user-avatar > .avatar-animated,
+.user-avatar-wrap.is-speaking .user-avatar.has-frozen > .avatar-animated,
+.channel-user.is-speaking .user-avatar.has-frozen > .avatar-animated,
+.channel-user:hover .user-avatar.has-frozen > .avatar-animated,
+.lounge-user-card.is-speaking .user-avatar.has-frozen > .avatar-animated,
+.lounge-user-card:hover .user-avatar.has-frozen > .avatar-animated,
 .chat-msg-avatar:hover > .avatar-animated,
 .user-popover-avatar > .avatar-animated,
 .profile-avatar-preview > .avatar-animated,
-#user-profile:hover .user-avatar > .avatar-animated,
-#dock-avatar-wrap.is-speaking .user-avatar > .avatar-animated {
+#user-profile:hover .user-avatar.has-frozen > .avatar-animated,
+#dock-avatar-wrap.is-speaking .user-avatar.has-frozen > .avatar-animated {
   display: block !important;
 }
 
-.user-avatar-wrap.is-speaking .user-avatar > .avatar-static,
-.channel-user.is-speaking .user-avatar > .avatar-static,
-.channel-user:hover .user-avatar > .avatar-static,
-.lounge-user-card.is-speaking .user-avatar > .avatar-static,
-.lounge-user-card:hover .user-avatar > .avatar-static,
-.chat-msg-avatar:hover > .avatar-static,
-.user-popover-avatar > .avatar-static,
-.profile-avatar-preview > .avatar-static,
-#user-profile:hover .user-avatar > .avatar-static,
-#dock-avatar-wrap.is-speaking .user-avatar > .avatar-static {
+.user-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.avatar-static,
+.channel-user.is-speaking .user-avatar.has-frozen > canvas.avatar-static,
+.channel-user:hover .user-avatar.has-frozen > canvas.avatar-static,
+.lounge-user-card.is-speaking .user-avatar.has-frozen > canvas.avatar-static,
+.lounge-user-card:hover .user-avatar.has-frozen > canvas.avatar-static,
+.chat-msg-avatar:hover > canvas.avatar-static,
+.user-popover-avatar > canvas.avatar-static,
+.profile-avatar-preview > canvas.avatar-static,
+#user-profile:hover .user-avatar.has-frozen > canvas.avatar-static,
+#dock-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.avatar-static {
   display: none !important;
 }
 
