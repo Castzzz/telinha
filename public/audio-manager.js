@@ -308,11 +308,21 @@ export class VoiceActivityDetector {
   startLoop() {
     if (typeof requestAnimationFrame === 'undefined') return;
 
+    let lastRun = 0;
     const processFrame = () => {
       if (!this.analyserNode || !this.isEnabled) {
         this.rafId = requestAnimationFrame(processFrame);
         return;
       }
+
+      const now = Date.now();
+      // Em telas de alta frequência (144Hz/240Hz), limita o cálculo de RMS a ~40 FPS (25ms),
+      // economizando CPU sem afetar a detecção de voz
+      if (now - lastRun < 25) {
+        this.rafId = requestAnimationFrame(processFrame);
+        return;
+      }
+      lastRun = now;
 
       this.analyserNode.getFloatTimeDomainData(this.dataArray);
 
@@ -324,8 +334,6 @@ export class VoiceActivityDetector {
       }
       const rms = Math.sqrt(sumSquares / this.dataArray.length);
       const db = 20 * Math.log10(Math.max(rms, 0.00001)); // epsilon prevents -infinity
-
-      const now = Date.now();
 
       // Normalize volume level (0.0 to 1.0) for UI meter
       if (this.onVolumeLevel) {

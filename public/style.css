@@ -2803,6 +2803,18 @@ ul {
   }
 }
 
+/* Modo leve: deixa as molduras neon/arco-íris estáticas (zero repintura de CPU/GPU) */
+html.light-mode .frame-neon::after,
+html.light-mode .frame-arco-iris::after {
+  animation: none !important;
+}
+
+/* Pausar animações visuais quando o app estiver em segundo plano ou minimizado */
+html.pause-in-background.app-unfocused *,
+html.pause-in-background.app-hidden * {
+  animation-play-state: paused !important;
+}
+
 /* Banner no topo do popup da pessoa */
 .user-popover {
   overflow: hidden;

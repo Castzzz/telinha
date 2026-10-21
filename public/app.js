@@ -99,6 +99,26 @@ function applyTheme(theme) {
 }
 applyTheme(prefs.theme);
 
+// Desempenho e economia: modo leve (molduras estáticas) e pausar animações em segundo plano
+function applyPerformancePrefs() {
+  const isLight = prefs.lightMode !== false; // padrão ligado (economiza CPU e GPU)
+  const isPauseBg = prefs.pauseInBackground !== false; // padrão ligado
+  document.documentElement.classList.toggle('light-mode', isLight);
+  document.documentElement.classList.toggle('pause-in-background', isPauseBg);
+}
+applyPerformancePrefs();
+
+// Pausa animações quando o app estiver minimizado ou sem foco
+document.addEventListener('visibilitychange', () => {
+  document.documentElement.classList.toggle('app-hidden', document.visibilityState === 'hidden');
+});
+window.addEventListener('blur', () => {
+  document.documentElement.classList.add('app-unfocused');
+});
+window.addEventListener('focus', () => {
+  document.documentElement.classList.remove('app-unfocused');
+});
+
 
 function savePrefs(patch) {
   Object.assign(prefs, patch);
@@ -4031,6 +4051,29 @@ function setupThemeSelect() {
   });
 }
 
+function setupPerformanceSelect() {
+  const checkLight = $('#check-light-mode');
+  const checkPause = $('#check-pause-background');
+  if (checkLight) {
+    checkLight.checked = prefs.lightMode !== false;
+    checkLight.addEventListener('change', () => {
+      const val = checkLight.checked;
+      prefs.lightMode = val;
+      applyPerformancePrefs();
+      savePrefs({ lightMode: val });
+    });
+  }
+  if (checkPause) {
+    checkPause.checked = prefs.pauseInBackground !== false;
+    checkPause.addEventListener('change', () => {
+      const val = checkPause.checked;
+      prefs.pauseInBackground = val;
+      applyPerformancePrefs();
+      savePrefs({ pauseInBackground: val });
+    });
+  }
+}
+
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
 const WHATS_NEW_VERSION = '3.2';
 function showWhatsNewOnce() {
@@ -6605,6 +6648,7 @@ function initApp() {
   setupMasterVolume();
   setupMicGain();
   setupThemeSelect();
+  setupPerformanceSelect();
   setupAdminSettings();
   setupShareMenu();
   updateMicButton();
