@@ -446,6 +446,40 @@ ul {
   color: var(--text-muted);
 }
 
+.channel-chat-btn {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.channel-chat-btn .icon-svg {
+  width: 16px;
+  height: 16px;
+}
+
+.channel-chat-btn:hover {
+  color: var(--text-header);
+  background: var(--bg-hover);
+}
+
+/* mensagem nova no chat da call */
+.channel-chat-btn.has-unread::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-red);
+}
+
 .channel-count:empty, .channel-count[data-count="0"] {
   display: none;
 }
@@ -832,6 +866,43 @@ ul {
 .videos-grid.mosaic-grid {
   grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
   grid-auto-rows: 1fr;
+  position: relative;
+}
+
+/* Divisória arrastável entre transmissões no mosaico */
+.mosaic-gutter {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 12px;
+  margin-left: -6px;
+  cursor: col-resize;
+  z-index: 15;
+  border-radius: var(--radius-pill);
+}
+
+.mosaic-gutter::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 4px;
+  height: 48px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--radius-pill);
+  background: var(--text-muted);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.videos-grid:hover .mosaic-gutter::after {
+  opacity: 0.5;
+}
+
+.mosaic-gutter:hover::after,
+.resizing-sidebar .mosaic-gutter::after {
+  opacity: 1;
+  background: var(--accent-brand);
 }
 
 .video-tile {
@@ -1267,15 +1338,58 @@ ul {
   border-color: var(--accent-brand);
 }
 
+/* Campo + clipe numa caixa só; o enviar é um círculo com o aviãozinho */
+.chat-composer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-fast);
+}
+
+.chat-composer:focus-within {
+  border-color: var(--accent-brand);
+}
+
+.chat-composer .chat-input,
+.chat-composer .chat-input:focus {
+  background: transparent;
+  border: none;
+}
+
+.chat-composer .btn-chat-attach {
+  margin-right: 3px;
+}
+
+.btn-chat-attach .icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
 .btn-chat-send {
+  width: 38px;
   height: 38px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: var(--accent-brand);
   color: #fff;
-  font-weight: 600;
-  padding: 0 14px;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  transition: background var(--transition-fast);
+  border-radius: 50%;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+}
+
+.btn-chat-send .icon-svg {
+  width: 18px;
+  height: 18px;
+  margin-left: -2px;
+}
+
+.btn-chat-send:active {
+  transform: scale(0.94);
 }
 
 .btn-chat-send:hover {
@@ -1309,7 +1423,84 @@ ul {
 }
 
 .modal-settings-card {
-  max-width: 720px;
+  max-width: 760px;
+  height: min(620px, calc(100vh - 32px));
+}
+
+/* Configurações separadas por tópico: lista à esquerda, conteúdo à direita */
+.modal-card > .modal-body.settings-body {
+  display: flex;
+  gap: 20px;
+  overflow: hidden;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 170px;
+  flex-shrink: 0;
+}
+
+.settings-tab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.settings-tab .icon-svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.settings-tab:hover {
+  background: var(--bg-hover);
+  color: var(--text-normal);
+}
+
+.settings-tab.active {
+  background: var(--bg-active);
+  color: var(--text-header);
+}
+
+.settings-panels {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.settings-section-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-header);
+  margin-bottom: 14px;
+}
+
+@media (max-width: 640px) {
+  .modal-card > .modal-body.settings-body {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    width: auto;
+    overflow-x: auto;
+  }
+
+  .settings-tab span {
+    display: none;
+  }
 }
 
 /* Tela pequena: o cartão cabe na janela e o meio rola (título e botões ficam fixos) */
@@ -1919,6 +2110,55 @@ ul {
   color: #fff;
 }
 
+/* Abas das transmissões lá em cima: foto, nome e o ✕ alinhados no meio */
+.stream-tab-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 6px 0 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.stream-tab-chip:hover {
+  color: var(--text-normal);
+  background: var(--bg-hover);
+}
+
+.stream-tab-chip.active {
+  color: var(--text-header);
+  border-color: var(--accent-brand);
+}
+
+.stream-tab-chip .stream-tab-avatar {
+  width: 22px;
+  height: 22px;
+}
+
+.stream-tab-chip > span:not(.stream-tab-avatar):not(.stream-tab-close) {
+  padding-right: 2px;
+}
+
+.stream-tab-chip .stream-tab-close {
+  margin-left: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 10px;
+}
+
 .stream-tab-close {
   margin-left: 4px;
   padding: 0 3px;
@@ -2013,10 +2253,6 @@ ul {
   transition: opacity 0.3s ease;
 }
 
-.user-popover-reconnect {
-  width: 100%;
-  margin-top: 8px;
-}
 
 /* Cabe o botão da câmera no dock mesmo com a barra estreita */
 .dock-controls {
@@ -2083,11 +2319,6 @@ ul {
   color: var(--text-normal);
 }
 
-.user-popover-kick {
-  width: 100%;
-  margin-top: 8px;
-  color: var(--accent-red);
-}
 
 /* ==================== COR DO NOME ==================== */
 .profile-name-preview {
@@ -2345,9 +2576,56 @@ ul {
 }
 
 .user-popover-admin {
-  margin-top: 10px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-medium);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Ações em lista, uma por linha, todas com o mesmo espaçamento */
+.user-popover-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-popover-footer {
   padding-top: 8px;
   border-top: 1px solid var(--border-medium);
+}
+
+.popover-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  color: var(--text-normal);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  transition: background var(--transition-fast);
+}
+
+.popover-menu-item .icon-svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.popover-menu-item:hover {
+  background: var(--bg-hover);
+}
+
+.popover-menu-item.danger {
+  color: var(--accent-red);
+}
+
+.popover-menu-item.danger:hover {
+  background: rgba(242, 63, 67, 0.12);
 }
 
 .user-popover-admin .user-popover-actions {
@@ -2357,4 +2635,66 @@ ul {
 .admin-lock {
   font-size: 9px;
   margin-left: 1px;
+}
+
+/* Quem está assistindo: fotinhas pequenas e juntinhas do lado do nome de quem transmite */
+.tile-viewers {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.tile-viewer-avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: 700;
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(17, 18, 20, 0.9);
+  flex-shrink: 0;
+}
+
+.tile-viewer-avatar + .tile-viewer-avatar {
+  margin-left: -5px;
+}
+
+.tile-viewer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.tile-viewer-more {
+  margin-left: 4px;
+  font-size: 11px;
+  color: #cbd5e1;
+}
+
+/* No canal em que você está, a bolinha de mensagem nova fica no balão do chat */
+.channel-item.channel-active.channel-unread > .channel-row::after {
+  display: none;
+}
+
+/* Foto/GIF de perfil em tamanho grande (por cima do popup da pessoa) */
+.image-viewer.avatar-view {
+  z-index: 1300;
+}
+
+.image-viewer.avatar-view img {
+  width: min(70vmin, 480px);
+  height: min(70vmin, 480px);
+  object-fit: cover;
+  border-radius: 24px;
+}
+
+#user-popover-avatar img,
+.chat-msg-avatar img {
+  cursor: zoom-in;
 }

@@ -22,10 +22,11 @@
 }
 
 /* ---------- Barra de cima: some no fundo, só os botões aparecem ---------- */
+/* 52px: mesma altura dos botões da janela (minimizar/fechar) que o Electron desenha por cima.
+   Só mexe na borda esquerda: a direita reserva o espaço desses botões (style.css). */
 [data-look="novo"] .app-topbar {
-  height: 48px;
   border-bottom: none;
-  padding: 0 14px;
+  padding-left: 14px;
 }
 
 [data-look="novo"] .brand-logo .logo-emoji {
@@ -62,7 +63,7 @@
 
 /* ---------- Os três painéis flutuando ---------- */
 [data-look="novo"] .app-layout {
-  height: calc(100vh - 48px);
+  height: calc(100vh - 52px);
   padding: 0 var(--panel-gap) var(--panel-gap);
   gap: var(--panel-gap);
   background: var(--bg-tertiary);
@@ -87,13 +88,16 @@
   box-shadow: none;
 }
 
-/* As alças de arrastar ficam no vão entre os painéis */
+/* As alças de arrastar ficam na beirada de dentro de cada painel (o chat corta o que sai dele) */
 [data-look="novo"] .sidebar-resizer {
-  right: -6px;
+  right: 0;
+  width: 8px;
+  z-index: 30;
 }
 
 [data-look="novo"] .chat-resizer {
-  left: -6px;
+  left: 0;
+  right: auto;
 }
 
 /* ---------- Barra de canais ---------- */
@@ -142,18 +146,111 @@
   border-radius: 8px;
 }
 
-/* Seu perfil vira um cartão no pé da barra */
+/* Painel "Voz conectada" + sair da call: só no visual novo */
+.voice-panel-info,
+.dock-leave {
+  display: none;
+}
+
+/* Seu perfil vira um cartão no pé da barra. Em call ganha uma linha de cima com o canal,
+   transmitir, câmera e sair; embaixo ficam você, microfone, fone e configurações. */
 [data-look="novo"] .user-dock {
   margin: 0 8px 8px;
   border: none;
   border-radius: 12px;
   background: var(--bg-tertiary);
-  height: calc(var(--bottom-bar-height) - 8px);
+  height: auto;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 34px);
+  grid-template-areas: "profile mic deaf gear";
+  align-items: center;
+  gap: 4px 2px;
 }
 
-[data-look="novo"] .user-dock {
-  padding: 0 6px;
-  gap: 4px;
+[data-look="novo"] .user-dock .dock-controls {
+  display: contents;
+}
+
+[data-look="novo"] .user-dock .user-profile { grid-area: profile; }
+[data-look="novo"] #btn-toggle-mic { grid-area: mic; }
+[data-look="novo"] #btn-toggle-deafen { grid-area: deaf; }
+[data-look="novo"] #btn-open-settings { grid-area: gear; }
+[data-look="novo"] #btn-share-screen { grid-area: share; }
+[data-look="novo"] #btn-share-camera { grid-area: cam; }
+[data-look="novo"] .voice-panel-info { grid-area: info; }
+[data-look="novo"] .dock-leave { grid-area: leave; }
+
+[data-look="novo"] .user-dock:not(.in-call) #btn-share-screen,
+[data-look="novo"] .user-dock:not(.in-call) #btn-share-camera {
+  display: none;
+}
+
+[data-look="novo"] .user-dock.in-call {
+  grid-template-areas:
+    "info share cam leave"
+    "profile mic deaf gear";
+  row-gap: 8px;
+}
+
+/* linha separando as duas partes */
+[data-look="novo"] .user-dock.in-call::before {
+  content: '';
+  grid-area: 1 / 1 / 2 / -1;
+  align-self: end;
+  height: 1px;
+  margin: 0 -8px -4px;
+  background: var(--border-medium);
+}
+
+[data-look="novo"] .user-dock.in-call .voice-panel-info,
+[data-look="novo"] .user-dock.in-call .dock-leave {
+  display: flex;
+}
+
+[data-look="novo"] .voice-panel-info {
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding-left: 4px;
+  line-height: 1.25;
+}
+
+[data-look="novo"] .voice-panel-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent-green);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+[data-look="novo"] .voice-panel-status .icon-svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-look="novo"] .voice-panel-channel {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+[data-look="novo"] .dock-leave {
+  color: var(--accent-red);
+}
+
+[data-look="novo"] .dock-leave:hover {
+  background: rgba(242, 63, 67, 0.15);
+  color: var(--accent-red);
+}
+
+/* o "Sair da call" lá de cima mudou pra cá */
+[data-look="novo"] #btn-leave-call {
+  display: none;
 }
 
 [data-look="novo"] .user-profile .user-avatar-wrap {
@@ -162,7 +259,7 @@
 
 [data-look="novo"] .dock-btn {
   border-radius: 8px;
-  width: 30px;
+  width: 34px;
 }
 
 /* ---------- Palco ---------- */
@@ -267,21 +364,30 @@
   padding: 0 10px;
 }
 
-[data-look="novo"] .chat-input {
+[data-look="novo"] .chat-composer {
   border-radius: var(--radius-pill);
   border-color: transparent;
-  padding: 0 16px;
-  height: 40px;
 }
 
-[data-look="novo"] .chat-input:focus {
+[data-look="novo"] .chat-composer:focus-within {
   border-color: var(--accent-brand);
 }
 
-[data-look="novo"] .btn-chat-send {
-  border-radius: var(--radius-pill);
+[data-look="novo"] .chat-input {
+  padding: 0 4px 0 16px;
   height: 40px;
-  padding: 0 18px;
+}
+
+[data-look="novo"] .btn-chat-attach {
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+}
+
+[data-look="novo"] .btn-chat-send {
+  width: 40px;
+  height: 40px;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-brand) 45%, transparent);
 }
 
 [data-look="novo"] .btn-chat-back {
@@ -344,4 +450,27 @@
 
 [data-look="novo"] ::-webkit-scrollbar-thumb:hover {
   background-color: var(--text-muted);
+}
+
+/* ---------- Menu da pessoa e configurações ---------- */
+[data-look="novo"] .popover-menu-item {
+  border-radius: 10px;
+}
+
+[data-look="novo"] .settings-tab {
+  border-radius: 10px;
+}
+
+[data-look="novo"] .settings-tab.active {
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent-brand);
+}
+
+[data-look="novo"] .modal-settings-card .settings-nav {
+  padding-right: 16px;
+  border-right: 1px solid var(--border-medium);
+}
+
+[data-look="novo"] .tile-badge {
+  border-radius: var(--radius-pill);
 }

@@ -130,6 +130,8 @@ const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" strok
 const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
 const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
 const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
+// Balão do chat da call (no canal de voz em que você está)
+const CHAT_BUBBLE_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
 // Alto-falante (silenciar alguém só pra você)
 const SPEAKER_PATHS = '<path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/>';
 const SPEAKER_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SPEAKER_PATHS}<path d="M3 3l18 18"/></svg>`;
@@ -643,6 +645,10 @@ const handleUserStateChanged = (state) => {
       }
     }
     if (typeof state.isDeafened === 'boolean') u.isDeafened = state.isDeafened;
+    if (Array.isArray(state.watching)) {
+      u.watching = state.watching;
+      renderStreamViewers();
+    }
     if (typeof state.isSpeaking === 'boolean') {
       u.isSpeaking = state.isSpeaking;
       updateSpeakingIndicators(userId, state.isSpeaking);
@@ -684,6 +690,11 @@ socket.on('chat-message', (msg) => {
 
   if (msg.channelId === appState.currentChannelId) {
     if (!appState.textView) appendChatMessage(msg, true);
+    // Chat da call fora da vista: acende a bolinha no balão do canal
+    if ((appState.textView || $('#chat-drawer')?.classList.contains('collapsed')) && msg.userId !== appState.myId) {
+      appState.unreadChannels.add(msg.channelId);
+      renderChannelsTree();
+    }
   } else {
     appState.unreadChannels.add(msg.channelId);
     renderChannelsTree();
@@ -941,13 +952,19 @@ function renderChannelsTree() {
     row.innerHTML = `
       <span class="channel-speaker-icon">${icon}</span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
-      ${userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
+      ${isActive
+        ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
+        : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
       ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
     `;
 
     row.querySelector('.channel-delete-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       deleteChannel(chId);
+    });
+    row.querySelector('.channel-chat-btn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openCallChat();
     });
     // Solta aqui a pessoa arrastada (admin)
     li.addEventListener('dragover', (e) => {
@@ -1043,6 +1060,7 @@ function renderChannelsTree() {
     li.appendChild(usersUl);
     treeContainer.appendChild(li);
   });
+  renderStreamViewers();
 }
 
 function updateTopBar() {
@@ -1051,6 +1069,9 @@ function updateTopBar() {
   const name = ch ? ch.name : appState.currentChannelId || 'Fora da call';
 
   $('#btn-leave-call')?.classList.toggle('hidden', !inCall);
+  $('#user-dock')?.classList.toggle('in-call', inCall);
+  const voiceChannel = $('#voice-panel-channel');
+  if (voiceChannel) voiceChannel.textContent = name;
 
   const textCh = appState.textView ? appState.textChannels.get(appState.textView) : null;
   const chatLabel = $('#chat-channel-label');
@@ -1395,8 +1416,18 @@ function setupChatImages() {
     const img = e.target.closest('.chat-image');
     if (!img || !viewer || !viewerImg) return;
     viewerImg.src = img.src;
+    viewer.classList.remove('avatar-view');
     viewer.classList.remove('hidden');
   });
+  // Clique na foto de alguém (popup da pessoa ou chat): mostra a foto/GIF grande
+  document.addEventListener('click', (e) => {
+    const img = e.target.closest('#user-popover-avatar img, .chat-msg-avatar img');
+    if (!img || !viewer || !viewerImg) return;
+    e.stopPropagation();
+    viewerImg.src = img.src;
+    viewer.classList.add('avatar-view');
+    viewer.classList.remove('hidden');
+  }, true);
   viewer?.addEventListener('click', () => viewer.classList.add('hidden'));
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') viewer?.classList.add('hidden');
@@ -1501,6 +1532,21 @@ function updateTextLayout() {
   $('#app-layout')?.classList.toggle('text-full', Boolean(appState.textView) && chatOpen && !watching);
 }
 
+// Balão do canal de voz: abre o chat da call no canto
+function markCallChatSeen() {
+  if (!appState.unreadChannels.delete(appState.currentChannelId)) return;
+  renderChannelsTree();
+}
+
+function openCallChat() {
+  closeTextView();
+  markCallChatSeen();
+  $('#chat-drawer')?.classList.remove('collapsed');
+  $('#btn-toggle-chat')?.classList.add('active');
+  updateTextLayout();
+  $('#chat-input')?.focus();
+}
+
 function openTextChannel(id) {
   if (!appState.textChannels.has(id)) return;
   appState.textView = id;
@@ -1520,6 +1566,7 @@ function openTextChannel(id) {
 function closeTextView() {
   if (!appState.textView) return;
   appState.textView = null;
+  markCallChatSeen();
   renderTextChannels();
   updateTopBar();
   updateTextLayout();
@@ -1726,6 +1773,7 @@ function setupDockControls() {
   shareBtn?.addEventListener('click', toggleScreenShare);
   loungeShareBtn?.addEventListener('click', toggleScreenShare);
   $('#btn-leave-call')?.addEventListener('click', leaveCall);
+  $('#btn-dock-leave')?.addEventListener('click', leaveCall);
   $('#btn-share-camera')?.addEventListener('click', toggleCameraShare);
 
   // Settings Modal Open
@@ -1763,6 +1811,7 @@ function setupChatAndReactions() {
     if (drawer) {
       drawer.classList.toggle('collapsed');
       $('#btn-toggle-chat')?.classList.toggle('active', !drawer.classList.contains('collapsed'));
+      if (!drawer.classList.contains('collapsed') && !appState.textView) markCallChatSeen();
       updateTextLayout();
     }
   });
@@ -2025,6 +2074,17 @@ function setupModals() {
       console.warn('[Settings] Failed to populate audio devices:', e);
     }
   };
+
+  // Tópicos das configurações (barra da esquerda)
+  document.querySelectorAll('.settings-tab').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      const name = tab.dataset.settingsTab;
+      document.querySelectorAll('.settings-tab').forEach((t) => t.classList.toggle('active', t === tab));
+      document.querySelectorAll('.settings-section').forEach((sec) => {
+        sec.classList.toggle('hidden', sec.dataset.settingsSection !== name);
+      });
+    });
+  });
 
   $('#btn-open-settings')?.addEventListener('click', async () => {
     $('#modal-settings')?.classList.remove('hidden');
@@ -2687,6 +2747,7 @@ function renderAdminSettings() {
   const group = $('#admin-settings');
   if (!group) return;
   group.classList.toggle('hidden', !appState.serverHasAdmin);
+  $('#settings-tab-admin')?.classList.toggle('hidden', !appState.serverHasAdmin);
   $('#admin-login-row')?.classList.toggle('hidden', appState.isAdmin);
   $('#admin-logged-row')?.classList.toggle('hidden', !appState.isAdmin);
 }
@@ -3299,8 +3360,138 @@ function toggleExpandedStream(userId) {
   updateStageLayout();
 }
 
+// Avisa o servidor o que você está assistindo, pra aparecer sua foto na transmissão dos outros
+let lastWatchingSent = '';
+function syncWatching() {
+  const keys = appState.currentChannelId
+    ? [...appState.activeStreams.entries()].filter(([, info]) => !info.isLocal).map(([key]) => key).sort()
+    : [];
+  appState.myUser.watching = keys;
+  const sig = `${appState.currentChannelId}|${keys.join()}`;
+  if (sig === lastWatchingSent) return;
+  lastWatchingSent = sig;
+  if (appState.currentChannelId) socket.emit('user-state-changed', { watching: keys });
+}
+
+// Fotinhas de quem está assistindo, do lado do nome de quem transmite
+const MAX_VIEWER_AVATARS = 6;
+function renderStreamViewers() {
+  const ch = appState.channels.get(appState.currentChannelId);
+  for (const key of appState.activeStreams.keys()) {
+    const badge = document.querySelector(`#video-tile-${CSS.escape(key)} .tile-badge`);
+    if (!badge) continue;
+    const viewers = [];
+    for (const u of ch?.users.values() || []) {
+      const list = u.id === appState.myId ? appState.myUser.watching : u.watching;
+      if (Array.isArray(list) && list.includes(key)) viewers.push(u.id === appState.myId ? { ...u, ...appState.myUser, id: u.id, avatarV: myProfile.avatar ? 1 : 0 } : u);
+    }
+    let box = badge.querySelector('.tile-viewers');
+    if (!viewers.length) {
+      box?.remove();
+      continue;
+    }
+    if (!box) {
+      box = document.createElement('span');
+      box.className = 'tile-viewers';
+      badge.appendChild(box);
+    }
+    const shown = viewers.slice(0, MAX_VIEWER_AVATARS);
+    const extra = viewers.length - shown.length;
+    box.title = `Assistindo: ${viewers.map((u) => u.name).join(', ')}`;
+    box.innerHTML = shown
+      .map((u) => `<span class="tile-viewer-avatar" style="background-color: ${safeColor(u.color)};">${avatarInnerHtml(u)}</span>`)
+      .join('') + (extra > 0 ? `<span class="tile-viewer-more">+${extra}</span>` : '');
+  }
+}
+
+// Mosaico: colunas com largura ajustável. Arrastar a divisória entre duas transmissões
+// alarga uma e estreita a outra (duplo clique volta tudo igual).
+const MIN_MOSAIC_WEIGHT = 0.25;
+appState.mosaicWeights = [];
+
+let mosaicObserver = null;
+function layoutMosaic(grid, count) {
+  if (!grid) return;
+  // Janela/painéis mudaram de tamanho: as divisórias acompanham
+  if (!mosaicObserver && typeof ResizeObserver !== 'undefined') {
+    mosaicObserver = new ResizeObserver(() => {
+      grid.querySelectorAll('.mosaic-gutter').forEach((g, j) => placeGutter(grid, g, j));
+    });
+    mosaicObserver.observe(grid);
+  }
+  grid.querySelectorAll('.mosaic-gutter').forEach((g) => g.remove());
+  if (!count) {
+    grid.style.gridTemplateColumns = '';
+    grid.style.gridTemplateRows = '';
+    return;
+  }
+  // Até 3 numa linha; mais que isso, duas linhas
+  const perRow = count <= 3 ? count : Math.ceil(count / 2);
+  const rows = Math.ceil(count / perRow);
+  if (appState.mosaicWeights.length !== perRow) appState.mosaicWeights = Array(perRow).fill(1);
+  const weights = appState.mosaicWeights;
+  grid.style.gridTemplateColumns = weights.map((w) => `minmax(0, ${w}fr)`).join(' ');
+  grid.style.gridTemplateRows = `repeat(${rows}, minmax(0, 1fr))`;
+
+  for (let i = 0; i < perRow - 1; i++) {
+    const gutter = document.createElement('div');
+    gutter.className = 'mosaic-gutter';
+    gutter.title = 'Arraste pra mudar o tamanho (duplo clique deixa igual)';
+    grid.appendChild(gutter);
+    placeGutter(grid, gutter, i);
+    gutter.addEventListener('click', (e) => e.stopPropagation());
+    gutter.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      appState.mosaicWeights = Array(perRow).fill(1);
+      layoutMosaic(grid, count);
+    });
+    gutter.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      gutter.setPointerCapture(e.pointerId);
+      document.body.classList.add('resizing-sidebar');
+      const startX = e.clientX;
+      const start = [...weights];
+      const total = start.reduce((a, b) => a + b, 0);
+      const pxPerWeight = grid.clientWidth / total;
+      const pair = start[i] + start[i + 1];
+      const onMove = (ev) => {
+        const delta = (ev.clientX - startX) / pxPerWeight;
+        const left = Math.min(pair - MIN_MOSAIC_WEIGHT, Math.max(MIN_MOSAIC_WEIGHT, start[i] + delta));
+        weights[i] = left;
+        weights[i + 1] = pair - left;
+        grid.style.gridTemplateColumns = weights.map((w) => `minmax(0, ${w}fr)`).join(' ');
+        grid.querySelectorAll('.mosaic-gutter').forEach((g, j) => placeGutter(grid, g, j));
+      };
+      const onUp = () => {
+        gutter.removeEventListener('pointermove', onMove);
+        document.body.classList.remove('resizing-sidebar');
+      };
+      gutter.addEventListener('pointermove', onMove);
+      gutter.addEventListener('pointerup', onUp, { once: true });
+      gutter.addEventListener('pointercancel', onUp, { once: true });
+    });
+  }
+}
+
+// Divisória no vão entre a coluna i e a i+1
+function placeGutter(grid, gutter, i) {
+  const weights = appState.mosaicWeights;
+  const total = weights.reduce((a, b) => a + b, 0);
+  const style = getComputedStyle(grid);
+  const padL = parseFloat(style.paddingLeft) || 0;
+  const padR = parseFloat(style.paddingRight) || 0;
+  const gap = parseFloat(style.columnGap) || 0;
+  const inner = grid.clientWidth - padL - padR - gap * (weights.length - 1);
+  const before = weights.slice(0, i + 1).reduce((a, b) => a + b, 0);
+  gutter.style.left = `${padL + (inner * before) / total + gap * i + gap / 2}px`;
+}
+
 function updateStageLayout() {
   updateTextLayout();
+  syncWatching();
+  renderStreamViewers();
   const grid = document.getElementById('videos-grid');
   const lounge = document.getElementById('voice-lounge');
   const watchingLabel = document.getElementById('watching-stream-label');
@@ -3376,6 +3567,8 @@ function updateStageLayout() {
       }
     }
   }
+
+  layoutMosaic(grid, mosaic && count > 1 ? count : 0);
 
   if (watchingLabel) {
     if (appState.focusedStreamUserId && appState.activeStreams.has(appState.focusedStreamUserId)) {

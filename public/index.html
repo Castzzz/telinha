@@ -119,6 +119,17 @@
 
       <!-- PERSISTENT BOTTOM USER DOCK -->
       <footer id="user-dock" class="user-dock">
+        <!-- Visual novo: em call, mostra o canal e o botão de sair aqui embaixo -->
+        <div class="voice-panel-info" id="voice-panel-info">
+          <span class="voice-panel-status">
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20v-4M9 20v-8M14 20V8M19 20V4"/></svg>
+            Voz conectada
+          </span>
+          <span class="voice-panel-channel" id="voice-panel-channel"></span>
+        </div>
+        <button id="btn-dock-leave" class="dock-btn dock-leave" title="Sair da call">
+          <span class="dock-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="M23 1L1 23"/></svg></span>
+        </button>
         <div class="user-profile" id="user-profile" title="Editar seu perfil" role="button" tabindex="0">
           <div class="user-avatar-wrap" id="dock-avatar-wrap">
             <div class="user-avatar" id="dock-user-avatar" style="background-color: var(--accent-brand);">
@@ -245,20 +256,22 @@
 
       <!-- CHAT INPUT FORM -->
       <form id="chat-form" class="chat-form">
-        <input
-          type="text"
-          id="chat-input"
-          class="chat-input"
-          placeholder="Conversar em #geral..."
-          maxlength="400"
-          autocomplete="off"
-        />
-        <label class="btn-chat-attach" title="Mandar imagem (ou cole com Ctrl+V / arraste pro chat)" aria-label="Mandar imagem">
-          📎
-          <input type="file" id="input-chat-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
-        </label>
-        <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar Mensagem">
-          Enviar
+        <div class="chat-composer">
+          <input
+            type="text"
+            id="chat-input"
+            class="chat-input"
+            placeholder="Conversar em #geral..."
+            maxlength="400"
+            autocomplete="off"
+          />
+          <label class="btn-chat-attach" title="Mandar imagem (ou cole com Ctrl+V / arraste pro chat)" aria-label="Mandar imagem">
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            <input type="file" id="input-chat-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+          </label>
+        </div>
+        <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar mensagem" aria-label="Enviar mensagem">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </button>
       </form>
     </aside>
@@ -397,150 +410,174 @@
       </div>
 
       <div class="modal-body settings-body">
-        <!-- Tema -->
-        <div class="form-group">
-          <label for="select-theme">Tema</label>
-          <select id="select-theme" class="form-select">
-            <option value="escuro">Escuro</option>
-            <option value="preto">Mais escuro (preto)</option>
-            <option value="claro">Claro</option>
-          </select>
-        </div>
+        <nav class="settings-nav" aria-label="Tópicos das configurações">
+          <button type="button" class="settings-tab active" data-settings-tab="aparencia"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 3a9 9 0 0 1 0 18"/></svg><span>Aparência</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="microfone"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span>Microfone</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="som"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg><span>Som</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="transmissao"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Transmissão</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="atalhos"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span>Atalhos</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="admin" id="settings-tab-admin"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18l-1-10 5 4 4-7 4 7 5-4-1 10"/></svg><span>Admin</span></button>
+        </nav>
+        <div class="settings-panels">
+          <section class="settings-section" data-settings-section="aparencia">
+            <h4 class="settings-section-title">Aparência</h4>
+            <!-- Tema -->
+            <div class="form-group">
+              <label for="select-theme">Tema</label>
+              <select id="select-theme" class="form-select">
+                <option value="escuro">Escuro</option>
+                <option value="preto">Mais escuro (preto)</option>
+                <option value="claro">Claro</option>
+              </select>
+            </div>
 
-        <!-- Visual novo (em teste) -->
-        <div class="form-group">
-          <label for="select-look">Visual</label>
-          <select id="select-look" class="form-select">
-            <option value="novo">Novo (em teste)</option>
-            <option value="classico">Clássico</option>
-          </select>
-        </div>
+            <!-- Visual novo (em teste) -->
+            <div class="form-group">
+              <label for="select-look">Visual</label>
+              <select id="select-look" class="form-select">
+                <option value="novo">Novo (em teste)</option>
+                <option value="classico">Clássico</option>
+              </select>
+            </div>
+          </section>
+          <section class="settings-section hidden" data-settings-section="microfone">
+            <h4 class="settings-section-title">Microfone</h4>
+            <!-- Dispositivo de Microfone -->
+            <div class="form-group">
+              <label for="select-audio-input">Microfone (Entrada de Voz)</label>
+              <select id="select-audio-input" class="form-select"></select>
+            </div>
 
-        <!-- Admin (só em sala com senha de admin) -->
-        <div class="form-group hidden" id="admin-settings">
-          <label for="input-admin-key">Admin 👑</label>
-          <div class="admin-row" id="admin-login-row">
-            <input type="password" id="input-admin-key" class="form-input" placeholder="Senha de admin da sala" autocomplete="off" />
-            <button type="button" class="btn-primary" id="btn-admin-login">Entrar</button>
-          </div>
-          <div class="admin-row hidden" id="admin-logged-row">
-            <span class="admin-status">Você é admin nessa sala.</span>
-            <button type="button" class="btn-secondary" id="btn-admin-logout">Deixar de ser admin</button>
-          </div>
-          <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
-        </div>
+            <!-- Ganho do microfone -->
+            <div class="form-group">
+              <label for="input-mic-gain">Volume do seu microfone</label>
+              <div class="master-volume-row">
+                <input type="range" id="input-mic-gain" min="0" max="300" step="5" value="100" />
+                <span id="mic-gain-text" class="master-volume-text">100%</span>
+              </div>
+              <p class="form-help">Se os amigos te ouvem baixo (ou o Windows fica abaixando o seu mic), aumente aqui. Veja o efeito no teste de voz lá embaixo.</p>
+            </div>
 
-        <!-- Dispositivo de Microfone -->
-        <div class="form-group">
-          <label for="select-audio-input">Microfone (Entrada de Voz)</label>
-          <select id="select-audio-input" class="form-select"></select>
-        </div>
+            <!-- Cancelamento de ruído do microfone -->
+            <div class="form-group">
+              <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
+              <select id="select-noise-suppression" class="form-select">
+                <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
+                <option value="basico">Básico (filtro do navegador)</option>
+                <option value="off">Desligado (som cru do microfone)</option>
+              </select>
+              <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
+            </div>
 
-        <!-- Ganho do microfone -->
-        <div class="form-group">
-          <label for="input-mic-gain">Volume do seu microfone</label>
-          <div class="master-volume-row">
-            <input type="range" id="input-mic-gain" min="0" max="300" step="5" value="100" />
-            <span id="mic-gain-text" class="master-volume-text">100%</span>
-          </div>
-          <p class="form-help">Se os amigos te ouvem baixo (ou o Windows fica abaixando o seu mic), aumente aqui. Veja o efeito no teste de voz lá embaixo.</p>
-        </div>
+            <!-- VAD Test Meter -->
+            <div class="form-group">
+              <label>Teste de Atividade de Voz (VAD)</label>
+              <div class="vad-meter-container">
+                <div id="vad-meter-bar" class="vad-meter-bar"></div>
+              </div>
+              <p class="form-help">O anel verde no seu avatar acende automaticamente quando você fala.</p>
+            </div>
+      
+          </section>
+          <section class="settings-section hidden" data-settings-section="som">
+            <h4 class="settings-section-title">Som</h4>
+            <!-- Dispositivo de Saída -->
+            <div class="form-group">
+              <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>
+              <select id="select-audio-output" class="form-select"></select>
+            </div>
 
-        <!-- Cancelamento de ruído do microfone -->
-        <div class="form-group">
-          <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
-          <select id="select-noise-suppression" class="form-select">
-            <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
-            <option value="basico">Básico (filtro do navegador)</option>
-            <option value="off">Desligado (som cru do microfone)</option>
-          </select>
-          <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
-        </div>
+            <!-- Ensurdecer e transmissões -->
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-deafen-streams" />
+                Ensurdecer também silencia as transmissões (desligado: você para de ouvir as vozes, mas continua ouvindo as telas)
+              </label>
+            </div>
 
-        <!-- Dispositivo de Saída -->
-        <div class="form-group">
-          <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>
-          <select id="select-audio-output" class="form-select"></select>
-        </div>
+            <!-- Som de entrada/saída -->
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-call-sounds" checked />
+                Tocar um áudio dos amigos quando alguém entra ou sai da call
+              </label>
+            </div>
 
-        <!-- Esconder a própria transmissão -->
-        <div class="form-group">
-          <label class="hotkey-global">
-            <input type="checkbox" id="input-hide-own-stream" />
-            Esconder minha própria transmissão e câmera daqui (os amigos continuam vendo; poupa o PC)
-          </label>
-        </div>
+            <!-- Volume geral -->
+            <div class="form-group">
+              <label for="input-master-volume">Volume geral do Teletela</label>
+              <div class="master-volume-row">
+                <input type="range" id="input-master-volume" min="0" max="200" step="5" value="100" />
+                <span id="master-volume-text" class="master-volume-text">100%</span>
+              </div>
+              <p class="form-help">Aumenta ou abaixa tudo que o Teletela toca (vozes e transmissões), até 200%.</p>
+            </div>
+          </section>
+          <section class="settings-section hidden" data-settings-section="transmissao">
+            <h4 class="settings-section-title">Transmissão</h4>
+            <!-- Esconder a própria transmissão -->
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-hide-own-stream" />
+                Esconder minha própria transmissão e câmera daqui (os amigos continuam vendo; poupa o PC)
+              </label>
+            </div>
 
-        <!-- Ensurdecer e transmissões -->
-        <div class="form-group">
-          <label class="hotkey-global">
-            <input type="checkbox" id="input-deafen-streams" />
-            Ensurdecer também silencia as transmissões (desligado: você para de ouvir as vozes, mas continua ouvindo as telas)
-          </label>
-        </div>
-
-        <!-- Som de entrada/saída -->
-        <div class="form-group">
-          <label class="hotkey-global">
-            <input type="checkbox" id="input-call-sounds" checked />
-            Tocar um áudio dos amigos quando alguém entra ou sai da call
-          </label>
-        </div>
-
-        <!-- Volume geral -->
-        <div class="form-group">
-          <label for="input-master-volume">Volume geral do Teletela</label>
-          <div class="master-volume-row">
-            <input type="range" id="input-master-volume" min="0" max="200" step="5" value="100" />
-            <span id="master-volume-text" class="master-volume-text">100%</span>
-          </div>
-          <p class="form-help">Aumenta ou abaixa tudo que o Teletela toca (vozes e transmissões), até 200%.</p>
-        </div>
-
-        <!-- Dispositivo do Som do Sistema (Linux Loopback Monitor Sink) -->
-        <div class="form-group">
-          <label for="select-audio-system">Áudio da Transmissão (Som do Sistema / Som do PC)</label>
-          <select id="select-audio-system" class="form-select"></select>
-          <p class="form-help">
-            🔊 No Linux PipeWire/PulseAudio, selecione o monitor de áudio do sistema (ex: <code>som_do_pc</code> ou <code>Monitor of...</code>). O som do jogo/vídeo será enviado em estéreo sem exigir microfone ligado.
-          </p>
-        </div>
-
-        <!-- Atalhos de teclado -->
-        <div class="form-group">
-          <label>Atalhos de teclado</label>
-          <div class="hotkey-row">
-            <span>🎙️ Mutar / desmutar</span>
-            <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="mute"></button>
-          </div>
-          <div class="hotkey-row">
-            <span>🎧 Ensurdecer</span>
-            <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="deafen"></button>
-          </div>
-          <label class="hotkey-global" id="hotkey-global-wrap">
-            <input type="checkbox" id="input-hotkey-global" />
-            Funcionar mesmo com o Teletela minimizado (ex: no meio do jogo)
-          </label>
-          <p class="form-help">
-            Clique no botão e aperte a tecla (Esc cancela, Backspace remove).
-            Com o Teletela minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
-            pra não roubar letras que você digita em outros programas.
-          </p>
-          <p class="form-help hidden" id="hotkey-wayland-help">
-            No Linux com Wayland quem segura a tecla no meio do jogo é o sistema. No Hyprland, coloque na config
-            (troque F8 pela sua tecla; <code>bindn</code> deixa o jogo receber a tecla também):<br />
-            <code>bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute</code><br />
-            Pra ensurdecer, use <code>/deafen</code> no fim.
-          </p>
-        </div>
-
-        <!-- VAD Test Meter -->
-        <div class="form-group">
-          <label>Teste de Atividade de Voz (VAD)</label>
-          <div class="vad-meter-container">
-            <div id="vad-meter-bar" class="vad-meter-bar"></div>
-          </div>
-          <p class="form-help">O anel verde no seu avatar acende automaticamente quando você fala.</p>
+            <!-- Dispositivo do Som do Sistema (Linux Loopback Monitor Sink) -->
+            <div class="form-group">
+              <label for="select-audio-system">Áudio da Transmissão (Som do Sistema / Som do PC)</label>
+              <select id="select-audio-system" class="form-select"></select>
+              <p class="form-help">
+                🔊 No Linux PipeWire/PulseAudio, selecione o monitor de áudio do sistema (ex: <code>som_do_pc</code> ou <code>Monitor of...</code>). O som do jogo/vídeo será enviado em estéreo sem exigir microfone ligado.
+              </p>
+            </div>
+          </section>
+          <section class="settings-section hidden" data-settings-section="atalhos">
+            <h4 class="settings-section-title">Atalhos</h4>
+            <!-- Atalhos de teclado -->
+            <div class="form-group">
+              <label>Atalhos de teclado</label>
+              <div class="hotkey-row">
+                <span>🎙️ Mutar / desmutar</span>
+                <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="mute"></button>
+              </div>
+              <div class="hotkey-row">
+                <span>🎧 Ensurdecer</span>
+                <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="deafen"></button>
+              </div>
+              <label class="hotkey-global" id="hotkey-global-wrap">
+                <input type="checkbox" id="input-hotkey-global" />
+                Funcionar mesmo com o Teletela minimizado (ex: no meio do jogo)
+              </label>
+              <p class="form-help">
+                Clique no botão e aperte a tecla (Esc cancela, Backspace remove).
+                Com o Teletela minimizado só funcionam combinações com Ctrl ou Alt, ou teclas F1–F24,
+                pra não roubar letras que você digita em outros programas.
+              </p>
+              <p class="form-help hidden" id="hotkey-wayland-help">
+                No Linux com Wayland quem segura a tecla no meio do jogo é o sistema. No Hyprland, coloque na config
+                (troque F8 pela sua tecla; <code>bindn</code> deixa o jogo receber a tecla também):<br />
+                <code>bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute</code><br />
+                Pra ensurdecer, use <code>/deafen</code> no fim.
+              </p>
+            </div>
+          </section>
+          <section class="settings-section hidden" data-settings-section="admin">
+            <h4 class="settings-section-title">Admin</h4>
+            <!-- Admin (só em sala com senha de admin) -->
+            <div class="form-group hidden" id="admin-settings">
+              <label for="input-admin-key">Admin 👑</label>
+              <div class="admin-row" id="admin-login-row">
+                <input type="password" id="input-admin-key" class="form-input" placeholder="Senha de admin da sala" autocomplete="off" />
+                <button type="button" class="btn-primary" id="btn-admin-login">Entrar</button>
+              </div>
+              <div class="admin-row hidden" id="admin-logged-row">
+                <span class="admin-status">Você é admin nessa sala.</span>
+                <button type="button" class="btn-secondary" id="btn-admin-logout">Deixar de ser admin</button>
+              </div>
+              <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
+            </div>
+          </section>
         </div>
       </div>
 
@@ -619,14 +656,16 @@
     </div>
     <div class="user-popover-admin hidden" id="user-popover-admin">
       <span class="user-popover-label">Admin 👑 (vale pra todo mundo)</span>
-      <div class="user-popover-actions">
-        <button type="button" class="btn-secondary" id="user-popover-server-mute">Mutar pra todos</button>
-        <button type="button" class="btn-secondary" id="user-popover-server-deafen">Ensurdecer pra todos</button>
+      <div class="user-popover-menu">
+        <button type="button" class="popover-menu-item" id="user-popover-server-mute">Mutar pra todos</button>
+        <button type="button" class="popover-menu-item" id="user-popover-server-deafen">Ensurdecer pra todos</button>
+        <button type="button" class="popover-menu-item danger hidden" id="user-popover-kick"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg> Tirar da call</button>
       </div>
     </div>
-    <button type="button" class="btn-secondary user-popover-kick hidden" id="user-popover-kick">🚪 Tirar da call (admin)</button>
-    <button type="button" class="btn-secondary user-popover-reconnect" id="user-popover-reconnect"
-      title="Use se você parou de ouvir essa pessoa">🔄 Reconectar a voz</button>
+    <div class="user-popover-menu user-popover-footer">
+      <button type="button" class="popover-menu-item" id="user-popover-reconnect"
+        title="Use se você parou de ouvir essa pessoa"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg> Reconectar a voz</button>
+    </div>
   </div>
 
   <!-- 4. MODAL NATIVO ELECTRON SCREEN PICKER (PREPARADO PARA M4) -->

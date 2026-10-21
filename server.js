@@ -445,6 +445,7 @@ function publicUser(u) {
     isSharing: u.isSharing,
     isCameraOn: u.isCameraOn,
     extraScreens: u.extraScreens,
+    watching: u.watching,
     isMicOn: u.isMicOn,
     isDeafened: u.isDeafened,
     isSpeaking: u.isSpeaking,
@@ -453,6 +454,8 @@ function publicUser(u) {
   };
 }
 
+const WATCH_KEY_RE = /^[A-Za-z0-9_-]{1,40}(?:__(?:cam|s[23]))?$/;
+const MAX_WATCHING = 8;
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const PROFILE_ID_RE = /^[a-z0-9-]{8,64}$/i;
 const AVATAR_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([a-z0-9+/=]+)$/i;
@@ -657,6 +660,7 @@ io.on('connection', (socket) => {
     isSharing: false,
     isCameraOn: false,
     extraScreens: [],
+    watching: [], // transmissões que essa pessoa está assistindo (chaves "<id>", "<id>__cam", "<id>__s2"...)
     isMicOn: false,
     isDeafened: false,
     isSpeaking: false,
@@ -894,6 +898,7 @@ io.on('connection', (socket) => {
 
     const channel = channels.get(cleanChannelId);
     user.channelId = cleanChannelId;
+    user.watching = [];
     channel.users.set(socket.id, user);
 
     socket.join(cleanChannelId);
@@ -967,6 +972,12 @@ io.on('connection', (socket) => {
     if (typeof rawPayload.isSpeaking === 'boolean' && user.isSpeaking !== rawPayload.isSpeaking) {
       user.isSpeaking = rawPayload.isSpeaking;
     }
+    // Quem está assistindo o quê (as fotinhas do lado do nome de quem transmite)
+    if (Array.isArray(rawPayload.watching)) {
+      const next = [...new Set(rawPayload.watching.filter((k) => typeof k === 'string' && WATCH_KEY_RE.test(k)))]
+        .slice(0, MAX_WATCHING).sort();
+      if (next.join() !== user.watching.join()) user.watching = next;
+    }
     if (typeof rawPayload.streamQuality === 'string' && rawPayload.streamQuality.trim()) {
       user.streamQuality = rawPayload.streamQuality.trim().slice(0, 16);
     }
@@ -977,6 +988,7 @@ io.on('connection', (socket) => {
       isSharing: user.isSharing,
       isCameraOn: user.isCameraOn,
       extraScreens: user.extraScreens,
+      watching: user.watching,
       isMicOn: user.isMicOn,
       isDeafened: user.isDeafened,
       serverMuted: user.serverMuted,
@@ -1379,6 +1391,7 @@ function leaveCurrentChannel(socket) {
   user.isSharing = false;
   user.isCameraOn = false;
   user.extraScreens = [];
+  user.watching = [];
   user.isSpeaking = false;
 
   const summaryList = getChannelsSummary();
