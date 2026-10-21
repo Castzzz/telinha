@@ -606,9 +606,19 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
     }
     let buffer = callSoundBuffers.get(url);
     if (!buffer) {
-      const res = await fetch(url);
-      if (!res.ok) return;
-      buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        buffer = await ctx.decodeAudioData(await res.arrayBuffer());
+      } catch (err) {
+        // Som de entrada de alguém que não veio: toca um dos áudios dos amigos no lugar
+        if (customUrl && !force) {
+          console.warn('[Som] Som de entrada personalizado não veio, tocando o padrão:', err);
+          lastCallSoundAt = 0;
+          return playCallSound(soundSeed, '', { kind });
+        }
+        throw err;
+      }
       callSoundBuffers.set(url, buffer);
     }
     const source = ctx.createBufferSource();

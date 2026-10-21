@@ -176,6 +176,7 @@ async function runTests() {
     assert.equal(bannerRes.headers.get('content-type'), 'image/gif');
     const soundRes = await fetch(`${URL_BASE}/api/join-sound/${bob.id}`);
     assert.equal(soundRes.headers.get('content-type'), 'audio/ogg');
+    assert.equal(soundRes.headers.get('access-control-allow-origin'), '*', 'o app (telinha://app) precisa conseguir baixar o som');
     // Lixo é ignorado: moldura inventada, áudio que não é áudio, som grande demais
     bob.emit('update-profile', {
       frame: 'hack', joinSound: `data:text/html;base64,${Buffer.from('<script>').toString('base64')}`, bio: 'mudou de novo'

@@ -627,6 +627,8 @@ function serveUserMedia(field) {
     const media = io.sockets.sockets.get(req.params.userId)?.data?.user?.[field];
     if (!media) return res.status(404).end();
     res.set({
+      // O app abre de telinha://app e baixa o som com fetch: sem isso o navegador bloqueia
+      'Access-Control-Allow-Origin': '*',
       'Content-Type': media.mime,
       'Cache-Control': 'public, max-age=86400, immutable',
       'X-Content-Type-Options': 'nosniff'
