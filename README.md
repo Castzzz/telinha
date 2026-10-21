@@ -229,7 +229,7 @@ Os links de download deste README apontam sempre pra versão mais nova, então n
 > O app desktop usa a interface da sala (`public/`) **que vem instalada com ele** (`telinha://app`); do servidor só vem a conexão. Então mudou `public/`: publique versão (`npm run release`) **e** atualize o servidor (`npm run deploy:oracle`, pra quem entra pelo navegador). Mudou só `server.js` ou `sfu/`: basta o deploy.
 
 ### Backup dos dados da sala
-`npm run backup` baixa os canais, o histórico dos canais de texto e o soundboard da VM pra `~/Teletela-backups` (fica com os 15 mais novos). O `npm run deploy:oracle` faz um backup sozinho antes de mexer. Pra voltar um backup: `npm run restore -- ~/Teletela-backups/<arquivo>.tar.gz`.
+`npm run backup` baixa os canais, o histórico dos canais de texto, o soundboard e os segredos da VM pra `~/Teletela-backups` (fica com os 15 mais novos). `npm run backup:auto` faz isso sozinho 1x por dia. O `npm run deploy:oracle` também faz um backup antes de mexer. Pra voltar um backup: `npm run restore -- ~/Teletela-backups/<arquivo>.tar.gz`. **A VM sumiu?** Siga o [docs/RECUPERAR-SERVIDOR.md](docs/RECUPERAR-SERVIDOR.md).
 
 ### Senha da sala
 O admin coloca em ⚙️ → *Admin* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.

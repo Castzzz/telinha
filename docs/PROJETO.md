@@ -109,7 +109,9 @@ native/win-audio/          Auxiliar do Windows que captura o som de UM programa 
 build/                     Ícone do app pro electron-builder (icon.svg é a fonte; png/ico gerados)
 deploy/oracle/
   deploy.sh                Roda no SEU PC: backup, compila, empacota, manda pra VM e chama o install
+  config.sh                IP da VM, domínio e chave SSH (os outros scripts leem daqui)
   backup.sh / restore.sh   npm run backup / npm run restore (dados da sala ↔ ~/Teletela-backups)
+  backup-auto.sh           npm run backup:auto (timer diário no seu PC)
   install.sh               Roda NA VM: instala Node/Caddy, serviços systemd, firewall, segredos
 
 tests/
@@ -121,6 +123,7 @@ tests/
 README.md                  Pra quem USA (download, instalar, como usar) + resumo pra quem mantém
 LEIA-ME-AMIGOS.txt         Guia curtinho pros amigos
 docs/PROJETO.md            Este arquivo
+docs/RECUPERAR-SERVIDOR.md Passo a passo pra recriar a sala se a VM sumir
 AGENTS.md / CLAUDE.md      Guia rápido pra agentes de IA
 telinha.desktop            Atalho de menu pro Linux
 ```
@@ -241,7 +244,8 @@ Precisa de:
 
 - A chave SSH `~/.ssh/oracle_telinha`, que só existe no PC do dono. Sem ela não tem deploy.
 - Go instalado. O script procura no PATH e, se não achar, em `~/.local/go/bin/go`.
-- Variáveis opcionais: `VM` (padrão `opc@163.176.189.41`), `DOMAIN`, `SSH_KEY`.
+- IP da VM, domínio e chave ficam em `deploy/oracle/config.sh` (dá pra sobrescrever com
+  `VM=...`, `DOMAIN=...`, `SSH_KEY=...` na linha de comando).
 - `DUCKDNS_TOKEN=xxxx`, só na primeira vez ou pra trocar o token.
 
 **O deploy reinicia o servidor.** Isso derruba todo mundo por uns segundos (o app reconecta
@@ -312,7 +316,10 @@ arquivo é reescrito limpo. As últimas 100 mensagens de cada canal ficam na mem
 Mensagem fixada também é uma op (`{"op":"pin",...}`), guardada no campo `pinned: { by, at }`.
 
 **Backup:** `npm run backup` (`deploy/oracle/backup.sh`) baixa essa pasta (menos `chat-images/`)
-pra `~/Teletela-backups` no seu PC e guarda os 15 mais novos. O deploy faz um backup antes de
+e o `/etc/telinha` da VM (senha de admin, segredo do SFU, token do DuckDNS) pra
+`~/Teletela-backups` no seu PC e guarda os 15 mais novos. `npm run backup:auto` liga um timer
+do systemd do seu usuário que faz isso uma vez por dia (`-- off` desliga). **Se a VM sumir:
+[docs/RECUPERAR-SERVIDOR.md](RECUPERAR-SERVIDOR.md).** O deploy faz um backup antes de
 mexer na VM (pule com `SKIP_BACKUP=1`). Pra voltar: `npm run restore -- <arquivo.tar.gz>`
 (`deploy/oracle/restore.sh` pede confirmação, faz backup do estado atual, para o servidor,
 troca a pasta e sobe de novo).

@@ -18,6 +18,7 @@
     "release": "npm run build:win-audio && GH_TOKEN=$(gh auth token) electron-builder --linux --win --publish always",
     "deploy:oracle": "bash deploy/oracle/deploy.sh",
     "backup": "bash deploy/oracle/backup.sh",
+    "backup:auto": "bash deploy/oracle/backup-auto.sh",
     "restore": "bash deploy/oracle/restore.sh"
   },
   "dependencies": {

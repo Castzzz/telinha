@@ -4,7 +4,8 @@ Teletela (antigo Telinha): app de voz e transmissão de tela entre amigos. Elect
 em JS puro (`public/`), servidor Node/Socket.IO (`server.js`) e SFU em Go (`sfu/`), rodando numa
 VM da Oracle em https://colheitafartus.duckdns.org.
 
-**Documentação completa: [docs/PROJETO.md](docs/PROJETO.md).** Leia antes de mudar algo grande.
+**Documentação completa: [docs/PROJETO.md](docs/PROJETO.md).** VM apagada/quebrada:
+[docs/RECUPERAR-SERVIDOR.md](docs/RECUPERAR-SERVIDOR.md). Leia antes de mudar algo grande.
 Lá tem a arquitetura, onde fica cada funcionalidade, os eventos do Socket.IO, os dados salvos,
 como fazer release/deploy e as armadilhas conhecidas.
 
@@ -40,6 +41,7 @@ node tests/m4-channels-admin.test.js                                   # integra
 npm run release             # publica versão nova (só se o dono pedir)
 npm run deploy:oracle       # atualiza a VM (só se o dono pedir; precisa de ~/.ssh/oracle_telinha; faz backup antes)
 npm run backup              # baixa os dados da sala pra ~/Teletela-backups (só leitura na VM)
+npm run backup:auto         # liga o backup diário no PC do dono (timer do systemd do usuário)
 ```
 
 ## Ao terminar uma mudança

@@ -4,13 +4,11 @@
 #   npm run deploy:oracle
 #
 # Primeira vez (ou pra trocar o token do DuckDNS): DUCKDNS_TOKEN=xxxx npm run deploy:oracle
-# Variáveis: VM (padrão opc@163.176.189.41), DOMAIN, SSH_KEY.
+# VM, DOMAIN e SSH_KEY vêm do deploy/oracle/config.sh (ou da linha de comando).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-VM="${VM:-opc@163.176.189.41}"
-DOMAIN="${DOMAIN:-colheitafartus.duckdns.org}"
-SSH_KEY="${SSH_KEY:-$HOME/.ssh/oracle_telinha}"
+source deploy/oracle/config.sh
 SSH=(ssh -i "$SSH_KEY" -o BatchMode=yes -o ConnectTimeout=30 "$VM")
 GO="${GO:-$(command -v go || echo "$HOME/.local/go/bin/go")}"
 
