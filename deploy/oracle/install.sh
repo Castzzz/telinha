@@ -86,6 +86,18 @@ chmod 600 /etc/telinha/*.env
 PUBLIC_IP=$(curl -fsS https://api.ipify.org || true)
 
 log "Serviços (systemd)"
+# Limites de memória: em VM pequena (1 GB), segura o Node em 192 MB; em VM maior (ex: 12 GB), dá mais folga
+TOTAL_RAM_KB=$(awk '/MemTotal/ {print $2}' /proc/meminfo 2>/dev/null || echo 1048576)
+if [ "$TOTAL_RAM_KB" -gt 4194304 ]; then
+  NODE_MEM_LIMIT="--max-old-space-size=2048"
+  APP_MEM_MAX="3G"
+  SFU_MEM_MAX="2G"
+else
+  NODE_MEM_LIMIT="--max-old-space-size=192"
+  APP_MEM_MAX="300M"
+  SFU_MEM_MAX="200M"
+fi
+
 cat > /etc/systemd/system/telinha-server.service <<EOF
 [Unit]
 Description=Telinha - servidor da sala (canais, chat, voz)
@@ -100,10 +112,10 @@ Environment=PORT=8080
 Environment=NODE_ENV=production
 # Canais criados ficam aqui (fora de app/, que o deploy apaga e recria)
 Environment=TELINHA_DATA_DIR=$APP/data
-ExecStart=$APP/node/bin/node --max-old-space-size=192 server.js
+ExecStart=$APP/node/bin/node $NODE_MEM_LIMIT server.js
 Restart=always
 RestartSec=2
-MemoryMax=300M
+MemoryMax=$APP_MEM_MAX
 
 [Install]
 WantedBy=multi-user.target
@@ -124,7 +136,7 @@ Environment=PUBLIC_IP=$PUBLIC_IP
 ExecStart=$APP/bin/telinha-sfu
 Restart=always
 RestartSec=2
-MemoryMax=200M
+MemoryMax=$SFU_MEM_MAX
 
 [Install]
 WantedBy=multi-user.target

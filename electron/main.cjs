@@ -53,7 +53,7 @@ function saveConfig(patch) {
 
 // Preferências da interface (perfil, volumes, atalhos). Ficam aqui e não no localStorage
 // porque o localStorage depende do link da sala, que muda toda vez que alguém hospeda.
-const MAX_PREFS_BYTES = 2 * 1024 * 1024;
+const MAX_PREFS_BYTES = 30 * 1024 * 1024; // 30 MB (permite salvar avatares e banners em GIF de até 10 MB)
 
 function prefsPath() {
   return path.join(app.getPath('userData'), 'prefs.json');

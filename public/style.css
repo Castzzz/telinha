@@ -1556,7 +1556,26 @@ ul {
 }
 
 .modal-screen-picker-card {
-  max-width: 680px;
+  max-width: 820px;
+  height: min(680px, calc(100vh - 48px));
+  max-height: calc(100vh - 48px);
+}
+
+/* Miniaturas em grade, rolando dentro do modal: com muita janela aberta a lista não passa da tela */
+.screen-picker-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  align-content: start;
+  gap: 10px;
+  margin-right: -8px;
+  padding-right: 8px;
+}
+
+.screen-picker-grid .screen-picker-item img {
+  height: 110px !important;
 }
 
 .modal-header {

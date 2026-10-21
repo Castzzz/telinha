@@ -150,12 +150,12 @@ async function runTests() {
     const avatarRes = await fetch(`${URL_BASE}/api/avatar/${bob.id}?v=${gifUpdate.user.avatarV}`);
     assert.equal(avatarRes.headers.get('content-type'), 'image/gif');
     assert.equal(Buffer.from(await avatarRes.arrayBuffer()).length, gif.length);
-    const tooBig = Buffer.alloc(1100 * 1024, 1);
+    const tooBig = Buffer.alloc(11 * 1024 * 1024, 1);
     bob.emit('update-profile', { avatar: `data:image/gif;base64,${tooBig.toString('base64')}`, bio: 'mudou' });
     await once(alice2, 'user-profile-updated');
     const stillOld = await fetch(`${URL_BASE}/api/avatar/${bob.id}`);
-    assert.equal(Buffer.from(await stillOld.arrayBuffer()).length, gif.length, 'GIF acima de 1 MB é recusado');
-    console.log('  ✓ Cor do nome chega pros outros; GIF até 1 MB aceito, acima recusado');
+    assert.equal(Buffer.from(await stillOld.arrayBuffer()).length, gif.length, 'GIF acima de 10 MB é recusado');
+    console.log('  ✓ Cor do nome chega pros outros; GIF até 10 MB aceito, acima recusado');
 
     // 7b. Perfil 3.0: gradiente, moldura, banner (GIF até 2 MB) e som de entrada
     const fancySeen = once(alice2, 'user-profile-updated');
@@ -184,8 +184,8 @@ async function runTests() {
     const junk = (await once(alice2, 'user-profile-updated')).user;
     assert.equal(junk.frame, 'arco-iris');
     assert.equal(junk.joinSoundV, fancy.joinSoundV);
-    bob.emit('update-profile', { joinSound: `data:audio/ogg;base64,${Buffer.alloc(400 * 1024).toString('base64')}`, bio: 'som grande' });
-    assert.equal((await once(alice2, 'user-profile-updated')).user.joinSoundV, fancy.joinSoundV, 'som acima de 300 KB é recusado');
+    bob.emit('update-profile', { joinSound: `data:audio/ogg;base64,${Buffer.alloc(1200 * 1024).toString('base64')}`, bio: 'som grande' });
+    assert.equal((await once(alice2, 'user-profile-updated')).user.joinSoundV, fancy.joinSoundV, 'som acima de 1 MB é recusado');
     console.log('  ✓ Nome em gradiente, moldura, banner GIF e som de entrada; lixo e arquivo grande recusados');
 
     // 8. Várias telas: extras 2 e 3 chegam pros outros (lixo é ignorado) e cada uma tem sala no SFU
@@ -220,8 +220,8 @@ async function runTests() {
     await new Promise((r) => setTimeout(r, 2100)); // uma imagem a cada 2 s
     const fake = await emit(bob, 'chat-image', { data: Buffer.from('<script>alert(1)</script>'), mime: 'image/png' });
     assert.equal(fake.success, false, 'texto disfarçado de PNG é recusado');
-    const huge = await emit(bob, 'chat-image', { data: Buffer.concat([png, Buffer.alloc(9 * 1024 * 1024)]), mime: 'image/png' });
-    assert.equal(huge.success, false, 'acima de 8 MB é recusado');
+    const huge = await emit(bob, 'chat-image', { data: Buffer.concat([png, Buffer.alloc(16 * 1024 * 1024)]), mime: 'image/png' });
+    assert.equal(huge.success, false, 'acima de 15 MB é recusado');
     assert.equal((await fetch(`${URL_BASE}/api/chat-image/..%2Fchannels.json`)).status, 404);
     console.log('  ✓ Imagem no chat: salva em disco, chega pra todos; arquivo falso, gigante e caminho estranho recusados');
 
@@ -362,13 +362,13 @@ async function runTests() {
     assert.equal((await emit(eve, 'message-delete', { messageId: callMsg.id })).success, true);
     assert.equal((await callDeleted).messageId, callMsg.id);
 
-    // 13. Soundboard: cada um sobe os seus sons (máximo 8, até 400 KB), todo mundo da call ouve
+    // 13. Soundboard: cada um sobe os seus sons (máximo 16, até 1 MB), todo mundo da call ouve
     const soundData = `data:audio/ogg;base64,${Buffer.alloc(10 * 1024, 3).toString('base64')}`;
     const listed = new Promise((resolve) => fred.on('soundboard-list', (list) => { if (list.some((x) => x.name === 'risada')) resolve(list); }));
     const added = await emit(eve, 'soundboard-add', { name: 'risada', emoji: '😂', data: soundData });
     assert.equal(added.success, true);
     assert.equal((await listed).find((x) => x.name === 'risada').profileId, 'eve-profile-00005');
-    assert.equal((await emit(eve, 'soundboard-add', { name: 'grande', data: `data:audio/ogg;base64,${Buffer.alloc(500 * 1024).toString('base64')}` })).success, false);
+    assert.equal((await emit(eve, 'soundboard-add', { name: 'grande', data: `data:audio/ogg;base64,${Buffer.alloc(1200 * 1024).toString('base64')}` })).success, false);
     assert.equal((await emit(eve, 'soundboard-add', { name: 'falso', data: 'data:text/html;base64,PHNjcmlwdD4=' })).success, false);
     const soundRes2 = await fetch(`${URL_BASE}/api/soundboard/${added.id}`);
     assert.equal(soundRes2.headers.get('content-type'), 'audio/ogg');

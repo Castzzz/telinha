@@ -38,7 +38,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
-  maxHttpBufferSize: 1e7 // 10MB
+  maxHttpBufferSize: 3e7 // 30MB (acomoda GIFs de 10MB em base64)
 });
 
 // Middleware for method validation on static files
@@ -241,11 +241,11 @@ function saveChannels() {
 // ----------------------------------------------------
 const TEXT_DIR = DATA_DIR ? path.join(DATA_DIR, 'text') : path.join(os.tmpdir(), `teletela-text-${process.pid}`);
 const TEXT_IMAGE_DIR = path.join(TEXT_DIR, 'images');
-const MAX_TEXT_MESSAGES_PER_CHANNEL = 20000; // passou disso, apaga as mais antigas
-const TEXT_RECENT_IN_MEMORY = 100;
+const MAX_TEXT_MESSAGES_PER_CHANNEL = 50000; // passou disso, apaga as mais antigas
+const TEXT_RECENT_IN_MEMORY = 250;
 const TEXT_PAGE_SIZE = 50;
-const MAX_TEXT_LENGTH = 2000;
-const MAX_TEXT_IMAGES_TOTAL_BYTES = 5 * 1024 * 1024 * 1024; // passou disso, apaga as imagens mais antigas
+const MAX_TEXT_LENGTH = 4000;
+const MAX_TEXT_IMAGES_TOTAL_BYTES = 25 * 1024 * 1024 * 1024; // 25 GB (passou disso, apaga as imagens mais antigas)
 const TEXT_IMAGE_FILE_RE = /^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/;
 
 // Map<id, { id, name, createdBy, createdAt, recent: [], count, lastMessageAt }>
@@ -410,9 +410,9 @@ loadTextStorage();
 // ----------------------------------------------------
 const SOUNDBOARD_DIR = DATA_DIR ? path.join(DATA_DIR, 'soundboard') : path.join(os.tmpdir(), `teletela-soundboard-${process.pid}`);
 const SOUNDBOARD_INDEX = path.join(SOUNDBOARD_DIR, 'index.json');
-const MAX_SOUNDBOARD_BYTES = 400 * 1024;
-const MAX_SOUNDS_PER_PROFILE = 8;
-const MAX_SOUNDS_TOTAL = 150;
+const MAX_SOUNDBOARD_BYTES = 1024 * 1024;
+const MAX_SOUNDS_PER_PROFILE = 16;
+const MAX_SOUNDS_TOTAL = 300;
 const SOUNDBOARD_ID_RE = /^[a-f0-9-]{36}$/;
 const BUILTIN_SOUND_RE = /^amigo-[1-9]$/;
 const SOUND_EXT = { 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/aac': 'aac' };
@@ -463,8 +463,8 @@ loadSoundboard();
 // antigas quando passam do limite. O histórico do chat não sobrevive a reinício, então
 // as imagens também começam do zero quando o servidor sobe.
 const CHAT_IMAGE_DIR = DATA_DIR ? path.join(DATA_DIR, 'chat-images') : path.join(os.tmpdir(), `teletela-chat-images-${process.pid}`);
-const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
-const MAX_CHAT_IMAGES_TOTAL_BYTES = 300 * 1024 * 1024;
+const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_CHAT_IMAGES_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
 const CHAT_IMAGE_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif' };
 const CHAT_IMAGE_ID_RE = /^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/;
 const chatImages = []; // [{ file, size }] do mais antigo pro mais novo
@@ -564,11 +564,11 @@ const PROFILE_ID_RE = /^[a-z0-9-]{8,64}$/i;
 const AVATAR_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([a-z0-9+/=]+)$/i;
 const MAX_AVATAR_BYTES = 200 * 1024;
 // GIF vai sem redimensionar (senão para de mexer), então pode ser maior
-const MAX_GIF_AVATAR_BYTES = 1024 * 1024;
-const MAX_BANNER_BYTES = 400 * 1024;
-const MAX_GIF_BANNER_BYTES = 2 * 1024 * 1024; // só é baixado quando clicam na pessoa
+const MAX_GIF_AVATAR_BYTES = 10 * 1024 * 1024;
+const MAX_BANNER_BYTES = 1024 * 1024;
+const MAX_GIF_BANNER_BYTES = 10 * 1024 * 1024; // só é baixado quando clicam na pessoa
 const SOUND_RE = /^data:(audio\/(?:ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac));base64,([a-z0-9+/=]+)$/i;
-const MAX_JOIN_SOUND_BYTES = 300 * 1024;
+const MAX_JOIN_SOUND_BYTES = 1024 * 1024;
 const FRAME_PRESETS = ['', 'cor', 'ouro', 'neon', 'fogo', 'gelo', 'arco-iris'];
 
 // Aplica os campos válidos do perfil; retorna true se algo mudou

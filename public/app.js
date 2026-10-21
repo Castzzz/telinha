@@ -751,8 +751,12 @@ const handleUserStateChanged = (state) => {
   const userId = state.userId;
 
   const ch = appState.channels.get(channelId);
+  // O servidor manda o estado inteiro toda vez; compara pra saber se precisa redesenhar
+  const visualSig = (u) => JSON.stringify([u.isSharing, u.isCameraOn, u.extraScreens, u.isMicOn, u.isDeafened, u.serverMuted, u.serverDeafened]);
+  let visualChanged = true;
   if (ch && ch.users.has(userId)) {
     const u = ch.users.get(userId);
+    const sigBefore = visualSig(u);
     if (typeof state.isCameraOn === 'boolean') {
       const wasOn = u.isCameraOn;
       u.isCameraOn = state.isCameraOn;
@@ -802,7 +806,12 @@ const handleUserStateChanged = (state) => {
       u.isSpeaking = state.isSpeaking;
       updateSpeakingIndicators(userId, state.isSpeaking);
     }
+    visualChanged = visualSig(u) !== sigBefore;
   }
+
+  // Só mudou o "falando": as bolinhas verdes já foram atualizadas acima. Redesenhar a lista
+  // inteira aqui recriava todas as fotos/GIFs várias vezes por segundo enquanto alguém falava
+  if (!visualChanged) return;
 
   renderChannelsTree();
 
@@ -1652,7 +1661,7 @@ function startEditMessage(id) {
   el.querySelector('.chat-text')?.remove();
   const box = document.createElement('div');
   box.className = 'chat-edit';
-  box.innerHTML = '<textarea rows="1" maxlength="2000"></textarea><small>Enter salva · Esc cancela</small>';
+  box.innerHTML = '<textarea rows="1" maxlength="4000"></textarea><small>Enter salva · Esc cancela</small>';
   const area = box.querySelector('textarea');
   area.value = msg.text || '';
   body.querySelector('.chat-msg-header').after(box);
@@ -1904,7 +1913,7 @@ function setupMentionAutocomplete() {
 // Os áudios dos amigos que vêm no app + os que cada um sobe (ficam salvos no servidor).
 // Tocar manda pra toda a call; cada um escolhe nas configurações se ouve e o volume.
 appState.soundboard = [];
-const MAX_SOUNDBOARD_BYTES = 400 * 1024;
+const MAX_SOUNDBOARD_BYTES = 1024 * 1024;
 const MAX_SOUNDBOARD_SECONDS = 10.5;
 
 function soundboardUrl(id) {
@@ -1960,7 +1969,7 @@ function renderSoundboard() {
 }
 
 async function readSoundboardFile(file) {
-  if (file.size > MAX_SOUNDBOARD_BYTES) throw new Error('Áudio grande demais: o máximo é 400 KB (corte ou use .ogg/.mp3).');
+  if (file.size > MAX_SOUNDBOARD_BYTES) throw new Error('Áudio grande demais: o máximo é 1 MB (corte ou use .ogg/.mp3).');
   const dataUrl = await readAsDataUrl(file);
   if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
     throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
@@ -2329,8 +2338,8 @@ function chatImageHtml(image) {
 }
 
 // Prepara a imagem pro chat: foto parada é reduzida (lado maior até 1920 px, WebP);
-// GIF vai como está pra continuar animado. Máximo 8 MB.
-const MAX_CHAT_IMAGE_BYTES = 8 * 1024 * 1024;
+// GIF vai como está pra continuar animado. Máximo 15 MB.
+const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024;
 const CHAT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 
 async function prepareChatImage(file) {
@@ -2346,7 +2355,7 @@ async function prepareChatImage(file) {
     const width = img.naturalWidth;
     const height = img.naturalHeight;
     if (file.type === 'image/gif') {
-      if (file.size > MAX_CHAT_IMAGE_BYTES) throw new Error('GIF grande demais (máximo 8 MB).');
+      if (file.size > MAX_CHAT_IMAGE_BYTES) throw new Error('GIF grande demais (máximo 15 MB).');
       return { data: await file.arrayBuffer(), mime: file.type, width, height };
     }
     const scale = Math.min(1, 1920 / Math.max(width, height));
@@ -2358,7 +2367,7 @@ async function prepareChatImage(file) {
     // Ficou maior que o original (print pequeno, PNG simples)? Manda o original
     const useOriginal = !blob || (scale === 1 && file.size <= blob.size);
     const out = useOriginal ? file : blob;
-    if (out.size > MAX_CHAT_IMAGE_BYTES) throw new Error('Imagem grande demais (máximo 8 MB).');
+    if (out.size > MAX_CHAT_IMAGE_BYTES) throw new Error('Imagem grande demais (máximo 15 MB).');
     return {
       data: await out.arrayBuffer(),
       mime: useOriginal ? file.type : 'image/webp',
@@ -2870,7 +2879,7 @@ function setupChatAndReactions() {
 
     const replyTo = appState.replyingTo?.id;
     if (appState.textView) {
-      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 2000), replyTo }, (res) => {
+      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 4000), replyTo }, (res) => {
         if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra mandar a mensagem.'}`, 'error');
       });
     } else {
@@ -3585,8 +3594,8 @@ function renderProfileDraft() {
 }
 
 // Corta no meio e reduz pra 128×128: a foto fica leve (~10 KB) pra mandar pra sala
-// GIF vai do jeito que está (redimensionar no canvas congela a animação), até 1 MB
-const MAX_GIF_AVATAR_BYTES = 1024 * 1024;
+// GIF vai do jeito que está (redimensionar no canvas congela a animação), até 10 MB
+const MAX_GIF_AVATAR_BYTES = 10 * 1024 * 1024;
 
 async function resizeAvatar(file) {
   if (file.type === 'image/gif') {
@@ -3629,11 +3638,11 @@ async function resizeAvatar(file) {
   }
 }
 
-// Banner: corta pra 3:1 e reduz pra 600×200 (GIF vai como está, até 2 MB)
-const MAX_GIF_BANNER_BYTES = 2 * 1024 * 1024;
+// Banner: corta pra 3:1 e reduz pra 600×200 (GIF vai como está, até 10 MB)
+const MAX_GIF_BANNER_BYTES = 10 * 1024 * 1024;
 async function resizeBanner(file) {
   if (file.type === 'image/gif') {
-    if (file.size > MAX_GIF_BANNER_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true, limit: '2 MB' });
+    if (file.size > MAX_GIF_BANNER_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true, limit: '10 MB' });
     return readAsDataUrl(file);
   }
   const url = URL.createObjectURL(file);
@@ -3670,10 +3679,10 @@ function readAsDataUrl(file) {
 }
 
 // Som de entrada: curtinho e leve, porque vai pra todo mundo da sala
-const MAX_JOIN_SOUND_BYTES = 300 * 1024;
+const MAX_JOIN_SOUND_BYTES = 1024 * 1024;
 const MAX_JOIN_SOUND_SECONDS = 5.5;
 async function readJoinSound(file) {
-  if (file.size > MAX_JOIN_SOUND_BYTES) throw new Error('Áudio grande demais: o máximo é 300 KB (corte ou use .ogg/.mp3).');
+  if (file.size > MAX_JOIN_SOUND_BYTES) throw new Error('Áudio grande demais: o máximo é 1 MB (corte ou use .ogg/.mp3).');
   const dataUrl = await readAsDataUrl(file);
   if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
     throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
@@ -3713,7 +3722,7 @@ function setupProfileModal() {
       renderProfileDraft();
     } catch (err) {
       console.warn('[Perfil] Não consegui ler a imagem:', err);
-      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo é 1 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
+      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo é 10 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
     }
   });
 
@@ -3732,7 +3741,7 @@ function setupProfileModal() {
       renderProfileDraft();
     } catch (err) {
       console.warn('[Perfil] Não consegui ler o banner:', err);
-      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo pro banner é 2 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
+      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo pro banner é 10 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
     }
   });
   $('#btn-profile-remove-banner')?.addEventListener('click', () => {
