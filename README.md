@@ -116,7 +116,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |
 | **Mandar imagem ou GIF no chat** | 📎 do lado do campo, `Ctrl+V` ou arraste pro chat (até 15 MB; GIF continua animado). O texto vai como legenda. Clique na imagem pra ver grande |
 | **Enviar vídeo ou arquivo** | Use o mesmo 📎 ou arraste pro chat (até 20 MB por arquivo). MP4/WebM têm player; outros formatos ficam disponíveis para baixar. Nos canais de texto os anexos ficam salvos; no chat da call são temporários |
-| **Sons ao mutar/desmutar** | Os botões e atalhos de microfone e áudio tocam avisos só pra você. Desliga em ⚙️ → *Som*. O aviso de ensurdecer continua audível e segue o volume geral |
+| **Sons ao mutar/desmutar** | Em ⚙️ → *Som* → *Áudios dos controles*, escolha a opção 1 (quatro sons separados) ou a opção 2 (a nova dupla, igual para microfone e áudio). Dá para desligar os avisos; só você ouve, seguindo o volume geral, inclusive ao ensurdecer |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
 | **Fixar mensagem** | Canal de texto: passe o mouse na mensagem e clique no 📌. O 📌 no topo do chat lista as fixadas |
@@ -194,6 +194,10 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 | Ninguém me ouve | Veja se o 🎙️ não está riscado e se o microfone certo está em ⚙️. Teste falando: a barra *Teste de Atividade de Voz* tem que mexer. |
 | Atalho não funciona com o jogo aberto | Use `Ctrl`/`Alt` + tecla ou `F1`–`F24`. Se aparecer *"Outro programa já usa esse atalho"*, escolha outro. |
 | Tela branca / travou | `Ctrl+R` recarrega; `Ctrl+Shift+H` volta pra tela inicial. |
+
+Quedas de resolução e imagem congelada com som continuando podem ter causas diferentes.
+A análise da transmissão e a correção do SFU na branch de teste estão em
+[docs/DIAGNOSTICO-TRANSMISSOES.md](docs/DIAGNOSTICO-TRANSMISSOES.md).
 
 ---
 

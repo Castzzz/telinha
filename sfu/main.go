@@ -349,15 +349,26 @@ func (r *Room) forward(hostPC *webrtc.PeerConnection, remote *webrtc.TrackRemote
 	for _, v := range viewers {
 		go r.offerViewer(v)
 	}
+	forwardPackets(remote, local, kind)
+}
 
+type rtpReader interface {
+	Read([]byte) (int, interceptor.Attributes, error)
+}
+
+func forwardPackets(remote rtpReader, local io.Writer, kind string) {
 	buf := make([]byte, 1500)
+	var lastErrorLog time.Time
 	for {
 		n, _, err := remote.Read(buf)
 		if err != nil {
 			return
 		}
-		if _, err := local.Write(buf[:n]); err != nil && !errors.Is(err, io.ErrClosedPipe) {
-			return
+		// Pion tenta todos os espectadores e agrega os erros. Um deles falhar não
+		// pode encerrar a faixa dos demais; a leitura termina quando o host sai.
+		if _, err := local.Write(buf[:n]); err != nil && !errors.Is(err, io.ErrClosedPipe) && time.Since(lastErrorLog) >= 5*time.Second {
+			log.Printf("envio %s: %v (continuando para os demais espectadores)", kind, err)
+			lastErrorLog = time.Now()
 		}
 	}
 }

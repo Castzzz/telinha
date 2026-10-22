@@ -100,6 +100,7 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   sounds/amigo-1..9.ogg    Áudios de entrar/sair gravados pelos amigos. FORA DO GIT (veja §13)
   sounds/microfone-*.ogg   Avisos locais de mutar/desmutar (também fora do git)
   sounds/audio-*.ogg       Avisos locais de desativar/restaurar o áudio (fora do git)
+  sounds/controle-alternativo-*.ogg  Segunda dupla de avisos, compartilhada entre mic/áudio
   vendor/emoji-picker/     Seletor de emojis (emoji-picker-element, copiado; ver README.txt dele)
   vendor/noise-suppressor/ RNNoise (cancelamento de ruído com IA)
 
@@ -172,6 +173,7 @@ Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
 npm test                                   # runner próprio: 62 testes, devem passar todos
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js
 node tests/m4-channels-admin.test.js       # integração: sobe o server.js de verdade
+go test -race ./sfu                       # SFU: erro de espectador não interrompe os demais
 ```
 
 - Todos os testes têm que passar. (O `M2.3` falhou por muito tempo porque esperava o AGC do
@@ -339,11 +341,14 @@ tamanho, nome e assinatura de MP4/WebM; outros arquivos são servidos como downl
 `/api/chat-file/:file` só aceitam UUID gerado no servidor, nunca caminhos do cliente. Vídeos
 aceitam Range para o player. Os eventos antigos de imagem continuam compatíveis.
 
-Sons dos controles são locais: `playControlSound` usa as quatro gravações privadas e sai
+Sons dos controles são locais: `playControlSound` usa gravações privadas e sai
 pelo `outputGain`, seguindo o volume geral e permitindo ouvir o aviso mesmo ao ensurdecer.
 Só ações nos botões/atalhos tocam esses sons; entrar na call e moderação não os disparam.
 `prefs.controlSounds` permite desligá-los. Trocar de aviso interrompe o anterior para evitar
 sobreposição. A reprodução não envia evento de som para os outros usuários.
+`prefs.controlSoundSet` escolhe `originais` (padrão, quatro sons) ou `alternativos` (a nova
+dupla, com o mesmo mutar/desmutar para mic e deafen). Mudar de opção cancela o som atual e
+qualquer decodificação pendente; a escolha fica salva por perfil, sem mudar áudio de terceiros.
 
 Formato do `text/<canal>.jsonl`: uma linha por mensagem. Editar, apagar e reagir **não
 reescrevem** o arquivo: viram uma linha nova com `op` (`{"op":"edit",...}`,
@@ -527,6 +532,12 @@ Coisas que já deram problema e o motivo:
     parada. Procedimento e volta em [MIGRAR-SERVIDOR.md](MIGRAR-SERVIDOR.md).
 16. **Restore rejeitando backup válido:** não use `grep -q` na listagem do tar com pipefail;
     o pipe fecha antes de o tar terminar e provoca SIGPIPE. O validador lê a listagem completa.
+17. **SFU parando uma faixa por erro de um espectador:** o `TrackLocalStaticRTP.Write` do Pion
+    tenta enviar para todos e retorna erros agregados. Encerrar a leitura do host nesse erro
+    interrompia a faixa também para espectadores saudáveis. `forwardPackets` continua o
+    repasse até o host encerrar; erros de envio são registrados no máximo a cada 5 s por faixa.
+    Testes em `sfu/main_test.go`; contexto e limites em
+    [DIAGNOSTICO-TRANSMISSOES.md](DIAGNOSTICO-TRANSMISSOES.md).
 
 ### Nomes que não podem mudar
 

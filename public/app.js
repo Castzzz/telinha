@@ -752,10 +752,20 @@ const CONTROL_SOUNDS = {
   mute: 'sounds/microfone-mutar.ogg', unmute: 'sounds/microfone-desmutar.ogg',
   deafen: 'sounds/audio-desativar.ogg', undeafen: 'sounds/audio-restaurar.ogg'
 };
+const ALTERNATIVE_CONTROL_SOUNDS = {
+  mute: 'sounds/controle-alternativo-mutar.ogg', deafen: 'sounds/controle-alternativo-mutar.ogg',
+  unmute: 'sounds/controle-alternativo-desmutar.ogg', undeafen: 'sounds/controle-alternativo-desmutar.ogg'
+};
 let controlSoundSource = null;
 let controlSoundRequest = 0;
+function stopControlSound() {
+  controlSoundRequest++;
+  controlSoundSource?.stop();
+  controlSoundSource = null;
+}
 async function playControlSound(kind) {
-  if (prefs.controlSounds === false || !CONTROL_SOUNDS[kind]) return;
+  const sounds = prefs.controlSoundSet === 'alternativos' ? ALTERNATIVE_CONTROL_SOUNDS : CONTROL_SOUNDS;
+  if (prefs.controlSounds === false || !sounds[kind]) return;
   const request = ++controlSoundRequest;
   try {
     controlSoundSource?.stop();
@@ -764,7 +774,7 @@ async function playControlSound(kind) {
     const ctx = mixer?.audioContext;
     if (!ctx || !mixer.outputGain) return;
     await ctx.resume();
-    const buffer = await loadSoundBuffer(ctx, CONTROL_SOUNDS[kind]);
+    const buffer = await loadSoundBuffer(ctx, sounds[kind]);
     if (request !== controlSoundRequest || prefs.controlSounds === false) return;
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -6801,7 +6811,15 @@ function initApp() {
     controlSoundsInput.checked = prefs.controlSounds !== false;
     controlSoundsInput.addEventListener('change', () => {
       savePrefs({ controlSounds: controlSoundsInput.checked });
-      if (!controlSoundsInput.checked) { controlSoundRequest++; controlSoundSource?.stop(); }
+      if (!controlSoundsInput.checked) stopControlSound();
+    });
+  }
+  const controlSoundSetInput = $('#select-control-sound-set');
+  if (controlSoundSetInput) {
+    controlSoundSetInput.value = prefs.controlSoundSet === 'alternativos' ? 'alternativos' : 'originais';
+    controlSoundSetInput.addEventListener('change', () => {
+      stopControlSound();
+      savePrefs({ controlSoundSet: controlSoundSetInput.value });
     });
   }
   const callSoundsInput = $('#input-call-sounds');
