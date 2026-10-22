@@ -98,6 +98,8 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   redesign.css             O visual 3.0 (vale com <html data-look="novo">, fixo no index.html)
   icon.png                 Ícone (favicon, logo da barra de cima, janela)
   sounds/amigo-1..9.ogg    Áudios de entrar/sair gravados pelos amigos. FORA DO GIT (veja §13)
+  sounds/microfone-*.ogg   Avisos locais de mutar/desmutar (também fora do git)
+  sounds/audio-*.ogg       Avisos locais de desativar/restaurar o áudio (fora do git)
   vendor/emoji-picker/     Seletor de emojis (emoji-picker-element, copiado; ver README.txt dele)
   vendor/noise-suppressor/ RNNoise (cancelamento de ruído com IA)
 
@@ -317,20 +319,41 @@ trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca va
 |---|---|
 | `channels.json` | `{ channels, textChannels }`: canais de voz e de texto criados (o Geral é fixo) |
 | `text/<canal>.jsonl` | histórico de cada canal de texto (veja abaixo) |
-| `text/images/` | imagens dos canais de texto (até 5 GB; passando, apaga as mais antigas) |
-| `soundboard/index.json` + arquivos | sons do soundboard (8 por pessoa, até 400 KB, 150 no total) |
+| `text/images/` | imagens/GIFs dos canais de texto (15 MB por envio, até 25 GB no total) |
+| `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
+| `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
-| `chat-images/` | imagens do chat da call (300 MB; **apagadas a cada reinício**) |
+| `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
+| `chat-files/` | vídeos e arquivos da call (20 MB por envio, até 1 GB; **apagados a cada reinício**) |
+
+Os limites de espaço removem os arquivos mais antigos, mantendo o histórico da mensagem;
+o download de um arquivo removido responde 404. Apagar uma mensagem com anexo ou o canal de
+texto também remove o arquivo correspondente. Anexos dos canais de texto entram no backup;
+mídias da call ficam de fora.
+
+Eventos `text-file` (canal de texto, funciona sem call) e `chat-file` (somente dentro da call)
+recebem `{ data: Buffer, mime, name, text?, replyTo?, channelId? }`. A mensagem guarda
+`attachment: { url, name, mime, size }` junto com os campos habituais. O servidor valida
+tamanho, nome e assinatura de MP4/WebM; outros arquivos são servidos como download em
+`application/octet-stream`, com `nosniff`. Rotas `/api/text-file/:file` e
+`/api/chat-file/:file` só aceitam UUID gerado no servidor, nunca caminhos do cliente. Vídeos
+aceitam Range para o player. Os eventos antigos de imagem continuam compatíveis.
+
+Sons dos controles são locais: `playControlSound` usa as quatro gravações privadas e sai
+pelo `outputGain`, seguindo o volume geral e permitindo ouvir o aviso mesmo ao ensurdecer.
+Só ações nos botões/atalhos tocam esses sons; entrar na call e moderação não os disparam.
+`prefs.controlSounds` permite desligá-los. Trocar de aviso interrompe o anterior para evitar
+sobreposição. A reprodução não envia evento de som para os outros usuários.
 
 Formato do `text/<canal>.jsonl`: uma linha por mensagem. Editar, apagar e reagir **não
 reescrevem** o arquivo: viram uma linha nova com `op` (`{"op":"edit",...}`,
 `{"op":"delete",...}`, `{"op":"reactions",...}`) que é aplicada na leitura
-(`readTextMessages`). A cada 1000 ops, ou passando de 20 mil mensagens (fica com 90%), o
+(`readTextMessages`). A cada 1000 ops, ou passando de 50 mil mensagens (fica com 90%), o
 arquivo é reescrito limpo. As últimas 100 mensagens de cada canal ficam na memória.
 
 Mensagem fixada também é uma op (`{"op":"pin",...}`), guardada no campo `pinned: { by, at }`.
 
-**Backup:** `npm run backup` (`deploy/oracle/backup.sh`) baixa essa pasta (menos `chat-images/`)
+**Backup:** `npm run backup` (`deploy/oracle/backup.sh`) baixa essa pasta (menos `chat-images/` e `chat-files/`)
 e o `/etc/telinha` da VM (senha de admin, segredo do SFU, token do DuckDNS) pra
 `~/Teletela-backups` no seu PC e guarda os 15 mais novos. `npm run backup:auto` liga um timer
 do systemd do seu usuário que faz isso uma vez por dia (`-- off` desliga). **Se a VM sumir:
@@ -387,6 +410,7 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `user-state-changed` | mic, ensurdecer, transmitindo, câmera, telas extras, falando, o que está assistindo (`watching`) |
 | `create-channel` / `delete-channel` | canais de voz |
 | `create-text-channel` / `delete-text-channel` / `text-history` / `text-message` / `text-image` | canais de texto |
+| `text-file` / `chat-file` | enviar vídeo/arquivo de até 20 MB para texto/call |
 | `chat-message` / `chat-image` | chat da call (aceitam `replyTo`) |
 | `message-edit` / `message-delete` / `message-react` | `{ scope: 'call'|'text', channelId?, messageId, ... }` |
 | `message-pin` / `text-pins` | fixar/desfixar e listar as fixadas (só canal de texto) |
@@ -429,6 +453,8 @@ de ruído, e 11 inicialização (`initApp`).
 | Senha da sala | cliente: `roomAccess`, `openRoomPasswordModal`, `setupRoomPasswordAdmin`; servidor: `io.use`, `isMemberKey`, `setRoomPassword` |
 | Exportar/importar perfil | `setupProfileTransfer` |
 | Soundboard | `setupSoundboard`, `renderSoundboard`, `playSoundboard`; servidor: bloco `SOUNDBOARD` |
+| Vídeos e arquivos no chat | `sendChatImage`, `chatAttachmentHtml`; servidor: `attachmentStorage`, `prepareAttachment`, `text-file`/`chat-file` |
+| Sons ao mutar/desmutar | `playControlSound`, `setupDockControls`, `prefs.controlSounds`; quatro `.ogg` privados em `public/sounds/` |
 | Sons de entrar/sair | `playCallSound`, `callSoundChoiceUrl`, `joinSoundUrl` (som do perfil) |
 | Perfil (banner, moldura, gradiente, perfil grande) | `renderProfileDraft`, `frameClass`, `nameCss`, `bannerCss`, `openProfileCard`; servidor: `applyProfile` |
 | Admin | `setupAdminSettings`, popup da pessoa (`openUserPopover`); servidor: `moderate`, `applyServerModeration` |

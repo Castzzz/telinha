@@ -24,9 +24,9 @@ file="$BACKUP_DIR/teletela-dados-$(date +%Y-%m-%d_%H-%M-%S).tar.gz"
 tmp="$file.parcial"
 
 echo "== Baixando os dados da sala ($VM)"
-# As imagens do chat da call ficam de fora: elas já somem a cada reinício do servidor
+# Mídias do chat da call ficam de fora: elas já somem a cada reinício do servidor
 # No arquivo: data/ (dados da sala) e telinha/ (o /etc/telinha da VM)
-if ! "${SSH[@]}" 'sudo test -d /opt/telinha/data && sudo tar -czf - --exclude=data/chat-images -C /opt/telinha data -C /etc telinha' > "$tmp"; then
+if ! "${SSH[@]}" 'sudo test -d /opt/telinha/data && sudo tar -czf - --exclude=data/chat-images --exclude=data/chat-files -C /opt/telinha data -C /etc telinha' > "$tmp"; then
   rm -f "$tmp"
   echo "❌ Não deu pra baixar o backup." >&2
   exit 1

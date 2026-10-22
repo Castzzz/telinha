@@ -240,7 +240,7 @@
                 🎵 Escolher áudio
                 <input type="file" id="input-soundboard-file" accept="audio/*" hidden />
               </label>
-              <span id="soundboard-file-name" class="soundboard-file-name">até 10 s e 400 KB</span>
+              <span id="soundboard-file-name" class="soundboard-file-name">até 10 s e 1 MB</span>
               <button type="submit" class="btn-primary" id="btn-soundboard-save">Salvar</button>
             </div>
           </form>
@@ -301,9 +301,9 @@
             maxlength="4000"
             autocomplete="off"
           />
-          <label class="btn-chat-attach" title="Mandar imagem (ou cole com Ctrl+V / arraste pro chat)" aria-label="Mandar imagem">
+          <label class="btn-chat-attach" title="Enviar imagem ou GIF (até 15 MB), vídeo ou arquivo (até 20 MB). Também aceita colar ou arrastar." aria-label="Enviar imagem, vídeo ou arquivo">
             <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            <input type="file" id="input-chat-image" accept="image/png,image/jpeg,image/webp,image/gif" hidden />
+            <input type="file" id="input-chat-image" hidden />
           </label>
         </div>
         <button type="submit" id="btn-chat-send" class="btn-chat-send" title="Enviar mensagem" aria-label="Enviar mensagem">
@@ -637,6 +637,14 @@
               <p class="form-help">Regula a altura dos avisos ao entrar/sair e também dos sons personalizados de quem entra.</p>
             </div>
 
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-control-sounds" checked />
+                Sons ao mutar/desmutar o microfone e desativar/restaurar o áudio
+              </label>
+              <p class="form-help">Só você ouve. Os avisos seguem o volume geral e continuam tocando ao ensurdecer.</p>
+            </div>
+
             <!-- Soundboard -->
             <div class="form-group">
               <label class="hotkey-global">
@@ -788,7 +796,7 @@
         </div>
 
         <div class="form-group">
-          <label>Foto <span class="form-help-inline">(pode ser GIF, até 1 MB)</span></label>
+          <label>Foto <span class="form-help-inline">(GIF até 10 MB; fotos paradas são reduzidas automaticamente)</span></label>
           <div class="profile-avatar-actions">
             <label class="btn-secondary profile-file-btn">
               📷 Escolher foto
@@ -816,7 +824,7 @@
         </div>
 
         <div class="form-group">
-          <label>Banner <span class="form-help-inline">(o fundo de cima quando clicam em você; pode ser GIF até 2 MB)</span></label>
+          <label>Banner <span class="form-help-inline">(o fundo de cima quando clicam em você; GIF até 10 MB; imagens paradas são reduzidas)</span></label>
           <div class="profile-colors" id="profile-banner-colors"></div>
           <div class="profile-avatar-actions">
             <label class="btn-secondary profile-file-btn">
@@ -828,7 +836,7 @@
         </div>
 
         <div class="form-group">
-          <label>Som de entrada <span class="form-help-inline">(toca pra todo mundo quando você entra na call; até 5 s e 300 KB)</span></label>
+          <label>Som de entrada <span class="form-help-inline">(toca pra todo mundo quando você entra na call; até 5 s e 1 MB)</span></label>
           <div class="profile-avatar-actions">
             <label class="btn-secondary profile-file-btn">
               🔊 Escolher áudio

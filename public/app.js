@@ -346,8 +346,8 @@ const socket = io(SERVER_URL, {
 // -----------------------------------------------------------------------------
 // 4. SIGNALING EVENT HANDLERS
 // -----------------------------------------------------------------------------
-// Ao escolher um canal de voz, o microfone abre
-// sozinho quando o canal responder. Trocar de canal ou reconectar mantém o mute como estava.
+// Ao escolher um canal de voz, o microfone abre quando o canal responder.
+// Trocar de canal ou reconectar mantém o mute como estava.
 let openMicOnJoin = false;
 
 function openMicAfterJoin() {
@@ -745,6 +745,36 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
     source.start();
   } catch (err) {
     console.warn('[Som] Não tocou o som de entrada/saída:', err);
+  }
+}
+
+const CONTROL_SOUNDS = {
+  mute: 'sounds/microfone-mutar.ogg', unmute: 'sounds/microfone-desmutar.ogg',
+  deafen: 'sounds/audio-desativar.ogg', undeafen: 'sounds/audio-restaurar.ogg'
+};
+let controlSoundSource = null;
+let controlSoundRequest = 0;
+async function playControlSound(kind) {
+  if (prefs.controlSounds === false || !CONTROL_SOUNDS[kind]) return;
+  const request = ++controlSoundRequest;
+  try {
+    controlSoundSource?.stop();
+    controlSoundSource = null;
+    const mixer = appState.mixerManager;
+    const ctx = mixer?.audioContext;
+    if (!ctx || !mixer.outputGain) return;
+    await ctx.resume();
+    const buffer = await loadSoundBuffer(ctx, CONTROL_SOUNDS[kind]);
+    if (request !== controlSoundRequest || prefs.controlSounds === false) return;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    // O aviso de ensurdecer precisa continuar audível após zerar as vozes.
+    source.connect(mixer.outputGain);
+    controlSoundSource = source;
+    source.onended = () => { source.disconnect(); if (controlSoundSource === source) controlSoundSource = null; };
+    source.start();
+  } catch (err) {
+    console.warn('[Som] Não foi possível tocar o aviso do controle:', err.message);
   }
 }
 
@@ -1618,6 +1648,7 @@ function buildChatMessage(msg) {
       </div>
       ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}${msg.editedAt ? ' <span class="chat-edited" title="Editada">(editado)</span>' : ''}</div>` : ''}
       ${chatImageHtml(msg.image)}
+      ${chatAttachmentHtml(msg.attachment)}
       ${reactionsHtml(msg)}
     </div>
     ${actions.length ? `<div class="chat-msg-actions">${actions.map(([act, label]) => `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"${act === 'delete' ? ' class="danger"' : ''}>${ACTION_ICONS[act]}</button>`).join('')}</div>` : ''}
@@ -1990,7 +2021,7 @@ function renderSoundboard() {
   grid.innerHTML = section('Seus sons', mine, () => true)
     + section('Da galera', others, () => appState.isAdmin)
     + section('Do app', builtIns, () => false)
-    + (mine.length ? '' : '<p class="soundboard-hint">Clique em <strong>＋ Adicionar som</strong> pra subir os seus (até 8).</p>');
+    + (mine.length ? '' : '<p class="soundboard-hint">Clique em <strong>＋ Adicionar som</strong> pra subir os seus (até 16).</p>');
 }
 
 async function readSoundboardFile(file) {
@@ -2071,7 +2102,7 @@ function setupSoundboard() {
       playCallSound(0, pendingData, { force: true });
     } catch (err) {
       pendingData = '';
-      $('#soundboard-file-name').textContent = 'até 10 s e 400 KB';
+      $('#soundboard-file-name').textContent = 'até 10 s e 1 MB';
       showToast(`❌ ${err.message || 'Não consegui abrir esse áudio.'}`, 'error');
     }
   });
@@ -2088,7 +2119,7 @@ function setupSoundboard() {
       pendingData = '';
       form.reset();
       $('#input-soundboard-emoji').value = '🔊';
-      $('#soundboard-file-name').textContent = 'até 10 s e 400 KB';
+      $('#soundboard-file-name').textContent = 'até 10 s e 1 MB';
       form.classList.add('hidden');
       showToast(`🔊 Som "${name}" adicionado!`, 'success');
     });
@@ -2158,7 +2189,7 @@ function renderPins() {
       ? list.map((m) => `<div class="pin-item" data-pin-id="${escapeHtml(m.id)}">
           <div class="pin-item-head"><strong${nameStyle({ nameColor: m.userNameColor, nameColor2: m.userNameColor2 })}>${escapeHtml(m.userName || '')}</strong>
             <button type="button" class="pin-unpin" data-unpin="${escapeHtml(m.id)}" title="Desfixar" aria-label="Desfixar">✕</button></div>
-          <div class="pin-item-text">${m.text ? linkifyText(m.text.slice(0, 300)) : (m.image ? '🖼️ Imagem' : '')}</div>
+          <div class="pin-item-text">${m.text ? linkifyText(m.text.slice(0, 300)) : (m.image ? '🖼️ Imagem' : escapeHtml(m.attachment?.name || ''))}</div>
           <small>Fixada por ${escapeHtml(m.pinned?.by || '')}</small>
         </div>`).join('')
       : '<p class="pins-empty">Nada fixado ainda. Passe o mouse numa mensagem e clique no 📌.</p>');
@@ -2362,10 +2393,26 @@ function chatImageHtml(image) {
   return `<img class="chat-image" src="${escapeHtml(SERVER_URL + image.url)}"${size} alt="Imagem" loading="lazy" />`;
 }
 
+function chatAttachmentHtml(attachment) {
+  if (!attachment || typeof attachment.url !== 'string' || !/^\/api\/(chat|text)-file\/[a-f0-9-]{36}\.(bin|mp4|webm)$/.test(attachment.url)) return '';
+  const url = SERVER_URL + attachment.url;
+  const name = typeof attachment.name === 'string' ? attachment.name : 'Arquivo';
+  const size = Number(attachment.size) || 0;
+  const sizeText = size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(size / 1024)} KB`;
+  const download = `${url}?download=1&name=${encodeURIComponent(name)}`;
+  const video = /\.(mp4|webm)$/.test(attachment.url);
+  return `${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
+    <a class="chat-file" href="${escapeHtml(download)}" download="${escapeHtml(name)}">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6m-3-3 3 3 3-3"/></svg>
+      <span><strong>${escapeHtml(name)}</strong><small>${sizeText} · Baixar${video ? ' vídeo' : ' arquivo'}</small></span>
+    </a>`;
+}
+
 // Prepara a imagem pro chat: foto parada é reduzida (lado maior até 1920 px, WebP);
 // GIF vai como está pra continuar animado. Máximo 15 MB.
 const MAX_CHAT_IMAGE_BYTES = 15 * 1024 * 1024;
 const CHAT_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 async function prepareChatImage(file) {
   if (!CHAT_IMAGE_TYPES.includes(file.type)) throw new Error('Só dá pra mandar PNG, JPG, WebP ou GIF.');
@@ -2408,30 +2455,36 @@ let sendingChatImage = false;
 async function sendChatImage(file) {
   if (!file) return;
   const textChannelId = appState.textView;
+  const callChannelId = appState.currentChannelId;
   if (!appState.currentChannelId && !textChannelId) {
-    showToast('Entre num canal pra mandar imagem.');
+    showToast('Abra um canal de texto ou entre numa call pra enviar anexos.');
     return;
   }
-  if (sendingChatImage) return;
+  if (sendingChatImage) return showToast('Já tem um anexo sendo enviado. Aguarde terminar.');
   sendingChatImage = true;
   const input = $('#chat-input');
+  const text = input?.value.trim() || '';
+  const replyTo = appState.replyingTo?.id;
   try {
-    const image = await prepareChatImage(file);
-    showToast('📎 Enviando imagem...');
-    // A legenda é o que estiver escrito no campo
-    const text = input?.value.trim() || '';
-    const replyTo = appState.replyingTo?.id;
-    const res = textChannelId
-      ? await socket.timeout(60000).emitWithAck('text-image', { ...image, text, channelId: textChannelId, replyTo })
-      : await socket.timeout(60000).emitWithAck('chat-image', { ...image, text, replyTo });
+    const isImage = CHAT_IMAGE_TYPES.includes(file.type);
+    if (!isImage && file.size > MAX_ATTACHMENT_BYTES) throw new Error('Arquivo grande demais (máximo 20 MB).');
+    if (!file.size) throw new Error('Escolha um arquivo que não esteja vazio.');
+    const attachment = isImage ? await prepareChatImage(file) : { data: await file.arrayBuffer(), mime: file.type, name: file.name };
+    if (!textChannelId && appState.currentChannelId !== callChannelId) throw new Error('A call mudou durante a preparação. Escolha o arquivo novamente.');
+    showToast('📎 Enviando anexo...');
+    const event = `${textChannelId ? 'text' : 'chat'}-${isImage ? 'image' : 'file'}`;
+    const res = await socket.timeout(60000).emitWithAck(event, { ...attachment, text, ...(textChannelId ? { channelId: textChannelId } : {}), replyTo });
     if (res?.success) {
-      if (input) input.value = '';
-      setReplyTo(null);
+      // Quem trocou de canal ou continuou digitando durante o envio mantém seu rascunho.
+      if (appState.textView === textChannelId && (textChannelId || appState.currentChannelId === callChannelId)) {
+        if (input?.value.trim() === text) input.value = '';
+        if (appState.replyingTo?.id === replyTo) setReplyTo(null);
+      }
     } else {
-      showToast(`❌ ${res?.error || 'Não deu pra mandar a imagem.'}`, 'error');
+      showToast(`❌ ${res?.error || 'Não deu pra mandar o anexo.'}`, 'error');
     }
   } catch (err) {
-    showToast(`❌ ${err?.message || 'Não deu pra mandar a imagem.'}`, 'error');
+    showToast(`❌ ${err?.message || 'Não deu pra mandar o anexo.'}`, 'error');
   } finally {
     sendingChatImage = false;
   }
@@ -2443,14 +2496,14 @@ function setupChatImages() {
     sendChatImage(fileInput.files?.[0]);
     fileInput.value = '';
   });
-  // Ctrl+V com imagem no campo do chat
+  // Ctrl+V com arquivo no campo do chat (texto normal continua sendo colado).
   $('#chat-input')?.addEventListener('paste', (e) => {
-    const file = [...(e.clipboardData?.files || [])].find((f) => f.type.startsWith('image/'));
+    const file = e.clipboardData?.files?.[0];
     if (!file) return;
     e.preventDefault();
     sendChatImage(file);
   });
-  // Arrastar imagem pro chat
+  // Arrastar arquivo pro chat
   const drawer = $('#chat-drawer');
   drawer?.addEventListener('dragover', (e) => {
     if ([...(e.dataTransfer?.items || [])].some((i) => i.kind === 'file')) {
@@ -2463,7 +2516,7 @@ function setupChatImages() {
   });
   drawer?.addEventListener('drop', (e) => {
     drawer.classList.remove('drag-over');
-    const file = [...(e.dataTransfer?.files || [])].find((f) => f.type.startsWith('image/'));
+    const file = e.dataTransfer?.files?.[0];
     if (!file) return;
     e.preventDefault();
     sendChatImage(file);
@@ -2815,19 +2868,19 @@ function setupDockControls() {
   const settingsBtn = $('#btn-open-settings');
 
   // Mic Mute Toggle
-  micBtn?.addEventListener('click', () => {
+  micBtn?.addEventListener('click', async () => {
     if (!appState.myUser.isMicOn && isMicLockedByAdmin()) {
       showToast(appState.myUser.serverDeafened ? '🎧 Um admin te ensurdeceu.' : '🔇 Um admin te mutou pra todos.', 'error');
       return;
     }
-    appState.myUser.isMicOn = !appState.myUser.isMicOn;
-    if (appState.myUser.isMicOn && appState.myUser.isDeafened) {
-      appState.myUser.isDeafened = false;
-    }
+    const nextMicOn = !appState.myUser.isMicOn;
+    if (nextMicOn && appState.myUser.isDeafened) onDeafenToggle(false);
+    appState.myUser.isMicOn = nextMicOn;
 
     updateMicButton();
 
-    onMicrophoneToggle(appState.myUser.isMicOn);
+    await onMicrophoneToggle(nextMicOn);
+    if (appState.myUser.isMicOn === nextMicOn) playControlSound(nextMicOn ? 'unmute' : 'mute');
 
     socket.emit('user-state-changed', {
       isMicOn: appState.myUser.isMicOn,
@@ -2846,6 +2899,7 @@ function setupDockControls() {
     }
     const nextDeafened = !appState.myUser.isDeafened;
     onDeafenToggle(nextDeafened);
+    playControlSound(nextDeafened ? 'deafen' : 'undeafen');
 
     updateMicButton();
 
@@ -6742,6 +6796,14 @@ function initApp() {
     });
   }
   setupCallSoundChoices();
+  const controlSoundsInput = $('#input-control-sounds');
+  if (controlSoundsInput) {
+    controlSoundsInput.checked = prefs.controlSounds !== false;
+    controlSoundsInput.addEventListener('change', () => {
+      savePrefs({ controlSounds: controlSoundsInput.checked });
+      if (!controlSoundsInput.checked) { controlSoundRequest++; controlSoundSource?.stop(); }
+    });
+  }
   const callSoundsInput = $('#input-call-sounds');
   if (callSoundsInput) {
     callSoundsInput.checked = prefs.callSounds !== false;

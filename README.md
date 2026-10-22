@@ -108,19 +108,21 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
-| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto (pode ser GIF animado, até 1 MB), cor do nome (com uma segunda cor vira gradiente), moldura da foto, banner (imagem, GIF até 2 MB ou cor), som de entrada (até 5 s / 300 KB, toca pra todo mundo quando você entra) e bio |
+| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto e banner com GIF até 10 MB (fotos paradas são reduzidas), cor do nome, gradiente, moldura, som de entrada (até 5 s / 1 MB, toca pra todo mundo quando você entra) e bio |
 | **Ver o perfil de alguém** | Clique na pessoa e depois na foto (ou na foto dela no chat): abre o perfil grande. Clique na foto de novo pra ver ela grande |
 | **Escolher os áudios de entrar/sair** | ⚙️ → *Som*: sorteado, um fixo ou nenhum (só pra você). O som de entrada do perfil de cada um continua tocando pra todos |
 | **Sair da call** | Botão vermelho no painel *Voz conectada*, lá embaixo à esquerda |
 | **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
 | **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |
-| **Mandar imagem no chat** | 📎 do lado do campo, `Ctrl+V` com a imagem copiada, ou arraste pro chat (até 8 MB; GIF continua animado). O que estiver escrito vai junto como legenda. Clique na imagem pra ver grande |
+| **Mandar imagem ou GIF no chat** | 📎 do lado do campo, `Ctrl+V` ou arraste pro chat (até 15 MB; GIF continua animado). O texto vai como legenda. Clique na imagem pra ver grande |
+| **Enviar vídeo ou arquivo** | Use o mesmo 📎 ou arraste pro chat (até 20 MB por arquivo). MP4/WebM têm player; outros formatos ficam disponíveis para baixar. Nos canais de texto os anexos ficam salvos; no chat da call são temporários |
+| **Sons ao mutar/desmutar** | Os botões e atalhos de microfone e áudio tocam avisos só pra você. Desliga em ⚙️ → *Som*. O aviso de ensurdecer continua audível e segue o volume geral |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
 | **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
 | **Fixar mensagem** | Canal de texto: passe o mouse na mensagem e clique no 📌. O 📌 no topo do chat lista as fixadas |
 | **Levar o perfil pra outro PC** | Clique no seu nome → *Exportar perfil*; no outro PC, *Importar perfil*. Não mande o arquivo pra ninguém: ele é a sua identidade nas salas |
 | **Marcar alguém** | Digite `@` no chat e escolha a pessoa (ou `@todos`). Ela recebe um aviso, mesmo com o Teletela minimizado |
-| **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 8, de até 10 s / 400 KB). Volume e desligar em ⚙️ → *Som* |
+| **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 16, de até 10 s / 1 MB). Volume e desligar em ⚙️ → *Som* |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
 | **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
@@ -242,7 +244,15 @@ O admin coloca em ⚙️ → *Admin* → *Senha da sala*. Quem já usa o app gua
 ### Senha de admin
 A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e guardada em `/etc/telinha/telinha.env` na VM. Ela é preservada nas migrações e não aparece nos logs do deploy. Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
 
-Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 20 mil mensagens por canal) e as imagens deles em `data/text/images/` (até 5 GB no total); passando do limite, as mais antigas são apagadas.
+Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 50 mil mensagens por canal), as imagens em `data/text/images/` (até 25 GB) e vídeos/arquivos em `data/text/files/` (até 5 GB). Passando dos limites de espaço, os arquivos mais antigos são apagados.
+
+### Testar a branch de anexos e sons
+
+Na branch `teste/anexos-e-sons`, rode `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-anexos npm start`
+e abra `http://127.0.0.1:3999`. Para testar no desktop, rode `npm run app` e entre por esse link
+na tela inicial. Assim o app usa o servidor local com os eventos novos. Os quatro áudios de
+controle ficam em `public/sounds/`, fora do git como os demais sons privados; precisam estar
+no disco. Esta branch não publica release nem faz deploy automaticamente.
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)

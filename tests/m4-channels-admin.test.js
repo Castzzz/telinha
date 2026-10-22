@@ -138,7 +138,7 @@ async function runTests() {
     assert.equal((await emit(bob, 'kick-user', { userId: bob.id })).success, false, 'não tira a si mesmo');
     console.log('  ✓ Admin tira alguém da call; quem não é admin não consegue');
 
-    // 7. Cor do nome e foto GIF (até 1 MB, maior que o limite de 200 KB da foto parada)
+    // 7. Cor do nome e foto GIF (até 10 MB, maior que o limite de 200 KB da foto parada)
     const colorSeen = once(alice2, 'user-profile-updated');
     bob.emit('update-profile', { nameColor: '#FF5C5C' });
     assert.equal((await colorSeen).user.nameColor, '#FF5C5C');
@@ -157,7 +157,7 @@ async function runTests() {
     assert.equal(Buffer.from(await stillOld.arrayBuffer()).length, gif.length, 'GIF acima de 10 MB é recusado');
     console.log('  ✓ Cor do nome chega pros outros; GIF até 10 MB aceito, acima recusado');
 
-    // 7b. Perfil 3.0: gradiente, moldura, banner (GIF até 2 MB) e som de entrada
+    // 7b. Perfil 3.0: gradiente, moldura, banner (GIF até 10 MB) e som de entrada
     const fancySeen = once(alice2, 'user-profile-updated');
     const bannerGif = Buffer.alloc(1500 * 1024, 1);
     bannerGif.write('GIF89a');
@@ -225,6 +225,54 @@ async function runTests() {
     assert.equal((await fetch(`${URL_BASE}/api/chat-image/..%2Fchannels.json`)).status, 404);
     console.log('  ✓ Imagem no chat: salva em disco, chega pra todos; arquivo falso, gigante e caminho estranho recusados');
 
+    // Anexos da call respeitam o canal e nunca abrem conteúdo arbitrário como página.
+    await join(bob, 'anexos-call', 'bob-profile-00002');
+    await emit(alice2, 'leave-channel', {});
+    assert.equal((await emit(alice2, 'chat-file', { data: Buffer.from('oi'), name: 'teste.txt' })).success, false, 'fora da call não envia');
+    let vazou = false;
+    const foraDaCall = () => { vazou = true; };
+    alice2.on('chat-message', foraDaCall);
+    const attachmentSeen = once(bob, 'chat-message');
+    const html = Buffer.from('<script>document.body.textContent="não executar"</script>');
+    assert.equal((await emit(bob, 'chat-file', { data: html, mime: 'text/html', name: '../teste\r\n.html', text: 'legenda' })).success, true);
+    const callAttachment = (await attachmentSeen).attachment;
+    const htmlRes = await fetch(`${URL_BASE}${callAttachment.url}?name=teste.html`);
+    assert.equal(htmlRes.headers.get('content-type'), 'application/octet-stream');
+    assert.match(htmlRes.headers.get('content-disposition'), /^attachment;/);
+    assert.equal(htmlRes.headers.get('x-content-type-options'), 'nosniff');
+    assert.equal(htmlRes.headers.get('access-control-allow-origin'), '*');
+    assert.ok(Buffer.from(await htmlRes.arrayBuffer()).equals(html));
+    assert.ok(!/[\/\\\r\n]/.test(callAttachment.name), 'nome não contém caminho nem quebra de cabeçalho');
+    assert.equal((await fetch(`${URL_BASE}/api/chat-file/..%2Fchannels.json`)).status, 404);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(vazou, false, 'anexo não vaza para fora da call');
+    alice2.off('chat-message', foraDaCall);
+    await join(bob, 'geral', 'bob-profile-00002');
+
+    // Canal de texto aceita anexos sem voz; o limite é conferido no servidor.
+    assert.equal((await emit(bob, 'create-text-channel', { name: 'Arquivos' })).success, true);
+    const filePayload = { channelId: 'arquivos', name: 'limite.bin', data: Buffer.alloc(20 * 1024 * 1024, 7) };
+    assert.equal((await emit(alice2, 'text-file', { ...filePayload, channelId: 'nao-existe' })).success, false);
+    assert.equal((await emit(alice2, 'text-file', { ...filePayload, data: Buffer.alloc(0) })).success, false);
+    assert.equal((await emit(alice2, 'text-file', { ...filePayload, data: Buffer.alloc(20 * 1024 * 1024 + 1) })).success, false);
+    assert.equal((await emit(alice2, 'text-file', filePayload)).success, true, '20 MB exatos são aceitos sem entrar em voz');
+    const mp4 = Buffer.from('000000186674797069736f6d0000020069736f6d', 'hex');
+    assert.equal((await emit(alice2, 'text-file', { channelId: 'arquivos', name: 'falso.mp4', mime: 'video/mp4', data: html })).success, false);
+    assert.equal((await emit(alice2, 'text-file', { channelId: 'arquivos', name: 'clipe.mp4', mime: 'video/mp4', data: mp4 })).success, true);
+    const chatGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64');
+    assert.equal((await emit(alice2, 'text-image', { channelId: 'arquivos', mime: 'image/gif', data: chatGif, width: 1, height: 1 })).success, true);
+    let attachmentsHistory = await emit(alice2, 'text-history', { channelId: 'arquivos' });
+    const savedFile = attachmentsHistory.messages[0];
+    assert.equal(savedFile.attachment.size, 20 * 1024 * 1024);
+    const savedVideo = attachmentsHistory.messages[1].attachment;
+    assert.equal(savedVideo.mime, 'video/mp4');
+    const rangeRes = await fetch(`${URL_BASE}${savedVideo.url}`, { headers: { Range: 'bytes=0-7' } });
+    assert.equal(rangeRes.status, 206, 'player pode buscar trechos do vídeo');
+    assert.equal(rangeRes.headers.get('content-type'), 'video/mp4');
+    assert.equal((await emit(alice2, 'message-edit', { scope: 'text', channelId: 'arquivos', messageId: savedFile.id, text: '' })).success, true, 'anexo pode ficar sem legenda');
+    assert.equal((await emit(alice2, 'message-react', { scope: 'text', channelId: 'arquivos', messageId: savedFile.id, emoji: '👍' })).success, true);
+    console.log('  ✓ Anexos: 20 MB, isolamento da call, download seguro, vídeo por trechos e validação no servidor');
+
     // 10. Canal de texto: histórico salvo em disco, volta depois de reiniciar, paginação e apagar
     const textList = new Promise((resolve) => alice2.on('text-channels', (list) => { if (list.some((c) => c.id === 'memes')) resolve(list); }));
     const createdText = await emit(bob, 'create-text-channel', { name: 'Memes', profileId: 'bob-profile-00002' });
@@ -247,6 +295,15 @@ async function runTests() {
     proc = await startServer();
     const reader = await connect();
     clients.push(reader);
+    attachmentsHistory = await emit(reader, 'text-history', { channelId: 'arquivos' });
+    assert.equal(attachmentsHistory.messages.length, 3, 'metadados dos anexos e GIF sobrevivem ao reinício');
+    const gifAfter = await fetch(`${URL_BASE}${attachmentsHistory.messages[2].image.url}`);
+    assert.equal(gifAfter.headers.get('content-type'), 'image/gif');
+    assert.ok(Buffer.from(await gifAfter.arrayBuffer()).equals(chatGif), 'GIF permanece no formato original');
+    assert.equal((await fetch(`${URL_BASE}${savedVideo.url}`)).status, 200);
+    const fileAfter = await fetch(`${URL_BASE}${savedFile.attachment.url}`);
+    assert.equal((await fileAfter.arrayBuffer()).byteLength, 20 * 1024 * 1024);
+    assert.equal((await fetch(`${URL_BASE}${callAttachment.url}`)).status, 404, 'anexos da call são temporários');
     const page1 = await emit(reader, 'text-history', { channelId: 'memes' });
     assert.equal(page1.messages.length, 50);
     assert.equal(page1.hasMore, true);
@@ -262,6 +319,10 @@ async function runTests() {
     await join(reader, 'geral', 'carol-profile-0003');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, false);
     assert.equal((await emit(reader, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(reader, 'message-delete', { scope: 'text', channelId: 'arquivos', messageId: savedFile.id })).success, true);
+    assert.equal((await fetch(`${URL_BASE}${savedFile.attachment.url}`)).status, 404, 'apagar mensagem remove seu arquivo');
+    assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'arquivos' })).success, true);
+    assert.equal(fs.readdirSync(path.join(DATA_DIR, 'text', 'files')).length, 0, 'apagar o canal também remove seus anexos');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, true);
     await new Promise((r) => setTimeout(r, 100));
     assert.ok(!fs.existsSync(path.join(DATA_DIR, 'text', 'memes.jsonl')), 'histórico apagado junto');

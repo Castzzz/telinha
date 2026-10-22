@@ -352,6 +352,7 @@ function appendTextMessage(ch, msg) {
     for (const old of all.slice(0, all.length - keep.length)) {
       const file = textImageFileOf(old);
       if (file) removeTextImage(file);
+      removeTextAttachment(old);
     }
     rewriteTextFile(ch, keep);
     ch.count = keep.length;
@@ -392,6 +393,7 @@ function deleteTextChannelData(ch) {
   for (const msg of readTextMessages(ch.id)) {
     const file = textImageFileOf(msg);
     if (file) removeTextImage(file);
+    removeTextAttachment(msg);
   }
   fs.rm(textFile(ch.id), { force: true }, () => {});
 }
@@ -497,6 +499,65 @@ function saveChatImage(data, mime) {
     fs.rm(path.join(CHAT_IMAGE_DIR, old.file), { force: true }, () => {});
   }
   return file;
+}
+
+// Arquivos ficam fora da pasta pública; só vídeos reconhecidos podem abrir no player.
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+const ATTACHMENT_FILE_RE = /^[a-f0-9-]{36}\.(bin|mp4|webm)$/;
+function attachmentStorage(directory, maxBytes, temporary = false) {
+  if (temporary) fs.rmSync(directory, { recursive: true, force: true });
+  fs.mkdirSync(directory, { recursive: true });
+  const files = fs.readdirSync(directory).filter((file) => ATTACHMENT_FILE_RE.test(file)).map((file) => {
+    const st = fs.statSync(path.join(directory, file));
+    return { file, size: st.size, time: st.mtimeMs };
+  }).sort((a, b) => a.time - b.time);
+  let bytes = files.reduce((sum, item) => sum + item.size, 0);
+  const remove = (file) => {
+    const i = files.findIndex((item) => item.file === file);
+    if (i < 0) return;
+    fs.rmSync(path.join(directory, file), { force: true });
+    bytes -= files[i].size;
+    files.splice(i, 1);
+  };
+  const trim = () => { while (bytes > maxBytes && files.length) remove(files[0].file); };
+  trim();
+  return {
+    directory, remove,
+    save(data, ext) {
+      const file = `${randomUUID()}.${ext}`;
+      fs.writeFileSync(path.join(directory, file), data, { flag: 'wx' });
+      files.push({ file, size: data.length, time: Date.now() });
+      bytes += data.length;
+      trim();
+      return file;
+    }
+  };
+}
+const textAttachments = attachmentStorage(path.join(TEXT_DIR, 'files'), 5 * 1024 ** 3);
+const chatAttachments = attachmentStorage(DATA_DIR ? path.join(DATA_DIR, 'chat-files') : path.join(os.tmpdir(), `teletela-files-${process.pid}`), 1024 ** 3, true);
+
+function attachmentName(raw) {
+  return (typeof raw === 'string' ? raw : '').replace(/[\\/\x00-\x1f\x7f]/g, '_').trim().slice(0, 160).replace(/[\uD800-\uDFFF]/gu, '_') || 'arquivo';
+}
+
+function prepareAttachment(payload) {
+  const data = Buffer.isBuffer(payload.data) ? payload.data : null;
+  if (!data?.length) throw new Error('Escolha um arquivo que não esteja vazio.');
+  if (data.length > MAX_ATTACHMENT_BYTES) throw new Error('Arquivo grande demais (máximo 20 MB).');
+  let mime = 'application/octet-stream', ext = 'bin';
+  if (payload.mime === 'video/mp4' || payload.mime === 'video/webm') {
+    const mp4 = data.length >= 12 && data.subarray(4, 8).toString('ascii') === 'ftyp';
+    const webm = data.subarray(0, 4).equals(Buffer.from([0x1a, 0x45, 0xdf, 0xa3]));
+    if (!(payload.mime === 'video/mp4' ? mp4 : webm)) throw new Error('O conteúdo não corresponde ao tipo de vídeo.');
+    mime = payload.mime;
+    ext = mp4 ? 'mp4' : 'webm';
+  }
+  return { data, mime, ext, name: attachmentName(payload.name) };
+}
+
+function removeTextAttachment(msg) {
+  const match = typeof msg?.attachment?.url === 'string' && msg.attachment.url.match(/^\/api\/text-file\/([a-f0-9-]{36}\.(?:bin|mp4|webm))$/);
+  if (match) textAttachments.remove(match[1]);
 }
 
 function isAdminKey(key) {
@@ -719,6 +780,23 @@ app.get('/api/text-image/:file', (req, res) => {
     if (err && !res.headersSent) res.status(404).end();
   });
 });
+
+for (const [scope, storage] of [['text', textAttachments], ['chat', chatAttachments]]) {
+  app.get(`/api/${scope}-file/:file`, (req, res) => {
+    const file = req.params.file;
+    if (!ATTACHMENT_FILE_RE.test(file)) return res.status(404).end();
+    res.set({ 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=86400, immutable' });
+    // Arquivos arbitrários nunca são interpretados como HTML/SVG na origem da sala.
+    const download = file.endsWith('.bin') || req.query.download === '1';
+    if (download) {
+      res.attachment(attachmentName(req.query.name));
+      res.type('application/octet-stream');
+    }
+    res.sendFile(path.join(storage.directory, file), (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
+}
 
 // Banner e som de entrada: mesmo esquema da foto (some quando a pessoa sai da sala)
 function serveUserMedia(field) {
@@ -1478,7 +1556,7 @@ io.on('connection', (socket) => {
   function replySnippet(target, id) {
     const m = findChatMessage(target, id);
     if (!m) return undefined;
-    return { id: m.id, userName: m.userName, text: (m.text || '').slice(0, 140), image: Boolean(m.image) };
+    return { id: m.id, userName: m.userName, text: (m.text || m.attachment?.name || '').slice(0, 140), image: Boolean(m.image) };
   }
   const announceChat = (target, event, data) => {
     if (target.scope === 'call') io.to(target.channel.id).emit(`chat-${event}`, data);
@@ -1517,7 +1595,7 @@ io.on('connection', (socket) => {
     if (!msg.profileId || msg.profileId !== user.profileId) return cb({ success: false, error: 'Só dá pra editar as suas mensagens.' });
     const max = target.scope === 'text' ? MAX_TEXT_LENGTH : 600;
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, max) : '';
-    if (!text && !msg.image) return cb({ success: false, error: 'Mensagem vazia: use apagar.' });
+    if (!text && !msg.image && !msg.attachment) return cb({ success: false, error: 'Mensagem vazia: use apagar.' });
     const updated = { ...msg, text, editedAt: Date.now() };
     try {
       if (target.scope === 'text') appendTextOp(target.ch, { op: 'edit', id: msg.id, text, editedAt: updated.editedAt });
@@ -1542,7 +1620,11 @@ io.on('connection', (socket) => {
         appendTextOp(target.ch, { op: 'delete', id: msg.id });
         const file = textImageFileOf(msg);
         if (file) removeTextImage(file);
+        removeTextAttachment(msg);
         target.ch.count = Math.max(0, target.ch.count - 1);
+      } else if (msg.attachment) {
+        const file = msg.attachment.url.split('/').pop();
+        if (ATTACHMENT_FILE_RE.test(file)) chatAttachments.remove(file);
       }
     } catch (err) {
       console.error('⚠️ [Texto] Não deu pra apagar:', err.message);
@@ -1651,7 +1733,7 @@ io.on('connection', (socket) => {
     const match = typeof payload.data === 'string' ? payload.data.match(SOUND_RE) : null;
     const data = match ? Buffer.from(match[2], 'base64') : null;
     if (!data || !data.length) return cb({ success: false, error: 'Esse arquivo não é um áudio.' });
-    if (data.length > MAX_SOUNDBOARD_BYTES) return cb({ success: false, error: 'Áudio grande demais (máximo 400 KB).' });
+    if (data.length > MAX_SOUNDBOARD_BYTES) return cb({ success: false, error: 'Áudio grande demais (máximo 1 MB).' });
     if (soundboard.filter((s) => s.profileId === user.profileId).length >= MAX_SOUNDS_PER_PROFILE) {
       return cb({ success: false, error: `Você já tem ${MAX_SOUNDS_PER_PROFILE} sons: apague um pra pôr outro.` });
     }
@@ -1744,7 +1826,7 @@ io.on('connection', (socket) => {
     cb({ success: true, messages: all.slice(start, idx), hasMore: start > 0 });
   }));
 
-  // Até 5 mensagens a cada 3 s por pessoa (texto e imagem juntos)
+  // Até 5 mensagens a cada 3 s por pessoa (texto e anexos juntos)
   const textSendTimes = [];
   const textRateLimited = () => {
     const now = Date.now();
@@ -1798,7 +1880,7 @@ io.on('connection', (socket) => {
     const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
     const data = Buffer.isBuffer(payload.data) ? payload.data : null;
     if (!CHAT_IMAGE_TYPES[mime] || !data || data.length === 0) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
-    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 8 MB).' });
+    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 15 MB).' });
     if (!imageMatchesType(data, mime)) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
     if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
     let file;
@@ -1818,6 +1900,48 @@ io.on('connection', (socket) => {
     }, cb);
   }));
 
+  for (const scope of ['text', 'chat']) {
+    socket.on(`${scope}-file`, safeHandler((rawPayload, maybeCallback) => {
+      const cb = safeCallback(maybeCallback);
+      const payload = safeObject(rawPayload);
+      const isText = scope === 'text';
+      const channel = isText ? textChannels.get(payload.channelId) : channels.get(user.channelId);
+      if (!channel) return cb({ success: false, error: isText ? 'Esse canal não existe mais.' : 'Entre numa call pra enviar arquivos.' });
+      let prepared;
+      try { prepared = prepareAttachment(payload); }
+      catch (err) { return cb({ success: false, error: err.message }); }
+      if (isText ? textRateLimited() : Date.now() - lastChatImageAt < 2000) {
+        return cb({ success: false, error: 'Calma, aguarde um pouco antes do próximo envio.' });
+      }
+      const storage = isText ? textAttachments : chatAttachments;
+      let file;
+      try {
+        file = storage.save(prepared.data, prepared.ext);
+        const msg = {
+          ...textMessageBase(channel),
+          replyTo: replySnippet(isText ? { scope: 'text', ch: channel } : { scope: 'call', channel }, payload.replyTo),
+          text: typeof payload.text === 'string' ? payload.text.trim().slice(0, isText ? MAX_TEXT_LENGTH : 600) : '',
+          attachment: { url: `/api/${scope}-file/${file}`, name: prepared.name, mime: prepared.mime, size: prepared.data.length }
+        };
+        if (isText) {
+          appendTextMessage(channel, msg);
+          io.emit('text-message', msg);
+        } else {
+          lastChatImageAt = Date.now();
+          msg.senderName = user.name;
+          channel.messages.push(msg);
+          if (channel.messages.length > 50) channel.messages.shift();
+          io.to(channel.id).emit('chat-message', msg);
+        }
+        cb({ success: true });
+      } catch (err) {
+        if (file) storage.remove(file);
+        console.error('⚠️ [Anexo] Não deu pra guardar o arquivo:', err.message);
+        cb({ success: false, error: 'O servidor não conseguiu guardar o arquivo.' });
+      }
+    }));
+  }
+
   // Imagem no chat (com legenda opcional). Uma a cada 2 s por pessoa.
   let lastChatImageAt = 0;
   socket.on('chat-image', safeHandler((rawPayload, maybeCallback) => {
@@ -1830,7 +1954,7 @@ io.on('connection', (socket) => {
     const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
     const data = Buffer.isBuffer(payload.data) ? payload.data : null;
     if (!CHAT_IMAGE_TYPES[mime] || !data || data.length === 0) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
-    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 8 MB).' });
+    if (data.length > MAX_CHAT_IMAGE_BYTES) return cb({ success: false, error: 'Imagem grande demais (máximo 15 MB).' });
     if (!imageMatchesType(data, mime)) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
     lastChatImageAt = now;
 
