@@ -68,6 +68,10 @@ Pontos importantes:
   (`/api/avatar/...`, `/api/banner/...`, etc.). **Mudou `public/`? Precisa de release**, não
   basta o deploy.
 - Pelo navegador também funciona: aí a página vem do próprio `server.js` (que serve `public/`).
+- Abrir o site ou a sala pelo app começa **fora da call**, inclusive ao recarregar e com
+  `?channel=` ou um canal salvo por versões antigas. O perfil é enviado ao conectar para
+  usar texto sem voz. Clicar num canal entra na call e abre o mic; reconectar após uma queda
+  de rede retoma apenas a call já escolhida nessa janela, mantendo o estado do microfone.
 - **Sala na nuvem:** voz, tela e câmera passam pelo SFU. O `server.js` dá uma senha temporária
   (HMAC com `SFU_SECRET`) pra cada conexão no SFU (evento `sfu-token`). Salas do SFU:
   `<canal>__<id>` (tela 1), `<canal>__<id>__cam`, `<canal>__<id>__voz`, `<canal>__<id>__s2`,
@@ -232,43 +236,53 @@ npm run deploy:oracle
 
 O que o `deploy/oracle/deploy.sh` faz, no seu PC:
 
-1. Compila o SFU pra `linux/amd64` com o Go.
+1. Detecta a arquitetura da VM pelo SSH e compila o SFU pra `linux/amd64` ou `linux/arm64`.
 2. Empacota `server.js`, `package.json`, `package-lock.json` e `public/` com
    `npm ci --omit=dev` (sem as dependências do app desktop).
-3. Descobre a versão LTS mais nova do Node e a mais nova do Caddy.
+3. Descobre a versão LTS mais nova do Node e a mais nova do Caddy (ou usa `NODE_VERSION` e
+   `CADDY_VERSION`, se definidos).
 4. Manda tudo por `scp` pra VM e roda o `install.sh` lá com `sudo`.
 
-No fim ele mostra o endereço e a **senha de admin**.
+No fim ele mostra o endereço. A senha de admin continua em `/etc/telinha/telinha.env`, sem
+ser exibida nos logs do deploy.
 
 Precisa de:
 
-- A chave SSH `~/.ssh/oracle_telinha`, que só existe no PC do dono. Sem ela não tem deploy.
+- A chave SSH `~/.ssh/oracle_telinha_ampere`, que só existe no PC do dono. Sem ela não tem deploy.
 - Go instalado. O script procura no PATH e, se não achar, em `~/.local/go/bin/go`.
 - IP da VM, domínio e chave ficam em `deploy/oracle/config.sh` (dá pra sobrescrever com
   `VM=...`, `DOMAIN=...`, `SSH_KEY=...` na linha de comando).
 - `DUCKDNS_TOKEN=xxxx`, só na primeira vez ou pra trocar o token.
+- `ACTIVATE_DUCKDNS=0` no deploy **e** restore permite preparar uma VM sem mudar o domínio.
+  Para uma troca planejada, siga [MIGRAR-SERVIDOR.md](MIGRAR-SERVIDOR.md).
 
 **O deploy reinicia o servidor.** Isso derruba todo mundo por uns segundos (o app reconecta
 sozinho) e perde o que só existe na memória (veja [§9](#9-dados-guardados)).
 
 ## 8. O servidor na nuvem (VM da Oracle)
 
-- **VM:** Oracle Cloud Always Free, micro (1 GB de RAM, 1 GB de swap), Oracle Linux 9, x86_64.
-  IP `163.176.189.41`, usuário `opc`. Domínio grátis do DuckDNS (`colheitafartus.duckdns.org`),
-  com um timer na VM que atualiza o IP a cada 30 min.
-- **Nunca rode `dnf` nessa VM.** Ele esgota a memória e trava a máquina. O `install.sh` usa
-  binários prontos (Node oficial, Caddy oficial, com hash conferido) e desliga o
-  `dnf-makecache.timer`.
+- **VM:** Oracle Cloud Ampere `VM.Standard.A1.Flex`, 2 CPUs ARM64, 12 GB de RAM, disco de
+  100 GB, Ubuntu 26.04 LTS, região São Paulo. IP `144.22.225.236`, usuário `ubuntu`.
+  Domínio DuckDNS (`colheitafartus.duckdns.org`), com timer que atualiza o IP a cada 30 min.
+- O instalador usa binários oficiais de Node e Caddy com hash conferido e detecta ARM64 ou
+  x86_64. No Ubuntu da Oracle, acrescenta regras de iptables antes do REJECT e salva com
+  `netfilter-persistent`, preservando as regras existentes; também suporta ufw ativo e firewalld.
+- **VM antiga:** `opc@163.176.189.41`, Oracle Linux 9, x86_64, 1 GB de RAM. Não rode `dnf`
+  nela: trava por falta de memória. Depois da migração, Node/SFU e DuckDNS ficam desativados;
+  o Caddy encaminha para a nova VM enquanto houver clientes com DNS antigo em cache.
 
 Serviços (systemd):
 
 | Serviço | O quê | Porta | Limite de RAM |
 |---|---|---|---|
-| `telinha-server` | `node server.js` | 8080 | 300 MB (`--max-old-space-size=192`) |
-| `telinha-sfu` | `/opt/telinha/bin/telinha-sfu` | 8081 + mídia 50000 UDP/TCP | 200 MB |
+| `telinha-server` | `node server.js` | 8080 | 3 GB (`--max-old-space-size=2048`) |
+| `telinha-sfu` | `/opt/telinha/bin/telinha-sfu` | 8081 + mídia 50000 UDP/TCP | 2 GB |
 | `caddy` | HTTPS, `/sfu/*` → 8081, resto → 8080 | 80/443 | 150 MB |
 | `duckdns.timer` | atualiza o IP no DuckDNS | | |
 | `telinha-keepalive.timer` | a cada 2 h, gasta meio núcleo por 20 min (só CPU, prioridade mínima) pra VM não ser "recuperada" pela Oracle por ficar parada. Desliga com `sudo touch /etc/telinha/keepalive.off` | | 16 MB |
+
+Em máquinas com até 4 GB de RAM, o instalador mantém os limites menores: Node com heap de
+192 MB e serviço de 300 MB, SFU com 200 MB.
 
 Caminhos na VM:
 
@@ -285,14 +299,14 @@ Caminhos na VM:
 Comandos úteis (pelo SSH):
 
 ```bash
-ssh -i ~/.ssh/oracle_telinha opc@163.176.189.41
+ssh -i ~/.ssh/oracle_telinha_ampere ubuntu@144.22.225.236
 sudo systemctl status telinha-server telinha-sfu caddy
 sudo journalctl -u telinha-server -n 100 --no-pager      # logs do servidor
 sudo journalctl -u telinha-sfu -f                        # logs do SFU ao vivo
 sudo systemctl restart telinha-server
 ```
 
-**Senha de admin:** fica em `/etc/telinha/telinha.env` e aparece no fim de todo deploy. Pra
+**Senha de admin:** fica em `/etc/telinha/telinha.env` e não aparece nos logs do deploy. Pra
 trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca vai pro git.**
 
 ## 9. Dados guardados
@@ -458,7 +472,7 @@ Coisas que já deram problema e o motivo:
    arquivos ficam só no PC do dono, mas **vão dentro do instalador**, então o release tem que
    ser feito de um PC que tenha essa pasta. Clonando o repositório em outro lugar, os sons de
    entrar/sair e os "Áudios do app" do soundboard não existem.
-4. **`dnf` na VM** trava a máquina (1 GB de RAM). Não rode.
+4. **`dnf` na VM antiga** trava a máquina (1 GB de RAM). Não rode; a nova usa Ubuntu.
 5. **Mídia baixada com `fetch()` pelo app** (som de entrada, soundboard) precisa do cabeçalho
    `Access-Control-Allow-Origin: *` no servidor, porque o app roda em `telinha://app` (outra
    origem). Sem isso o som toca só pra quem subiu. `<img>` não precisa disso.
@@ -482,6 +496,11 @@ Coisas que já deram problema e o motivo:
     a senha. Coloque senha só depois que todo mundo atualizar.
 14. **Arquivo `channels.json`/`text/*.jsonl` corrompido:** o servidor ignora linhas inválidas
     em vez de cair; o arquivo é reescrito via `.tmp` + `rename` pra não corromper no meio.
+15. **Duas VMs atualizando DuckDNS:** a antiga pode reapontar o domínio para si a cada 30 min.
+    Desative o timer antigo antes de ativar o novo. A cópia final dos dados precisa da antiga
+    parada. Procedimento e volta em [MIGRAR-SERVIDOR.md](MIGRAR-SERVIDOR.md).
+16. **Restore rejeitando backup válido:** não use `grep -q` na listagem do tar com pipefail;
+    o pipe fecha antes de o tar terminar e provoca SIGPIPE. O validador lê a listagem completa.
 
 ### Nomes que não podem mudar
 

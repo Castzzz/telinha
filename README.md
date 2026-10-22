@@ -102,6 +102,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 
 | Quero… | Como |
 |---|---|
+| **Entrar numa chamada** | Abrir o site ou entrar no servidor pelo app mostra os canais sem ligar a voz. Clique num canal de voz quando quiser entrar; os canais de texto funcionam antes disso |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. Ao entrar na call o microfone já abre |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
 | **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
@@ -231,11 +232,15 @@ Os links de download deste README apontam sempre pra versão mais nova, então n
 ### Backup dos dados da sala
 `npm run backup` baixa os canais, o histórico dos canais de texto, o soundboard e os segredos da VM pra `~/Teletela-backups` (fica com os 15 mais novos). `npm run backup:auto` faz isso sozinho 1x por dia. O `npm run deploy:oracle` também faz um backup antes de mexer. Pra voltar um backup: `npm run restore -- ~/Teletela-backups/<arquivo>.tar.gz`. **A VM sumiu?** Siga o [docs/RECUPERAR-SERVIDOR.md](docs/RECUPERAR-SERVIDOR.md).
 
+A sala roda numa VM Ampere ARM64 com Ubuntu 26.04, 12 GB de RAM e disco de 100 GB. Para
+trocar de VM mantendo dados e endereço, siga [docs/MIGRAR-SERVIDOR.md](docs/MIGRAR-SERVIDOR.md).
+O deploy também suporta x86_64; IP, usuário e chave SSH ficam em `deploy/oracle/config.sh`.
+
 ### Senha da sala
 O admin coloca em ⚙️ → *Admin* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.
 
 ### Senha de admin
-A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e mostrada no fim do `npm run deploy:oracle` (fica em `/etc/telinha/telinha.env` na VM). Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
+A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e guardada em `/etc/telinha/telinha.env` na VM. Ela é preservada nas migrações e não aparece nos logs do deploy. Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
 
 Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 20 mil mensagens por canal) e as imagens deles em `data/text/images/` (até 5 GB no total); passando do limite, as mais antigas são apagadas.
 

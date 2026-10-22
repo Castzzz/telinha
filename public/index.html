@@ -57,7 +57,7 @@
 
         <ul class="channels-tree" id="channels-tree">
           <!-- 1. GERAL -->
-          <li class="channel-item channel-active" id="channel-geral" data-channel-id="geral">
+          <li class="channel-item" id="channel-geral" data-channel-id="geral">
             <div class="channel-row" role="button" tabindex="0">
               <span class="channel-speaker-icon">🔊</span>
               <span class="channel-name">Geral</span>
@@ -179,7 +179,7 @@
       <section id="voice-lounge" class="voice-lounge">
         <div class="lounge-header">
           <span class="lounge-icon" id="lounge-channel-icon">🔊</span>
-          <h2 id="lounge-channel-title">Canal de Voz: Geral</h2>
+          <h2 id="lounge-channel-title">Fora da call: clique num canal da lista pra entrar</h2>
           <p class="lounge-subtitle">Converse por voz ou transmita sua tela com som do jogo/vídeo sem precisar do microfone.</p>
         </div>
 
@@ -276,8 +276,8 @@
       <!-- SCROLLABLE MESSAGES LIST -->
       <div id="chat-messages" class="chat-messages" role="log" aria-live="polite">
         <div class="chat-welcome-banner" id="chat-welcome-banner">
-          <h3>Bem-vindo ao chat do canal!</h3>
-          <p>As mensagens enviadas aqui são visíveis apenas para os amigos conectados neste canal.</p>
+          <h3>Você está fora da call</h3>
+          <p>Clique num canal da lista pra entrar e ver o chat dele.</p>
         </div>
       </div>
 
@@ -296,7 +296,8 @@
             type="text"
             id="chat-input"
             class="chat-input"
-            placeholder="Conversar em #geral..."
+            placeholder="Entre num canal pra conversar"
+            disabled
             maxlength="4000"
             autocomplete="off"
           />

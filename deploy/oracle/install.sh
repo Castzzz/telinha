@@ -1,5 +1,5 @@
 #!/bin/bash
-# Instala/atualiza o Telinha numa VM Oracle Linux 9 (x86_64). Roda NA VM, como root.
+# Instala/atualiza o Telinha em Oracle Linux ou Ubuntu (x86_64/ARM64), como root.
 # Normalmente quem chama é o deploy.sh (no seu PC), que já manda os arquivos pra /tmp/telinha-deploy.
 #
 #   DOMAIN=meu.duckdns.org DUCKDNS_TOKEN=xxxx bash install.sh
@@ -13,10 +13,32 @@ APP=/opt/telinha
 NODE_VERSION="${NODE_VERSION:-v24.11.1}"
 CADDY_VERSION="${CADDY_VERSION:-2.10.2}"
 MEDIA_PORT=50000
+ACTIVATE_DUCKDNS="${ACTIVATE_DUCKDNS:-1}"
+
+case "$(uname -m)" in
+  x86_64) NODE_ARCH=x64; CADDY_ARCH=amd64 ;;
+  aarch64|arm64) NODE_ARCH=arm64; CADDY_ARCH=arm64 ;;
+  *) echo "Arquitetura da VM não suportada." >&2; exit 1 ;;
+esac
+case "$ACTIVATE_DUCKDNS" in
+  0|1) ;;
+  *) echo "ACTIVATE_DUCKDNS precisa ser 0 ou 1." >&2; exit 1 ;;
+esac
+# A imagem Ubuntu da Oracle usa iptables persistente, sem ufw instalado.
+if command -v firewall-cmd >/dev/null && systemctl is-active --quiet firewalld; then
+  FIREWALL=firewalld
+elif command -v ufw >/dev/null && ufw status | grep -q '^Status: active'; then
+  FIREWALL=ufw
+elif command -v iptables >/dev/null && command -v netfilter-persistent >/dev/null; then
+  FIREWALL=iptables
+else
+  echo "Firewall não suportado; configure firewalld, ufw ativo ou iptables-persistent." >&2
+  exit 1
+fi
 
 log() { printf '\n== %s\n' "$*"; }
 
-log "Swap (a micro tem só 1 GB de RAM)"
+log "Swap de apoio (cria 1 GB se não existir)"
 # A imagem da Oracle às vezes já vem com swap (/.swapfile); só cria se não tiver nenhum
 if [ -z "$(swapon --noheadings --show)" ]; then
   if [ ! -f /swapfile-telinha ]; then
@@ -41,7 +63,7 @@ chmod 700 /etc/telinha
 log "Node.js $NODE_VERSION (binário oficial, hash conferido)"
 if [ "$("$APP/node/bin/node" --version 2>/dev/null || true)" != "$NODE_VERSION" ]; then
   tmp=$(mktemp -d)
-  file="node-$NODE_VERSION-linux-x64.tar.xz"
+  file="node-$NODE_VERSION-linux-$NODE_ARCH.tar.xz"
   curl -fsSL -o "$tmp/$file" "https://nodejs.org/dist/$NODE_VERSION/$file"
   curl -fsSL -o "$tmp/SHASUMS256.txt" "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt"
   (cd "$tmp" && grep " $file\$" SHASUMS256.txt | sha256sum -c -)
@@ -53,7 +75,7 @@ fi
 log "Caddy $CADDY_VERSION (HTTPS automático)"
 if ! /usr/local/bin/caddy version 2>/dev/null | grep -q "v$CADDY_VERSION"; then
   tmp=$(mktemp -d)
-  file="caddy_${CADDY_VERSION}_linux_amd64.tar.gz"
+  file="caddy_${CADDY_VERSION}_linux_${CADDY_ARCH}.tar.gz"
   base="https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION"
   curl -fsSL -o "$tmp/$file" "$base/$file"
   curl -fsSL -o "$tmp/checksums.txt" "$base/caddy_${CADDY_VERSION}_checksums.txt"
@@ -83,7 +105,8 @@ if [ -n "${DUCKDNS_TOKEN:-}" ]; then
   printf 'DUCKDNS_DOMAIN=%s\nDUCKDNS_TOKEN=%s\n' "${DOMAIN%%.duckdns.org}" "$DUCKDNS_TOKEN" > /etc/telinha/duckdns.env
 fi
 chmod 600 /etc/telinha/*.env
-PUBLIC_IP=$(curl -fsS https://api.ipify.org || true)
+PUBLIC_IP=$(curl -4 -fsS --max-time 15 https://api.ipify.org)
+[ -n "$PUBLIC_IP" ] || { echo "Não foi possível descobrir o IPv4 público." >&2; exit 1; }
 
 log "Serviços (systemd)"
 # Limites de memória: em VM pequena (1 GB), segura o Node em 192 MB; em VM maior (ex: 12 GB), dá mais folga
@@ -231,16 +254,41 @@ WantedBy=timers.target
 EOF
 
 log "Firewall da VM"
-firewall-cmd -q --permanent --add-service=http
-firewall-cmd -q --permanent --add-service=https
-firewall-cmd -q --permanent --add-port=$MEDIA_PORT/udp
-firewall-cmd -q --permanent --add-port=$MEDIA_PORT/tcp
-firewall-cmd -q --reload
+case "$FIREWALL" in
+  firewalld)
+    firewall-cmd -q --permanent --add-service=http
+    firewall-cmd -q --permanent --add-service=https
+    firewall-cmd -q --permanent --add-port=$MEDIA_PORT/udp
+    firewall-cmd -q --permanent --add-port=$MEDIA_PORT/tcp
+    firewall-cmd -q --reload
+    ;;
+  ufw)
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+    ufw allow "$MEDIA_PORT/udp"
+    ufw allow "$MEDIA_PORT/tcp"
+    ;;
+  iptables)
+    for rules in iptables ip6tables; do
+      command -v "$rules" >/dev/null || continue
+      # Insere antes do REJECT da Oracle e preserva SSH e regras da infraestrutura.
+      "$rules" -C INPUT -p tcp -m multiport --dports "80,443,$MEDIA_PORT" -j ACCEPT 2>/dev/null ||
+        "$rules" -I INPUT 1 -p tcp -m multiport --dports "80,443,$MEDIA_PORT" -j ACCEPT
+      "$rules" -C INPUT -p udp --dport "$MEDIA_PORT" -j ACCEPT 2>/dev/null ||
+        "$rules" -I INPUT 1 -p udp --dport "$MEDIA_PORT" -j ACCEPT
+    done
+    netfilter-persistent save
+    ;;
+esac
 
 log "Subindo tudo"
 systemctl daemon-reload
 systemctl enable -q --now telinha-server telinha-sfu caddy
-[ -f /etc/telinha/duckdns.env ] && systemctl enable -q --now duckdns.timer
+if [ "$ACTIVATE_DUCKDNS" = 1 ] && [ -f /etc/telinha/duckdns.env ]; then
+  systemctl enable -q --now duckdns.timer
+else
+  systemctl disable -q --now duckdns.timer 2>/dev/null || true
+fi
 systemctl enable -q --now telinha-keepalive.timer
 systemctl restart telinha-server telinha-sfu
 systemctl reload caddy 2>/dev/null || systemctl restart caddy
@@ -248,4 +296,4 @@ sleep 3
 systemctl --no-pager --lines=0 status telinha-server telinha-sfu caddy | grep -E '●|Active:' || true
 echo
 echo "Pronto: https://$DOMAIN"
-grep '^ADMIN_KEY=' /etc/telinha/telinha.env | sed 's/^ADMIN_KEY=/Senha de admin (Configurações > Admin no app): /'
+echo "Senha de admin preservada em /etc/telinha/telinha.env (não exibida nos logs)."

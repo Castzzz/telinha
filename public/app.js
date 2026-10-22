@@ -206,7 +206,6 @@ function profilePayload() {
 
 const initialUsername = myProfile.name;
 const initialColor = myProfile.color;
-const initialChannel = (new URLSearchParams(window.location.search).get('channel') || localStorage.getItem('telinha_last_channel') || 'geral').toLowerCase();
 
 const appState = {
   myId: null,
@@ -220,7 +219,8 @@ const appState = {
     isSpeaking: false,
     streamQuality: QUALITY_PRESETS[prefs.streamQuality] ? prefs.streamQuality : '1080p60'
   },
-  currentChannelId: initialChannel,
+  // Abrir a sala não entra em voz; o canal só é escolhido por uma ação da pessoa.
+  currentChannelId: null,
   channels: new Map(), // channelId -> ChannelRecord
   channelChats: new Map(), // channelId -> Array<ChatMessage>
   unreadChannels: new Set(),
@@ -346,10 +346,9 @@ const socket = io(SERVER_URL, {
 // -----------------------------------------------------------------------------
 // 4. SIGNALING EVENT HANDLERS
 // -----------------------------------------------------------------------------
-// Ao entrar na call (abrindo o app ou voltando depois de "Sair da call") o microfone abre
+// Ao escolher um canal de voz, o microfone abre
 // sozinho quando o canal responder. Trocar de canal ou reconectar mantém o mute como estava.
 let openMicOnJoin = false;
-let connectedOnce = false;
 
 function openMicAfterJoin() {
   if (!openMicOnJoin) return;
@@ -438,6 +437,8 @@ socket.on('connect', () => {
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
   appState.isAdmin = false;
+  // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
+  socket.emit('update-profile', profilePayload());
   const adminKey = savedAdminKey();
   if (adminKey) {
     adminLogin(adminKey, (res) => {
@@ -446,10 +447,8 @@ socket.on('connect', () => {
     });
   }
 
-  // Send join-channel with current user state (fora da call não entra em nenhum)
+  // Uma queda de conexão retoma a call escolhida nesta janela; abrir a sala não escolhe uma.
   if (!appState.currentChannelId) return;
-  if (!connectedOnce) openMicOnJoin = true;
-  connectedOnce = true;
   socket.emit('join-channel', {
     channelId: appState.currentChannelId,
     userName: appState.myUser.name,
@@ -912,7 +911,6 @@ function switchChannel(targetChannelId) {
   if (!oldChannelId) openMicOnJoin = true;
   appState.currentChannelId = cleanId;
   appState.unreadChannels.delete(cleanId);
-  localStorage.setItem('telinha_last_channel', cleanId);
 
   // Update browser URL without reload
   // Mantém o ?server= (no app, sem ele o Ctrl+R perderia a sala)
@@ -934,6 +932,7 @@ function switchChannel(targetChannelId) {
   socket.emit('join-channel', {
     channelId: cleanId,
     userName: appState.myUser.name,
+    profile: profilePayload(),
     isMicOn: appState.myUser.isMicOn,
     isDeafened: appState.myUser.isDeafened,
     isSharing: appState.myUser.isSharing
@@ -989,7 +988,6 @@ socket.on('channel-deleted', ({ channelId, channelName, by } = {}) => {
   appState.channels.delete(channelId);
   appState.unreadChannels.delete(channelId);
   appState.channelChats?.delete(channelId);
-  if (localStorage.getItem('telinha_last_channel') === channelId) localStorage.removeItem('telinha_last_channel');
   renderChannelsTree();
 });
 
@@ -1280,7 +1278,7 @@ function updateTopBar() {
 
   const textCh = appState.textView ? appState.textChannels.get(appState.textView) : null;
   const chatLabel = $('#chat-channel-label');
-  if (chatLabel) chatLabel.textContent = textCh ? `#${textCh.name}` : `#${name}-chat`;
+  if (chatLabel) chatLabel.textContent = textCh ? `#${textCh.name}` : inCall ? `#${name}-chat` : 'Fora da call';
   $('#btn-chat-back-voice')?.classList.toggle('hidden', !textCh || !inCall);
   $('#btn-chat-pins')?.classList.toggle('hidden', !textCh);
   if (!textCh) $('#pins-popover')?.classList.add('hidden');
@@ -6696,6 +6694,13 @@ function initAudioSystem() {
 
 // O módulo espera as preferências (await no topo): o DOMContentLoaded pode já ter passado
 function initApp() {
+  // Links e recargas também começam fora da call, mantendo o endereço do servidor no app.
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('channel')) {
+    params.delete('channel');
+    const query = params.toString();
+    window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
+  }
   initAudioSystem();
   updateUserDockProfile();
   setupDockControls();
@@ -6744,6 +6749,7 @@ function initApp() {
   }
   renderChannelsTree();
   updateTopBar();
+  renderChannelChat(appState.currentChannelId);
   updateVoiceLounge();
   if (isFirstRun) openProfileModal();
   showWhatsNewOnce();

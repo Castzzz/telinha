@@ -6,6 +6,8 @@ VM da Oracle em https://colheitafartus.duckdns.org.
 
 **Documentação completa: [docs/PROJETO.md](docs/PROJETO.md).** VM apagada/quebrada:
 [docs/RECUPERAR-SERVIDOR.md](docs/RECUPERAR-SERVIDOR.md). Leia antes de mudar algo grande.
+Migração planejada: [docs/MIGRAR-SERVIDOR.md](docs/MIGRAR-SERVIDOR.md). VM atual: Ubuntu
+26.04 ARM64/Ampere, 12 GB de RAM, `ubuntu@144.22.225.236`.
 Lá tem a arquitetura, onde fica cada funcionalidade, os eventos do Socket.IO, os dados salvos,
 como fazer release/deploy e as armadilhas conhecidas.
 
@@ -21,7 +23,7 @@ como fazer release/deploy e as armadilhas conhecidas.
   `server.js` ou `sfu/`? Só **deploy**. Tabela completa em docs/PROJETO.md §6.
 - Antes de release: aumentar `version` no `package.json` e atualizar o popup de novidades
   (`WHATS_NEW_VERSION` em `app.js` + `#modal-whats-new` no `index.html`).
-- **Nunca rode `dnf` na VM** (1 GB de RAM, trava).
+- **Nunca rode `dnf` na VM antiga** (`163.176.189.41`, 1 GB de RAM, trava). A nova usa Ubuntu.
 - A senha de admin e os segredos ficam só em `/etc/telinha/telinha.env` na VM. Nunca escreva
   no repositório.
 - Não renomeie `appId`, a pasta de dados "Telinha", o repositório nem os nomes de artefato
@@ -39,7 +41,7 @@ npm test                    # 62 testes (todos passam)
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js   # todos passam
 node tests/m4-channels-admin.test.js                                   # integração do servidor
 npm run release             # publica versão nova (só se o dono pedir)
-npm run deploy:oracle       # atualiza a VM (só se o dono pedir; precisa de ~/.ssh/oracle_telinha; faz backup antes)
+npm run deploy:oracle       # atualiza a VM (só se o dono pedir; precisa de ~/.ssh/oracle_telinha_ampere; faz backup antes)
 npm run backup              # baixa os dados da sala pra ~/Teletela-backups (só leitura na VM)
 npm run backup:auto         # liga o backup diário no PC do dono (timer do systemd do usuário)
 ```
