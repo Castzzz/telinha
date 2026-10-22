@@ -196,7 +196,7 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 | Tela branca / travou | `Ctrl+R` recarrega; `Ctrl+Shift+H` volta pra tela inicial. |
 
 Quedas de resolução e imagem congelada com som continuando podem ter causas diferentes.
-A análise da transmissão e a correção do SFU na branch de teste estão em
+A análise da transmissão e a correção do SFU incluída na versão 3.4 estão em
 [docs/DIAGNOSTICO-TRANSMISSOES.md](docs/DIAGNOSTICO-TRANSMISSOES.md).
 
 ---
@@ -250,13 +250,13 @@ A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e guardada em 
 
 Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 50 mil mensagens por canal), as imagens em `data/text/images/` (até 25 GB) e vídeos/arquivos em `data/text/files/` (até 5 GB). Passando dos limites de espaço, os arquivos mais antigos são apagados.
 
-### Testar a branch de anexos e sons
+### Testar anexos e sons localmente
 
-Na branch `teste/anexos-e-sons`, rode `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-anexos npm start`
+Rode `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-anexos npm start`
 e abra `http://127.0.0.1:3999`. Para testar no desktop, rode `npm run app` e entre por esse link
-na tela inicial. Assim o app usa o servidor local com os eventos novos. Os quatro áudios de
+na tela inicial. Assim o app usa o servidor local com os eventos novos. Os seis áudios de
 controle ficam em `public/sounds/`, fora do git como os demais sons privados; precisam estar
-no disco. Esta branch não publica release nem faz deploy automaticamente.
+no disco. Esse servidor local usa P2P; testar o repasse do SFU exige subir o SFU também.
 
 ### Estrutura
 - `server.js`: servidor de sinalização e canais (Socket.IO)

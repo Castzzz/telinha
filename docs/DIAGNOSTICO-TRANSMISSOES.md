@@ -1,7 +1,7 @@
 # Imagem congelada e quedas de qualidade
 
-Análise de 22/10/2026, após o relato de problemas na VM antiga de 1 GB. As mudanças abaixo
-estão na branch de teste; a inspeção das VMs foi somente leitura, sem reiniciar a sala.
+Análise de 22/10/2026, após o relato de problemas na VM antiga de 1 GB. A correção abaixo
+faz parte da versão 3.4.0; a inspeção inicial das VMs foi somente leitura, sem reiniciar a sala.
 
 ## O que foi observado
 
@@ -32,7 +32,7 @@ garantir que isso resolva perda de pacotes ou banda insuficiente.
 Referências: [W3C, dicas de conteúdo de vídeo](https://w3c.github.io/mst-content-hint/#video-content-hints)
 e [W3C, estatísticas de limitação da qualidade](https://www.w3.org/TR/webrtc-stats/#dom-rtcoutboundrtpstreamstats-qualitylimitationreason).
 
-## Falha encontrada e corrigida na branch
+## Falha encontrada e corrigida na versão 3.4
 
 O laço de `Room.forward` encerrava o repasse ao receber um erro de escrita diferente de
 `io.ErrClosedPipe`. Porém, [o Pion 4.2.24 tenta todos os espectadores e agrega seus erros](https://github.com/pion/webrtc/blob/v4.2.24/track_local_static.go).
