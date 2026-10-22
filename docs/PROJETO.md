@@ -468,6 +468,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
+| Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
 | Configurações (abas) | `#modal-settings` no `index.html`, abas `data-settings-tab` |
 | Popup de novidades | `showWhatsNewOnce`, `#modal-whats-new` |
 | Tela inicial, hospedar sala, túnel | `electron/connect.html`, `ensureLocalServer`, `startTunnel` no `main.cjs` |
@@ -538,6 +539,11 @@ Coisas que já deram problema e o motivo:
     repasse até o host encerrar; erros de envio são registrados no máximo a cada 5 s por faixa.
     Testes em `sfu/main_test.go`; contexto e limites em
     [DIAGNOSTICO-TRANSMISSOES.md](DIAGNOSTICO-TRANSMISSOES.md).
+18. **GIF congelando com modo leve desligado:** as regras de avatar estático precisam de
+    `html.light-mode`. A pausa em segundo plano é independente (`pauseInBackground`) e deve
+    prevalecer sobre fala, mouse e perfil aberto. GIF não obedece `animation-play-state`:
+    avatares usam o canvas de `freezeAvatar`; animações CSS precisam pausar também os
+    pseudoelementos das molduras. Sem as duas opções, os avatares animam continuamente.
 
 ### Nomes que não podem mudar
 

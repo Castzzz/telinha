@@ -99,7 +99,7 @@ function applyTheme(theme) {
 }
 applyTheme(prefs.theme);
 
-// Desempenho e economia: modo leve (molduras estáticas) e pausar animações em segundo plano
+// Desempenho: modo leve e pausa em segundo plano são opções independentes.
 function applyPerformancePrefs() {
   const isLight = prefs.lightMode !== false; // padrão ligado (economiza CPU e GPU)
   const isPauseBg = prefs.pauseInBackground !== false; // padrão ligado
@@ -108,10 +108,13 @@ function applyPerformancePrefs() {
 }
 applyPerformancePrefs();
 
-// Pausa animações quando o app estiver minimizado ou sem foco
-document.addEventListener('visibilitychange', () => {
+// Sincroniza também ao abrir, caso o app já comece em segundo plano.
+function syncAppVisibility() {
   document.documentElement.classList.toggle('app-hidden', document.visibilityState === 'hidden');
-});
+  document.documentElement.classList.toggle('app-unfocused', !document.hasFocus());
+}
+syncAppVisibility();
+document.addEventListener('visibilitychange', syncAppVisibility);
 window.addEventListener('blur', () => {
   document.documentElement.classList.add('app-unfocused');
 });
@@ -1464,6 +1467,10 @@ function avatarInnerHtml(u) {
   const initials = avatarInitials(u?.name);
   const src = avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
+  return avatarPhotoHtml(src, initials);
+}
+
+function avatarPhotoHtml(src, initials) {
   return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" onload="window.freezeAvatar?.(this)" /><canvas class="avatar-static" width="64" height="64"></canvas>`;
 }
 
@@ -3624,7 +3631,7 @@ function renderProfileDraft() {
   const preview = $('#profile-avatar-preview');
   preview.style.backgroundColor = safeColor(profileDraft.color);
   preview.innerHTML = profileDraft.avatar
-    ? `<img src="${escapeHtml(profileDraft.avatar)}" alt="" />`
+    ? avatarPhotoHtml(profileDraft.avatar, avatarInitials($('#input-profile-name').value || profileDraft.name))
     : `<span>${avatarInitials($('#input-profile-name').value || profileDraft.name)}</span>`;
   applyFrame(preview, { ...profileDraft, id: null });
   $('#btn-profile-remove-avatar').classList.toggle('hidden', !profileDraft.avatar);
@@ -4206,13 +4213,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.4';
+const WHATS_NEW_VERSION = '3.4.1';
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
   // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
   const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
   if (isFirstRun) return;
+  $('#whats-new-3-4')?.classList.toggle('hidden', seen >= 3.4);
   $('#whats-new-3-3')?.classList.toggle('hidden', seen >= 3.3);
   $('#whats-new-3-2')?.classList.toggle('hidden', seen >= 3.2);
   $('#whats-new-3-1')?.classList.toggle('hidden', seen >= 3.1);

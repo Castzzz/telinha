@@ -125,6 +125,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 16, de até 10 s / 1 MB). Volume e desligar em ⚙️ → *Som* |
 | **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
+| **Manter os avatares animados** | ⚙️ → *Aparência* → desmarque **Modo leve** para os GIFs animarem mesmo sem ninguém falar. Desmarque também **Pausar animações em segundo plano** para continuarem quando o app estiver sem foco ou minimizado. As duas opções são independentes e ficam salvas |
 | **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
 | **Recolher os canais** | Clique em *Canais de Voz* ou *Canais de Texto*. Recolhido, fica só o canal em que você está (com as fotos lado a lado) e os canais de texto com mensagem nova |
 | **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
