@@ -21,6 +21,7 @@ import {
   sanitizeVolumePercent,
   setRemoteElementMuted
 } from './audio-manager.js';
+import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -180,12 +181,14 @@ const myProfile = {
   color: prefs.profile?.color || localStorage.getItem('telinha_user_color') || PROFILE_COLORS[0],
   bio: prefs.profile?.bio || '',
   avatar: prefs.profile?.avatar || '',
+  avatarCrop: normalizeImageCrop(prefs.profile?.avatarCrop),
   nameColor: prefs.profile?.nameColor || '',
   nameColor2: prefs.profile?.nameColor2 || '',
   frame: prefs.profile?.frame || '',
   frameColor: prefs.profile?.frameColor || '',
   bannerColor: prefs.profile?.bannerColor || '',
   banner: prefs.profile?.banner || '',
+  bannerCrop: normalizeImageCrop(prefs.profile?.bannerCrop),
   joinSound: prefs.profile?.joinSound || ''
 };
 if (isFirstRun) savePrefs({ profile: { ...myProfile } });
@@ -197,12 +200,14 @@ function profilePayload() {
     color: myProfile.color,
     bio: myProfile.bio,
     avatar: myProfile.avatar,
+    avatarCrop: myProfile.avatarCrop,
     nameColor: myProfile.nameColor,
     nameColor2: myProfile.nameColor2,
     frame: myProfile.frame,
     frameColor: myProfile.frameColor,
     bannerColor: myProfile.bannerColor,
     banner: myProfile.banner,
+    bannerCrop: myProfile.bannerCrop,
     joinSound: myProfile.joinSound
   };
 }
@@ -346,25 +351,63 @@ const socket = io(SERVER_URL, {
   timeout: 20000
 });
 
+let connectionProbeTimer = null;
+let connectionProbeRun = 0;
+let connectionProbeActive = false;
+let connectionPingSupported = false;
+
+function showConnectionQuality(quality, text, detail) {
+  const status = $('#voice-panel-status');
+  if (!status) return;
+  status.dataset.quality = quality;
+  status.title = detail;
+  status.setAttribute('aria-label', `${text}. ${detail}`);
+  $('#voice-panel-status-text').textContent = text;
+}
+
+function syncConnectionMonitor() {
+  if (!appState.currentChannelId || !socket.connected) {
+    clearTimeout(connectionProbeTimer);
+    connectionProbeActive = false;
+    ++connectionProbeRun;
+    if (appState.currentChannelId) showConnectionQuality('bad', 'Reconectando…', 'Sem conexão com o servidor.');
+    else showConnectionQuality('measuring', 'Fora da call', 'Entre em um canal de voz para medir a conexão.');
+    return;
+  }
+  if (!connectionPingSupported) {
+    clearTimeout(connectionProbeTimer);
+    connectionProbeActive = false;
+    ++connectionProbeRun;
+    showConnectionQuality('measuring', 'Voz conectada', 'Este servidor ainda não informa o ping.');
+    return;
+  }
+  if (connectionProbeActive) return;
+  connectionProbeActive = true;
+  const run = ++connectionProbeRun;
+  showConnectionQuality('measuring', 'Voz conectada', 'Medindo o ping até o servidor…');
+  const measure = () => {
+    if (run !== connectionProbeRun) return;
+    const started = performance.now();
+    socket.timeout(4000).emit('connection-ping', (err, result) => {
+      // Resposta da call anterior ou de uma conexão que já caiu não altera o painel.
+      if (run !== connectionProbeRun) return;
+      if (err || !result?.success) {
+        showConnectionQuality('bad', 'Conexão instável', 'O servidor não respondeu em 4 segundos. Tentando novamente…');
+      } else {
+        const ping = Math.round(performance.now() - started);
+        const quality = ping < 150 ? 'good' : ping < 300 ? 'fair' : 'bad';
+        const description = quality === 'good' ? 'Boa' : quality === 'fair' ? 'Regular' : 'Ruim';
+        showConnectionQuality(quality, 'Voz conectada', `Ping até o servidor: ${ping} ms · Conexão ${description.toLowerCase()}.`);
+      }
+      connectionProbeTimer = setTimeout(measure, 5000);
+    });
+  };
+  measure();
+}
+
 // -----------------------------------------------------------------------------
 // 4. SIGNALING EVENT HANDLERS
 // -----------------------------------------------------------------------------
-// Ao escolher um canal de voz, o microfone abre quando o canal responder.
-// Trocar de canal ou reconectar mantém o mute como estava.
-let openMicOnJoin = false;
-
-function openMicAfterJoin() {
-  if (!openMicOnJoin) return;
-  openMicOnJoin = false;
-  if (appState.myUser.isMicOn || appState.myUser.isDeafened || isMicLockedByAdmin()) return;
-  appState.myUser.isMicOn = true;
-  updateMicButton();
-  onMicrophoneToggle(true);
-  socket.emit('user-state-changed', { isMicOn: true, isDeafened: appState.myUser.isDeafened });
-  renderChannelsTree();
-  updateVoiceLounge();
-}
-
 // Admin: a senha fica salva por sala (cada servidor tem a sua) e vai sozinha ao conectar
 appState.isAdmin = false;
 appState.serverHasAdmin = false;
@@ -430,13 +473,17 @@ socket.on('room-password-changed', ({ password, by } = {}) => {
   showToast(password ? `🔒 ${by || 'O admin'} colocou senha na sala (o seu app já guardou).` : `🔓 ${by || 'O admin'} tirou a senha da sala.`);
 });
 
-socket.on('room-info', ({ hasPassword } = {}) => {
+socket.on('room-info', ({ hasPassword, connectionPing } = {}) => {
   appState.roomHasPassword = Boolean(hasPassword);
+  connectionPingSupported = connectionPing === true;
+  syncConnectionMonitor();
   renderAdminSettings();
 });
 
 socket.on('connect', () => {
   appState.myId = socket.id;
+  connectionPingSupported = false;
+  syncConnectionMonitor();
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
   appState.isAdmin = false;
@@ -463,6 +510,8 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', (reason) => {
+  syncConnectionMonitor();
+  renderServerHome();
   console.warn(`[Socket.IO] Desconectado: ${reason}`);
   showToast('Desconectado do servidor. Reconectando...', 'error');
 });
@@ -589,7 +638,6 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
   updateTopBar();
   renderChannelChat(channelId);
   updateVoiceLounge();
-  openMicAfterJoin();
 });
 
 const handleUserJoined = (data) => {
@@ -951,9 +999,10 @@ function switchChannel(targetChannelId) {
   if (cleanId === appState.currentChannelId) return;
 
   const oldChannelId = appState.currentChannelId;
-  if (!oldChannelId) openMicOnJoin = true;
+  // Entrar e trocar de canal preservam o mute escolhido no dock.
   appState.currentChannelId = cleanId;
   appState.unreadChannels.delete(cleanId);
+  if (appState.textView) closeTextView();
 
   // Update browser URL without reload
   // Mantém o ?server= (no app, sem ele o Ctrl+R perderia a sala)
@@ -984,7 +1033,6 @@ function switchChannel(targetChannelId) {
   const targetCh = appState.channels.get(cleanId);
   const targetName = targetCh ? targetCh.name : cleanId;
   addSystemChatMessage(`Você entrou no canal #${targetName}.`, cleanId);
-  showToast(`Conectado a #${targetName}`);
 }
 
 // Sair da call sem fechar o app: desliga voz e transmissões e fica fora de todos os canais.
@@ -994,7 +1042,6 @@ function leaveCall() {
   // Eu saí: o servidor responde com o áudio que tocou pros outros
   socket.emit('leave-channel', {}, (res) => playCallSound(res?.soundSeed, '', { kind: 'leave' }));
   leaveCallLocally();
-  showToast('Você saiu da call. Clique num canal pra entrar de novo.');
 }
 
 // Desliga voz e transmissões e fica fora dos canais (o servidor já sabe ou vai saber à parte)
@@ -1285,7 +1332,7 @@ function renderChannelsTree() {
         userLi.addEventListener('dragend', () => userLi.classList.remove('dragging'));
       }
       userLi.addEventListener('click', (e) => {
-        if (isMe) openProfileModal();
+        if (isMe) openProfileSettings();
         else openUserPopover(u.id, e);
       });
 
@@ -1310,6 +1357,9 @@ function renderChannelsTree() {
 }
 
 function updateTopBar() {
+  syncConnectionMonitor();
+  updateTextLayout();
+  updateStageControls();
   const inCall = Boolean(appState.currentChannelId);
   const ch = appState.channels.get(appState.currentChannelId);
   const name = ch ? ch.name : appState.currentChannelId || 'Fora da call';
@@ -1337,22 +1387,81 @@ function updateTopBar() {
   }
 }
 
+let serverHomeSignature = '';
+
+function renderServerHome() {
+  if (appState.currentChannelId) return;
+  const root = $('#server-home');
+  if (!root) return;
+  const channels = [...appState.channels.values()];
+  const textChannels = [...(appState.textChannels?.values() || [])];
+  // A fala muda várias vezes por segundo; o início só precisa mudar com canais e pessoas.
+  const signature = JSON.stringify([
+    socket.connected,
+    channels.map((ch) => [ch.id, ch.name, sortedUsers(ch).map((u) => [u.id, u.name, u.color])]),
+    textChannels.map((ch) => [ch.id, ch.name])
+  ]);
+  if (signature === serverHomeSignature) return;
+  serverHomeSignature = signature;
+  const count = channels.reduce((total, ch) => total + ch.users.size, 0);
+  $('#home-summary').textContent = !socket.connected ? 'Reconectando à sala…'
+    : count ? `${count} ${count === 1 ? 'pessoa em voz agora' : 'pessoas em voz agora'}`
+      : 'A sala está aberta. Entre quando quiser.';
+  $('#home-voice-count').textContent = String(channels.length);
+  $('#home-voice-channels').innerHTML = channels.map((ch) => {
+    const users = sortedUsers(ch);
+    const names = users.slice(0, 3).map((u) => u.name).join(', ');
+    const label = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : 'Livre para entrar';
+    // Iniciais estáticas evitam decodificar outra cópia dos GIFs de cada amigo no início.
+    const faces = users.slice(0, 4).map((u) => `<span class="home-person" style="background:${safeColor(u.color)}" title="${escapeHtml(u.name)}">${avatarInitials(u.name)}</span>`).join('');
+    return `<button type="button" class="home-voice-card${users.length ? ' occupied' : ''}" data-home-voice="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}>
+      <span class="home-channel-icon">${HEADPHONES_ON_SVG}</span>
+      <span class="home-channel-info"><strong>${escapeHtml(ch.name)}</strong><span>${escapeHtml(label)}</span></span>
+      <span class="home-card-bottom"><span class="home-people">${faces || '<span class="home-empty-mark" aria-hidden="true"></span>'}</span><span class="home-enter">Entrar <span aria-hidden="true">→</span></span></span>
+    </button>`;
+  }).join('');
+  $('#home-text-section').classList.toggle('hidden', !textChannels.length);
+  $('#home-text-channels').innerHTML = textChannels.map((ch) => `<button type="button" class="home-text-channel" data-home-text="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}><span class="home-text-hash" aria-hidden="true">#</span><span>${escapeHtml(ch.name)}</span><span class="home-text-arrow" aria-hidden="true">→</span></button>`).join('');
+}
+
+function setupServerHome() {
+  $('#home-voice-channels').addEventListener('click', (e) => {
+    const button = e.target.closest('[data-home-voice]');
+    if (button) switchChannel(button.dataset.homeVoice);
+  });
+  $('#home-text-channels').addEventListener('click', (e) => {
+    const button = e.target.closest('[data-home-text]');
+    if (button) openTextChannel(button.dataset.homeText);
+  });
+}
+
 function updateVoiceLounge() {
   const lounge = $('#voice-lounge');
   const videosGrid = $('#videos-grid');
   if (!lounge) return;
 
+  const home = $('#server-home');
+  const inCall = Boolean(appState.currentChannelId);
+  const hasStreams = appState.activeStreams.size > 0;
+  home?.classList.toggle('hidden', inCall || hasStreams);
+  if (!inCall) {
+    lounge.classList.add('hidden');
+    if (videosGrid) videosGrid.classList.toggle('hidden', !hasStreams);
+    renderServerHome();
+    return;
+  }
   const ch = appState.channels.get(appState.currentChannelId);
   const name = ch ? ch.name : appState.currentChannelId;
 
   const title = $('#lounge-channel-title');
   if (title) {
-    title.textContent = appState.currentChannelId ? `Canal de Voz: ${name}` : 'Fora da call: clique num canal da lista pra entrar';
+    title.textContent = appState.currentChannelId ? `Canal de Voz: ${name}` : 'Escolha um canal para começar';
   }
 
   const iconEl = $('#lounge-channel-icon');
   if (iconEl) {
-    if (ch?.id === 'cinema') iconEl.textContent = '🎬';
+    if (!appState.currentChannelId) iconEl.innerHTML = CHAT_BUBBLE_SVG;
+    else if (ch?.id === 'cinema') iconEl.textContent = '🎬';
     else if (ch?.id === 'futebol') iconEl.textContent = '⚽';
     else if (ch?.id === 'gameplay') iconEl.textContent = '🎮';
     else iconEl.textContent = '🔊';
@@ -1361,6 +1470,7 @@ function updateVoiceLounge() {
   // Populate users in lounge
   const loungeUsersGrid = $('#lounge-users-grid');
   if (loungeUsersGrid) {
+    loungeUsersGrid.classList.toggle('hidden', !appState.currentChannelId);
     loungeUsersGrid.innerHTML = '';
     const users = ch ? sortedUsers(ch) : [];
 
@@ -1385,7 +1495,7 @@ function updateVoiceLounge() {
       `;
       card.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
       card.addEventListener('click', (e) => {
-        if (isMe) openProfileModal();
+        if (isMe) openProfileSettings();
         else openUserPopover(u.id, e);
       });
       card.querySelectorAll('.badge-live-stream').forEach((liveBadge) => {
@@ -1441,13 +1551,14 @@ function freezeAvatar(img) {
 
   const doFreeze = () => {
     try {
-      const wrap = img.parentElement;
+      const wrap = img.closest('.avatar-photo')?.parentElement;
       if (!wrap) return;
       const canvas = wrap.querySelector('canvas.avatar-static');
       if (canvas && img.naturalWidth > 0 && img.naturalHeight > 0) {
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const crop = imageCropRect(img.naturalWidth, img.naturalHeight, 1, JSON.parse(img.dataset.crop || '{}'));
+        ctx.drawImage(img, crop.x, crop.y, crop.width, crop.height, 0, 0, canvas.width, canvas.height);
         wrap.classList.add('has-frozen');
       }
     } catch (_) {
@@ -1467,11 +1578,13 @@ function avatarInnerHtml(u) {
   const initials = avatarInitials(u?.name);
   const src = avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
-  return avatarPhotoHtml(src, initials);
+  const profile = u?.id === appState.myId ? myProfile : findUser(u?.id) || u;
+  return avatarPhotoHtml(src, initials, profile?.avatarCrop);
 }
 
-function avatarPhotoHtml(src, initials) {
-  return `<img class="avatar-animated" src="${escapeHtml(src)}" alt="" data-initials="${initials}" onload="window.freezeAvatar?.(this)" /><canvas class="avatar-static" width="64" height="64"></canvas>`;
+function avatarPhotoHtml(src, initials, rawCrop) {
+  const crop = normalizeImageCrop(rawCrop);
+  return `<span class="avatar-photo profile-image-window"><img class="avatar-animated" style="${imageCropStyle(crop)}" data-crop="${escapeHtml(JSON.stringify(crop))}" src="${escapeHtml(src)}" alt="" data-initials="${initials}" onload="window.freezeAvatar?.(this)" /></span><canvas class="avatar-static" width="128" height="128"></canvas>`;
 }
 
 document.addEventListener('error', (e) => {
@@ -1479,9 +1592,10 @@ document.addEventListener('error', (e) => {
   if (img?.tagName === 'IMG' && img.dataset.initials !== undefined) {
     const span = document.createElement('span');
     span.textContent = img.dataset.initials;
-    const parent = img.parentElement;
+    const parent = img.closest('.avatar-photo')?.parentElement;
     if (parent) {
-      parent.querySelectorAll('.avatar-static, .avatar-animated').forEach((el) => el.remove());
+      parent.querySelectorAll('.avatar-static, .avatar-photo').forEach((el) => el.remove());
+      parent.classList.remove('has-frozen', 'has-photo');
       parent.appendChild(span);
     } else {
       img.replaceWith(span);
@@ -1557,13 +1671,17 @@ function applyFrame(el, u) {
 }
 
 // Banner do perfil: imagem, senão a cor escolhida, senão a cor da bolinha
-function bannerCss(u) {
+function renderBanner(element, u) {
+  if (!element) return;
   const src = u?.id === appState.myId ? myProfile : u;
   const color = safeColor(HEX_RE.test(src?.bannerColor || '') ? src.bannerColor : u?.color);
   let img = '';
   if (u?.id === appState.myId || src === myProfile) img = myProfile.banner || '';
+  else if (src?.banner) img = src.banner;
   else if (u?.bannerV) img = `${SERVER_URL}/api/banner/${encodeURIComponent(u.id)}?v=${encodeURIComponent(u.bannerV)}`;
-  return img ? `background: ${color} url("${img.replace(/"/g, '%22')}") center / cover no-repeat;` : `background: ${color};`;
+  element.style.background = color;
+  element.classList.add('profile-image-window');
+  element.innerHTML = img ? `<img src="${escapeHtml(img)}" alt="" style="${imageCropStyle(src?.bannerCrop)}" />` : '';
 }
 
 // -----------------------------------------------------------------------------
@@ -2069,6 +2187,7 @@ function setupSoundboard() {
     btn.setAttribute('aria-expanded', 'false');
   };
   btn.addEventListener('click', () => {
+    if (!appState.currentChannelId) return;
     const opening = pop.classList.contains('hidden');
     if (!opening) return close();
     renderSoundboard();
@@ -2308,7 +2427,7 @@ function setupProfileTransfer() {
     e.target.value = '';
     if (!file) return;
     try {
-      if (file.size > 6 * 1024 * 1024) throw new Error('Arquivo grande demais.');
+      if (file.size > 30 * 1024 * 1024) throw new Error('Arquivo grande demais.');
       const data = JSON.parse(await file.text());
       const p = data?.profile;
       if (data?.app !== 'teletela' || !p || typeof p.id !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(p.id) || typeof p.name !== 'string') {
@@ -2322,12 +2441,14 @@ function setupProfileTransfer() {
         color: HEX_RE.test(p.color || '') ? p.color : myProfile.color,
         bio: str(p.bio, 140),
         avatar: /^data:image\//.test(p.avatar || '') ? p.avatar : '',
+        avatarCrop: normalizeImageCrop(p.avatarCrop),
         nameColor: HEX_RE.test(p.nameColor || '') ? p.nameColor : '',
         nameColor2: HEX_RE.test(p.nameColor2 || '') ? p.nameColor2 : '',
         frame: FRAME_IDS.has(p.frame) ? p.frame : '',
         frameColor: HEX_RE.test(p.frameColor || '') ? p.frameColor : '',
         bannerColor: HEX_RE.test(p.bannerColor || '') ? p.bannerColor : '',
         banner: /^data:image\//.test(p.banner || '') ? p.banner : '',
+        bannerCrop: normalizeImageCrop(p.bannerCrop),
         joinSound: /^data:audio\//.test(p.joinSound || '') ? p.joinSound : ''
       };
       // A chave de membro é do perfil antigo: a do novo vem ao conectar
@@ -2545,17 +2666,21 @@ function setupChatImages() {
   $('#chat-messages')?.addEventListener('click', (e) => {
     const img = e.target.closest('.chat-image');
     if (!img || !viewer || !viewerImg) return;
+    viewerImg.removeAttribute('style');
     viewerImg.src = img.src;
+    viewer.setAttribute('aria-label', 'Imagem do chat');
     viewer.classList.remove('avatar-view');
     viewer.classList.remove('hidden');
   });
   // Clique na foto de alguém (popup da pessoa ou chat): abre o perfil grande.
   // No perfil grande, clicar na foto mostra ela grande (GIF animando).
   document.addEventListener('click', (e) => {
-    const bigImg = e.target.closest('#profile-card-avatar img');
+    const bigImg = e.target.closest('#profile-card-avatar')?.querySelector('img');
     if (bigImg && viewer && viewerImg) {
       e.stopPropagation();
+      viewerImg.style.cssText = imageCropStyle(JSON.parse(bigImg.dataset.crop || '{}'));
       viewerImg.src = bigImg.src;
+      viewer.setAttribute('aria-label', 'Foto de perfil ampliada');
       viewer.classList.add('avatar-view');
       viewer.classList.remove('hidden');
       return;
@@ -2589,7 +2714,6 @@ function updateCategoryHeaders() {
     header.classList.toggle('collapsed', Boolean(prefs[key]));
     header.setAttribute('aria-expanded', String(!prefs[key]));
   }
-  $('#btn-open-create-modal')?.closest('.sidebar-action-wrap')?.classList.toggle('hidden', Boolean(prefs.collapsedVoice));
 }
 
 function setupCategoryCollapse() {
@@ -2670,12 +2794,20 @@ function renderTextChannels() {
     });
     tree.appendChild(li);
   }
+  renderServerHome();
 }
 
 // Canal de texto aberto ocupa a tela toda, a não ser que você esteja assistindo alguém
 function updateTextLayout() {
   const watching = [...appState.activeStreams.values()].some((info) => !info.isLocal);
-  const chatOpen = !$('#chat-drawer')?.classList.contains('collapsed');
+  const available = Boolean(appState.currentChannelId || appState.textView);
+  const drawer = $('#chat-drawer');
+  const toggle = $('#btn-toggle-chat');
+  drawer?.classList.toggle('hidden', !available);
+  toggle?.classList.toggle('hidden', !available);
+  const chatOpen = available && !drawer?.classList.contains('collapsed');
+  toggle?.classList.toggle('active', chatOpen);
+  toggle?.setAttribute('aria-expanded', String(chatOpen));
   $('#app-layout')?.classList.toggle('text-full', Boolean(appState.textView) && chatOpen && !watching);
 }
 
@@ -2686,6 +2818,7 @@ function markCallChatSeen() {
 }
 
 function openCallChat() {
+  if (!appState.currentChannelId) return;
   closeTextView();
   markCallChatSeen();
   $('#chat-drawer')?.classList.remove('collapsed');
@@ -2882,7 +3015,6 @@ function setupDockControls() {
   const deafenBtn = $('#btn-toggle-deafen');
   const shareBtn = $('#btn-share-screen');
   const loungeShareBtn = $('#btn-lounge-start-share');
-  const settingsBtn = $('#btn-open-settings');
 
   // Mic Mute Toggle
   micBtn?.addEventListener('click', async () => {
@@ -2927,7 +3059,6 @@ function setupDockControls() {
 
     renderChannelsTree();
     updateVoiceLounge();
-    showToast(appState.myUser.isDeafened ? 'Áudio desativado (Deafened)' : 'Áudio restaurado');
   });
 
   // Screen Share Toggle
@@ -2957,10 +3088,6 @@ function setupDockControls() {
   $('#btn-dock-leave')?.addEventListener('click', leaveCall);
   $('#btn-share-camera')?.addEventListener('click', toggleCameraShare);
 
-  // Settings Modal Open
-  settingsBtn?.addEventListener('click', () => {
-    $('#modal-settings')?.classList.remove('hidden');
-  });
 }
 
 function setupChatAndReactions() {
@@ -2991,6 +3118,7 @@ function setupChatAndReactions() {
 
   // Toggle Chat Drawer
   $('#btn-toggle-chat')?.addEventListener('click', () => {
+    if (!appState.currentChannelId && !appState.textView) return;
     const drawer = $('#chat-drawer');
     if (drawer) {
       drawer.classList.toggle('collapsed');
@@ -3008,14 +3136,11 @@ function setupChatAndReactions() {
 
   // Emoji Reactions
   const sendReaction = (emoji) => {
+    if (!appState.currentChannelId) return;
     socket.emit('reaction', { emoji });
     spawnFloatingReaction(appState.myUser.name, emoji);
     countReactionUse(emoji);
   };
-  $('#quick-reactions')?.addEventListener('click', (e) => {
-    const emoji = e.target.closest('[data-emoji]')?.getAttribute('data-emoji');
-    if (emoji) sendReaction(emoji);
-  });
   renderQuickReactions();
   setupEmojiPicker(sendReaction);
 
@@ -3024,6 +3149,7 @@ function setupChatAndReactions() {
 // Barra de reações rápidas: começa com estes e vai virando os emojis que você mais usa.
 // Cada lugar só troca quando outro emoji passa o menos usado da barra (os botões não ficam
 // pulando de posição enquanto você clica).
+let closeCallReactions = () => {};
 const DEFAULT_QUICK_REACTIONS = ['🔥', '😂', '😱', '⚽', '🎮', '👏', '❤️'];
 const MAX_TRACKED_EMOJIS = 100;
 
@@ -3067,61 +3193,188 @@ function countReactionUse(emoji) {
   if (changed) renderQuickReactions();
 }
 
-// Botão "+" das reações: seletor com todos os emojis e busca em português.
-// O seletor (e a lista de emojis) só carrega na primeira vez que abre.
+// Hover mostra só sete atalhos; a lista completa continua sendo carregada sob demanda.
 function setupEmojiPicker(onPick) {
   const btn = $('#btn-more-reactions');
+  const quick = $('#reaction-quick-popover');
   const popover = $('#emoji-picker-popover');
-  if (!btn || !popover) return;
-
+  if (!btn || !quick || !popover) return;
   let loading = null;
+  let closeTimer = null;
+  let request = 0;
+  const cancelClose = () => clearTimeout(closeTimer);
+  const close = () => {
+    ++request;
+    cancelClose();
+    quick.classList.add('hidden');
+    popover.classList.add('hidden');
+    btn.setAttribute('aria-expanded', 'false');
+  };
+  closeCallReactions = close;
+  const choose = (emoji) => {
+    close();
+    onPick(emoji);
+    btn.focus();
+  };
   const load = () => loading ??= Promise.all([
     import('./vendor/emoji-picker/picker.js'),
     import('./vendor/emoji-picker/pt_BR.js')
   ]).then(([{ default: Picker }, { default: i18n }]) => {
     const picker = new Picker({
-      locale: 'pt',
-      i18n,
+      locale: 'pt', i18n,
       dataSource: new URL('vendor/emoji-picker/data-pt.json', window.location.href).href
     });
     picker.addEventListener('emoji-click', (e) => {
-      if (e.detail?.unicode) onPick(e.detail.unicode);
-      close();
+      if (e.detail?.unicode) choose(e.detail.unicode);
     });
     popover.appendChild(picker);
     return picker;
-  }).catch((err) => {
-    loading = null;
-    throw err;
-  });
+  }).catch((err) => { loading = null; throw err; });
 
-  const close = () => {
-    popover.classList.add('hidden');
-    btn.setAttribute('aria-expanded', 'false');
+  const openQuick = (focus = false) => {
+    if (!appState.currentChannelId || !popover.classList.contains('hidden')) return;
+    cancelClose();
+    quick.classList.remove('hidden');
+    btn.setAttribute('aria-expanded', 'true');
+    if (focus) quick.querySelector('button')?.focus();
   };
-  const open = async () => {
+  const openAll = async () => {
+    const channelId = appState.currentChannelId;
+    if (!channelId) return;
+    cancelClose();
+    const currentRequest = ++request;
+    quick.classList.add('hidden');
     try {
       const picker = await load();
+      if (currentRequest !== request || channelId !== appState.currentChannelId) return;
       picker.className = document.documentElement.dataset.theme === 'claro' ? 'light' : 'dark';
       popover.classList.remove('hidden');
       btn.setAttribute('aria-expanded', 'true');
       picker.shadowRoot?.querySelector('input.search')?.focus();
     } catch (err) {
+      close();
       console.error('[Reações] Seletor de emojis não carregou:', err);
       showToast('❌ Não deu pra abrir os emojis.', 'error');
     }
   };
-
-  btn.addEventListener('click', () => {
-    if (popover.classList.contains('hidden')) open();
-    else close();
+  const scheduleClose = () => {
+    if (quick.contains(document.activeElement)) return;
+    cancelClose();
+    // Dá tempo de atravessar o pequeno espaço entre o botão e os atalhos.
+    closeTimer = setTimeout(() => { if (popover.classList.contains('hidden')) close(); }, 220);
+  };
+  btn.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') openQuick(); });
+  btn.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') scheduleClose(); });
+  quick.addEventListener('pointerenter', cancelClose);
+  quick.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') scheduleClose(); });
+  quick.addEventListener('focusin', cancelClose);
+  btn.addEventListener('click', (e) => {
+    // O mouse pode ter aberto os atalhos antes do clique; o clique ainda permite usar o painel.
+    if (!popover.classList.contains('hidden')) close();
+    else openQuick(e.detail === 0);
   });
+  btn.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); openQuick(true); }
+  });
+  $('#quick-reactions').addEventListener('click', (e) => {
+    const emoji = e.target.closest('[data-emoji]')?.dataset.emoji;
+    if (emoji) choose(emoji);
+  });
+  $('#btn-all-reactions').addEventListener('click', openAll);
   document.addEventListener('mousedown', (e) => {
-    if (!popover.classList.contains('hidden') && !popover.contains(e.target) && !btn.contains(e.target)) close();
+    if (!popover.contains(e.target) && !quick.contains(e.target) && !btn.contains(e.target)) close();
   });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !popover.classList.contains('hidden')) close();
+    if (e.key === 'Escape' && (!popover.classList.contains('hidden') || !quick.classList.contains('hidden'))) {
+      close(); btn.focus();
+    }
   });
+}
+
+// Dispositivos só são consultados nas abas de áudio.
+async function populateSettingsDevices() {
+  try {
+    const detected = await refreshAudioDevices(true);
+    const inputSelect = $('#select-audio-input');
+    const outputSelect = $('#select-audio-output');
+    const systemSelect = $('#select-audio-system');
+
+    if (inputSelect) {
+      inputSelect.innerHTML = '';
+      if (detected.microphoneDevices.length === 0) {
+        inputSelect.innerHTML = '<option value="">Nenhum microfone detectado</option>';
+      } else {
+        detected.microphoneDevices.forEach((d) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Microfone (${d.deviceId.slice(0, 8)})`;
+          if (d.deviceId === appState.audioManager?.selectedMicrophoneId) opt.selected = true;
+          inputSelect.appendChild(opt);
+        });
+      }
+    }
+
+    if (outputSelect) {
+      outputSelect.innerHTML = '';
+      if (detected.audioOutputs.length === 0) {
+        outputSelect.innerHTML = '<option value="">Dispositivo padrão</option>';
+      } else {
+        detected.audioOutputs.forEach((d) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Saída (${d.deviceId.slice(0, 8)})`;
+          if (d.deviceId === appState.audioManager?.selectedOutputId) opt.selected = true;
+          outputSelect.appendChild(opt);
+        });
+      }
+    }
+
+    if (systemSelect) {
+      systemSelect.innerHTML = '';
+      if (detected.systemAudioDevices.length === 0) {
+        systemSelect.innerHTML = '<option value="">Nenhum monitor sink detectado (usar padrão)</option>';
+      } else {
+        detected.systemAudioDevices.forEach((d) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || `Som do PC (${d.deviceId.slice(0, 8)})`;
+          if (d.deviceId === appState.audioManager?.selectedSystemAudioId) opt.selected = true;
+          systemSelect.appendChild(opt);
+        });
+      }
+    }
+  } catch (e) {
+    console.warn('[Configurações] Não consegui listar os dispositivos de áudio:', e);
+  }
+}
+
+function selectSettingsTab(name) {
+  $$('.settings-tab').forEach((tab) => {
+    const active = tab.dataset.settingsTab === name;
+    tab.classList.toggle('active', active);
+    tab.setAttribute('aria-pressed', String(active));
+  });
+  $$('.settings-section').forEach((section) => {
+    section.classList.toggle('hidden', section.dataset.settingsSection !== name);
+  });
+  const isProfile = name === 'perfil';
+  $('#btn-profile-save').classList.toggle('hidden', !isProfile);
+  $('#btn-profile-reset').classList.toggle('hidden', !isProfile);
+  $('#btn-settings-done').classList.toggle('btn-primary', !isProfile);
+  $('#btn-settings-done').classList.toggle('btn-secondary', isProfile);
+  $('#modal-settings .settings-panels').scrollTop = 0;
+  if (isProfile && !profileDraft) resetProfileDraft();
+  if (['microfone', 'som', 'transmissao'].includes(name)) populateSettingsDevices();
+}
+
+function openSettings(name = $('.settings-tab.active')?.dataset.settingsTab || 'aparencia') {
+  const modal = $('#modal-settings');
+  if (modal.classList.contains('hidden')) {
+    profileDraft = null;
+    ++imageCropRequest;
+  }
+  modal.classList.remove('hidden');
+  selectSettingsTab(name);
 }
 
 function setupModals() {
@@ -3136,13 +3389,14 @@ function setupModals() {
 
   $('#btn-header-add-channel')?.addEventListener('click', () => openCreateModal());
   $('#btn-add-channel-category')?.addEventListener('click', () => openCreateModal());
-  $('#btn-open-create-modal')?.addEventListener('click', () => openCreateModal());
 
   // Close modals on buttons with data-close-modal
   $$('[data-close-modal]').forEach((btn) => {
     btn.addEventListener('click', () => {
       const modalId = btn.getAttribute('data-close-modal');
       if (modalId) $(`#${modalId}`)?.classList.add('hidden');
+      if (modalId === 'modal-settings') { profileDraft = null; ++imageCropRequest; }
+      if (modalId === 'modal-whats-new') whatsNewReturnFocus?.focus();
     });
   });
 
@@ -3202,78 +3456,13 @@ function setupModals() {
     });
   });
 
-  // Populate audio devices in settings modal
-  const populateSettingsDevices = async () => {
-    try {
-      const detected = await refreshAudioDevices(true);
-      const inputSelect = $('#select-audio-input');
-      const outputSelect = $('#select-audio-output');
-      const systemSelect = $('#select-audio-system');
-
-      if (inputSelect) {
-        inputSelect.innerHTML = '';
-        if (detected.microphoneDevices.length === 0) {
-          inputSelect.innerHTML = '<option value="">Nenhum microfone detectado</option>';
-        } else {
-          detected.microphoneDevices.forEach((d) => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.textContent = d.label || `Microfone (${d.deviceId.slice(0, 8)})`;
-            if (d.deviceId === appState.audioManager?.selectedMicrophoneId) opt.selected = true;
-            inputSelect.appendChild(opt);
-          });
-        }
-      }
-
-      if (outputSelect) {
-        outputSelect.innerHTML = '';
-        if (detected.audioOutputs.length === 0) {
-          outputSelect.innerHTML = '<option value="">Dispositivo padrão</option>';
-        } else {
-          detected.audioOutputs.forEach((d) => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.textContent = d.label || `Saída (${d.deviceId.slice(0, 8)})`;
-            if (d.deviceId === appState.audioManager?.selectedOutputId) opt.selected = true;
-            outputSelect.appendChild(opt);
-          });
-        }
-      }
-
-      if (systemSelect) {
-        systemSelect.innerHTML = '';
-        if (detected.systemAudioDevices.length === 0) {
-          systemSelect.innerHTML = '<option value="">Nenhum monitor sink detectado (usar padrão)</option>';
-        } else {
-          detected.systemAudioDevices.forEach((d) => {
-            const opt = document.createElement('option');
-            opt.value = d.deviceId;
-            opt.textContent = d.label || `Som do PC (${d.deviceId.slice(0, 8)})`;
-            if (d.deviceId === appState.audioManager?.selectedSystemAudioId) opt.selected = true;
-            systemSelect.appendChild(opt);
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[Settings] Failed to populate audio devices:', e);
-    }
-  };
-
-  // Tópicos das configurações (barra da esquerda)
-  document.querySelectorAll('.settings-tab').forEach((tab) => {
-    tab.addEventListener('click', () => {
-      const name = tab.dataset.settingsTab;
-      document.querySelectorAll('.settings-tab').forEach((t) => t.classList.toggle('active', t === tab));
-      document.querySelectorAll('.settings-section').forEach((sec) => {
-        sec.classList.toggle('hidden', sec.dataset.settingsSection !== name);
-      });
-    });
+  // O mesmo editor atende o atalho no próprio perfil e a aba nas configurações.
+  $$('.settings-tab').forEach((tab) => {
+    tab.title = tab.textContent.trim();
+    tab.addEventListener('click', () => selectSettingsTab(tab.dataset.settingsTab));
   });
-
-  $('#btn-open-settings')?.addEventListener('click', async () => {
-    $('#modal-settings')?.classList.remove('hidden');
-    await populateSettingsDevices();
-  });
+  selectSettingsTab('aparencia');
+  $('#btn-open-settings')?.addEventListener('click', () => openSettings());
 
   $('#select-audio-input')?.addEventListener('change', async (e) => {
     const micId = e.target.value;
@@ -3450,7 +3639,7 @@ function openUserPopover(userId, anchorEvent) {
   applyNameStyle($('#user-popover-name'), u);
   applyFrame(avatar, u);
   const banner = $('#user-popover-banner');
-  if (banner) banner.style.cssText = bannerCss(u);
+  renderBanner(banner, u);
   $('#user-popover-bio').textContent = u.bio || '';
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
@@ -3488,7 +3677,7 @@ function openProfileCard(userId) {
   closeUserPopover();
   const isMe = userId === appState.myId;
   const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
-  $('#profile-card-banner').style.cssText = bannerCss(shown);
+  renderBanner($('#profile-card-banner'), shown);
   const avatar = $('#profile-card-avatar');
   avatar.style.backgroundColor = safeColor(shown.color);
   avatar.innerHTML = avatarInnerHtml(isMe ? { id: userId, name: shown.name } : u);
@@ -3580,14 +3769,23 @@ function setupUserPopover() {
 // -----------------------------------------------------------------------------
 let profileDraft = null;
 
-function openProfileModal() {
-  closeUserPopover();
+function resetProfileDraft() {
+  ++imageCropRequest;
   profileDraft = { ...myProfile };
   $('#input-profile-name').value = profileDraft.name;
   $('#input-profile-bio').value = profileDraft.bio;
   renderProfileDraft();
-  $('#modal-profile')?.classList.remove('hidden');
-  $('#input-profile-name')?.focus();
+}
+
+function openProfileSettings() {
+  closeUserPopover();
+  openSettings('perfil');
+  $('#input-profile-name').focus();
+}
+
+function isProfileEditorOpen() {
+  return !$('#modal-settings').classList.contains('hidden')
+    && !$('.settings-section[data-settings-section="perfil"]').classList.contains('hidden');
 }
 
 // Linha de bolinhas de cor (+ "Normal"/"Nenhuma" quando dá pra deixar sem, + cor livre)
@@ -3631,28 +3829,25 @@ function renderProfileDraft() {
   const preview = $('#profile-avatar-preview');
   preview.style.backgroundColor = safeColor(profileDraft.color);
   preview.innerHTML = profileDraft.avatar
-    ? avatarPhotoHtml(profileDraft.avatar, avatarInitials($('#input-profile-name').value || profileDraft.name))
+    ? avatarPhotoHtml(profileDraft.avatar, avatarInitials($('#input-profile-name').value || profileDraft.name), profileDraft.avatarCrop)
     : `<span>${avatarInitials($('#input-profile-name').value || profileDraft.name)}</span>`;
   applyFrame(preview, { ...profileDraft, id: null });
   $('#btn-profile-remove-avatar').classList.toggle('hidden', !profileDraft.avatar);
   const bannerPreview = $('#profile-banner-preview');
-  if (bannerPreview) {
-    const color = safeColor(HEX_RE.test(profileDraft.bannerColor || '') ? profileDraft.bannerColor : profileDraft.color);
-    bannerPreview.style.cssText = profileDraft.banner
-      ? `background: ${color} url("${profileDraft.banner.replace(/"/g, '%22')}") center / cover no-repeat;`
-      : `background: ${color};`;
-  }
+  renderBanner(bannerPreview, profileDraft);
+  $('#btn-profile-adjust-avatar')?.classList.toggle('hidden', !profileDraft.avatar);
+  $('#btn-profile-adjust-banner')?.classList.toggle('hidden', !profileDraft.banner);
   $('#btn-profile-remove-banner')?.classList.toggle('hidden', !profileDraft.banner);
   $('#btn-profile-remove-sound')?.classList.toggle('hidden', !profileDraft.joinSound);
   $('#btn-profile-play-sound')?.classList.toggle('hidden', !profileDraft.joinSound);
   const soundStatus = $('#profile-sound-status');
-  if (soundStatus) soundStatus.textContent = profileDraft.joinSound ? '✅ Você tem um som de entrada.' : 'Sem som próprio: toca um dos áudios dos amigos.';
+  if (soundStatus) soundStatus.textContent = profileDraft.joinSound ? 'Som de entrada escolhido.' : 'Sem som próprio: toca um dos áudios dos amigos.';
 
   renderColorRow($('#profile-colors'), PROFILE_COLORS, profileDraft.color, pick('color'));
   renderColorRow($('#profile-name-colors'), NAME_COLORS, profileDraft.nameColor, pick('nameColor'), 'Normal');
   renderColorRow($('#profile-name-colors2'), NAME_COLORS, profileDraft.nameColor2, pick('nameColor2'), 'Nenhuma');
   $('#profile-name-colors2')?.classList.toggle('disabled', !profileDraft.nameColor);
-  renderColorRow($('#profile-banner-colors'), BANNER_COLORS, profileDraft.bannerColor, pick('bannerColor'), 'Cor da bolinha');
+  renderColorRow($('#profile-banner-colors'), BANNER_COLORS, profileDraft.bannerColor, pick('bannerColor'), 'Cor do avatar');
 
   // Molduras: cada opção mostra uma bolinha com a moldura
   const frames = $('#profile-frames');
@@ -3682,6 +3877,7 @@ function renderProfileDraft() {
     }
   }
 
+  $('#profile-bio-preview').textContent = $('#input-profile-bio').value.trim();
   const namePreview = $('#profile-name-preview');
   if (namePreview) {
     namePreview.textContent = $('#input-profile-name').value || profileDraft.name;
@@ -3689,79 +3885,150 @@ function renderProfileDraft() {
   }
 }
 
-// Corta no meio e reduz pra 128×128: a foto fica leve (~10 KB) pra mandar pra sala
-// GIF vai do jeito que está (redimensionar no canvas congela a animação), até 10 MB
-const MAX_GIF_AVATAR_BYTES = 10 * 1024 * 1024;
-
-async function resizeAvatar(file) {
-  if (file.type === 'image/gif') {
-    if (file.size > MAX_GIF_AVATAR_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true });
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+// Mantém a imagem inteira para permitir reenquadrar depois. GIF nunca passa pelo canvas.
+async function prepareProfileImage(file, kind) {
+  if (!['image/png', 'image/jpeg', 'image/webp', 'image/gif'].includes(file.type)) {
+    throw new Error('Use uma imagem PNG, JPEG, WebP ou GIF.');
   }
-  const url = URL.createObjectURL(file);
+  if (file.type === 'image/gif' && file.size > 10 * 1024 * 1024) {
+    throw new Error('GIF muito grande: o máximo é 10 MB.');
+  }
+  const data = await readAsDataUrl(file);
+  if (file.type === 'image/gif') return data;
+  const img = await loadProfileImage(data);
+  const canvas = document.createElement('canvas');
+  const maxSide = kind === 'avatar' ? 1024 : 1800;
+  const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+  canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+  const limit = kind === 'avatar' ? 200 * 1024 : 1024 * 1024;
+  // Texturas difíceis de comprimir também precisam caber no limite do servidor.
+  for (let attempt = 0; attempt < 8; attempt++) {
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const result = canvas.toDataURL('image/webp', Math.max(0.5, 0.88 - attempt * 0.06));
+    if (result.length * 3 / 4 <= limit) return result;
+    canvas.width = Math.max(1, Math.round(canvas.width * 0.8));
+    canvas.height = Math.max(1, Math.round(canvas.height * 0.8));
+  }
+  throw new Error('Não consegui reduzir essa imagem. Tente uma imagem menor.');
+}
+
+function loadProfileImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Não consegui abrir essa imagem.'));
+    img.src = src;
+  });
+}
+
+let imageCropEditor = null;
+let imageCropRequest = 0;
+
+async function editProfileImage(kind, file = null) {
+  const draft = profileDraft;
+  if (!draft) return;
+  const request = ++imageCropRequest;
+  const returnFocus = document.activeElement;
   try {
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = url;
-    });
-    const size = 128;
-    const canvas = document.createElement('canvas');
-    canvas.width = size;
-    canvas.height = size;
-    const side = Math.min(img.naturalWidth, img.naturalHeight);
-    canvas.getContext('2d').drawImage(
-      img,
-      (img.naturalWidth - side) / 2,
-      (img.naturalHeight - side) / 2,
-      side,
-      side,
-      0,
-      0,
-      size,
-      size
-    );
-    const webp = canvas.toDataURL('image/webp', 0.85);
-    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.85);
-  } finally {
-    URL.revokeObjectURL(url);
+    const data = file ? await prepareProfileImage(file, kind) : draft[kind];
+    if (!data) return;
+    const img = await loadProfileImage(data);
+    if (request !== imageCropRequest || draft !== profileDraft || !isProfileEditorOpen()) return;
+    imageCropEditor = {
+      kind, data, img, draft, returnFocus,
+      crop: normalizeImageCrop(file ? null : draft[`${kind}Crop`])
+    };
+    $('#image-crop-title').textContent = kind === 'avatar' ? 'Ajustar foto de perfil' : 'Ajustar banner';
+    $('#image-crop-preview').classList.toggle('crop-avatar', kind === 'avatar');
+    $('#modal-image-crop').classList.remove('hidden');
+    renderImageCrop();
+    $('#input-image-crop-zoom').focus();
+  } catch (err) {
+    if (request === imageCropRequest) showToast(`❌ ${err.message || 'Não consegui abrir essa imagem.'}`, 'error');
   }
 }
 
-// Banner: corta pra 3:1 e reduz pra 600×200 (GIF vai como está, até 10 MB)
-const MAX_GIF_BANNER_BYTES = 10 * 1024 * 1024;
-async function resizeBanner(file) {
-  if (file.type === 'image/gif') {
-    if (file.size > MAX_GIF_BANNER_BYTES) throw Object.assign(new Error('GIF grande demais'), { tooBig: true, limit: '10 MB' });
-    return readAsDataUrl(file);
+function renderImageCrop() {
+  if (!imageCropEditor) return;
+  const { crop, data } = imageCropEditor;
+  const preview = $('#image-crop-preview');
+  let img = preview.querySelector('img');
+  if (!img) { img = new Image(); img.alt = ''; img.draggable = false; preview.appendChild(img); }
+  if (img.getAttribute('src') !== data) img.src = data;
+  img.style.cssText = imageCropStyle(crop);
+  for (const field of ['zoom', 'x', 'y']) {
+    const value = Math.round(crop[field] * 100);
+    $(`#input-image-crop-${field}`).value = value;
+    $(`#image-crop-${field}-value`).textContent = `${value}%`;
   }
-  const url = URL.createObjectURL(file);
-  try {
-    const img = await new Promise((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = url;
+}
+
+function closeImageCrop(save = false) {
+  ++imageCropRequest;
+  const editor = imageCropEditor;
+  if (save && editor && editor.draft === profileDraft) {
+    profileDraft[editor.kind] = editor.data;
+    profileDraft[`${editor.kind}Crop`] = { ...editor.crop };
+    renderProfileDraft();
+  }
+  imageCropEditor = null;
+  $('#modal-image-crop').classList.add('hidden');
+  $('#image-crop-preview').replaceChildren();
+  editor?.returnFocus?.focus();
+}
+
+function setupImageCrop() {
+  for (const field of ['zoom', 'x', 'y']) {
+    $(`#input-image-crop-${field}`).addEventListener('input', (e) => {
+      if (!imageCropEditor) return;
+      imageCropEditor.crop[field] = Number(e.target.value) / 100;
+      renderImageCrop();
     });
-    const w = 600;
-    const h = 200;
-    const canvas = document.createElement('canvas');
-    canvas.width = w;
-    canvas.height = h;
-    const scale = Math.max(w / img.naturalWidth, h / img.naturalHeight);
-    const sw = w / scale;
-    const sh = h / scale;
-    canvas.getContext('2d').drawImage(img, (img.naturalWidth - sw) / 2, (img.naturalHeight - sh) / 2, sw, sh, 0, 0, w, h);
-    const webp = canvas.toDataURL('image/webp', 0.85);
-    return webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', 0.85);
-  } finally {
-    URL.revokeObjectURL(url);
+  }
+  $('#btn-image-crop-save').addEventListener('click', () => closeImageCrop(true));
+  $('#btn-image-crop-cancel').addEventListener('click', () => closeImageCrop());
+  $('#btn-image-crop-reset').addEventListener('click', () => {
+    if (!imageCropEditor) return;
+    imageCropEditor.crop = normalizeImageCrop();
+    renderImageCrop();
+  });
+  const modal = $('#modal-image-crop');
+  modal.addEventListener('click', (e) => { if (e.target === modal) closeImageCrop(); });
+  modal.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.stopPropagation(); closeImageCrop(); }
+    if (e.key === 'Tab') {
+      const controls = [...modal.querySelectorAll('button, input')];
+      if (e.shiftKey && document.activeElement === controls[0]) {
+        e.preventDefault(); controls.at(-1).focus();
+      } else if (!e.shiftKey && document.activeElement === controls.at(-1)) {
+        e.preventDefault(); controls[0].focus();
+      }
+    }
+  });
+  const preview = $('#image-crop-preview');
+  let drag = null;
+  preview.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !imageCropEditor) return;
+    e.preventDefault();
+    drag = { x: e.clientX, y: e.clientY };
+    preview.setPointerCapture(e.pointerId);
+  });
+  preview.addEventListener('pointermove', (e) => {
+    if (!drag || !imageCropEditor) return;
+    const { img, crop } = imageCropEditor;
+    const bounds = preview.getBoundingClientRect();
+    const rect = imageCropRect(img.naturalWidth, img.naturalHeight, bounds.width / bounds.height, crop);
+    const extraX = img.naturalWidth / rect.width * bounds.width - bounds.width;
+    const extraY = img.naturalHeight / rect.height * bounds.height - bounds.height;
+    if (extraX > 0.01) crop.x -= (e.clientX - drag.x) / extraX;
+    if (extraY > 0.01) crop.y -= (e.clientY - drag.y) / extraY;
+    imageCropEditor.crop = normalizeImageCrop(crop);
+    drag = { x: e.clientX, y: e.clientY };
+    renderImageCrop();
+  });
+  for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) {
+    preview.addEventListener(event, () => { drag = null; });
   }
 }
 
@@ -3796,64 +4063,52 @@ async function readJoinSound(file) {
   return dataUrl;
 }
 
-function setupProfileModal() {
-  $('#user-profile')?.addEventListener('click', openProfileModal);
+function setupProfileSettings() {
+  $$('[data-profile-file]').forEach((button) => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.profileFile)?.click());
+  });
+  $('#btn-profile-reset').addEventListener('click', resetProfileDraft);
+  $('#user-profile')?.addEventListener('click', openProfileSettings);
   $('#user-profile')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      openProfileModal();
+      openProfileSettings();
     }
   });
 
-  $('#input-profile-name')?.addEventListener('input', () => {
-    if (profileDraft) renderProfileDraft();
-  });
+  for (const field of ['name', 'bio']) {
+    $(`#input-profile-${field}`).addEventListener('input', () => {
+      if (profileDraft) renderProfileDraft();
+    });
+  }
 
-  $('#input-profile-avatar')?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !profileDraft) return;
-    try {
-      profileDraft.avatar = await resizeAvatar(file);
+  for (const kind of ['avatar', 'banner']) {
+    $(`#input-profile-${kind}`)?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      e.target.value = '';
+      if (file) editProfileImage(kind, file);
+    });
+    $(`#btn-profile-adjust-${kind}`).addEventListener('click', () => editProfileImage(kind));
+    $(`#btn-profile-remove-${kind}`).addEventListener('click', () => {
+      if (!profileDraft) return;
+      ++imageCropRequest;
+      profileDraft[kind] = '';
+      profileDraft[`${kind}Crop`] = normalizeImageCrop();
       renderProfileDraft();
-    } catch (err) {
-      console.warn('[Perfil] Não consegui ler a imagem:', err);
-      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo é 10 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
-    }
-  });
-
-  $('#btn-profile-remove-avatar')?.addEventListener('click', () => {
-    if (!profileDraft) return;
-    profileDraft.avatar = '';
-    renderProfileDraft();
-  });
-
-  $('#input-profile-banner')?.addEventListener('change', async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file || !profileDraft) return;
-    try {
-      profileDraft.banner = await resizeBanner(file);
-      renderProfileDraft();
-    } catch (err) {
-      console.warn('[Perfil] Não consegui ler o banner:', err);
-      showToast(err?.tooBig ? '❌ GIF muito grande: o máximo pro banner é 10 MB.' : '❌ Não consegui abrir essa imagem.', 'error');
-    }
-  });
-  $('#btn-profile-remove-banner')?.addEventListener('click', () => {
-    if (!profileDraft) return;
-    profileDraft.banner = '';
-    renderProfileDraft();
-  });
+    });
+  }
 
   $('#input-profile-sound')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !profileDraft) return;
     try {
-      profileDraft.joinSound = await readJoinSound(file);
+      const draft = profileDraft;
+      const sound = await readJoinSound(file);
+      if (draft !== profileDraft || !isProfileEditorOpen()) return;
+      draft.joinSound = sound;
       renderProfileDraft();
-      playCallSound(0, profileDraft.joinSound, { force: true });
+      playCallSound(0, sound, { force: true });
     } catch (err) {
       showToast(`❌ ${err.message || 'Não consegui abrir esse áudio.'}`, 'error');
     }
@@ -3885,7 +4140,7 @@ function setupProfileModal() {
     renderChannelsTree();
     updateVoiceLounge();
     document.activeElement?.blur();
-    $('#modal-profile')?.classList.add('hidden');
+    resetProfileDraft();
     showToast('Perfil salvo!', 'success');
   });
 }
@@ -4213,22 +4468,43 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.4.1';
+const WHATS_NEW_VERSION = '3.5.0';
+let whatsNewReturnFocus = null;
+
+function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
+  closeUserPopover();
+  whatsNewReturnFocus = returnFocus;
+  const seenParts = String(seen).split('.').map(Number);
+  for (const version of ['3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+    const parts = version.split('-').map(Number);
+    // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
+    const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
+    const alreadySeen = difference === -1 || (seenParts[difference] || 0) > parts[difference];
+    $(`#whats-new-${version}`)?.classList.toggle('hidden', alreadySeen);
+  }
+  $('#modal-whats-new .modal-body').scrollTop = 0;
+  $('#modal-whats-new').classList.remove('hidden');
+  $('#modal-whats-new .modal-close-btn').focus();
+}
+
+function setupWhatsNew() {
+  $('#settings-app-version').textContent = `Versão ${WHATS_NEW_VERSION}`;
+  for (const id of ['btn-home-whats-new', 'btn-settings-whats-new']) {
+    document.getElementById(id).addEventListener('click', (e) => openWhatsNew(0, e.currentTarget));
+  }
+  $('#modal-whats-new').addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    e.stopPropagation();
+    $('#modal-whats-new').classList.add('hidden');
+    whatsNewReturnFocus?.focus();
+  });
+}
+
 function showWhatsNewOnce() {
   if (prefs.seenWhatsNew === WHATS_NEW_VERSION) return;
-  // Mostra também as novidades das versões que a pessoa pulou (sem nada visto = veio de antes da 2.0)
-  const seen = Number.parseFloat(prefs.seenWhatsNew) || 0;
+  const seen = prefs.seenWhatsNew || '0';
   savePrefs({ seenWhatsNew: WHATS_NEW_VERSION });
-  if (isFirstRun) return;
-  $('#whats-new-3-4')?.classList.toggle('hidden', seen >= 3.4);
-  $('#whats-new-3-3')?.classList.toggle('hidden', seen >= 3.3);
-  $('#whats-new-3-2')?.classList.toggle('hidden', seen >= 3.2);
-  $('#whats-new-3-1')?.classList.toggle('hidden', seen >= 3.1);
-  $('#whats-new-3-0')?.classList.toggle('hidden', seen >= 3.0);
-  $('#whats-new-2-2')?.classList.toggle('hidden', seen >= 2.2);
-  $('#whats-new-2-1')?.classList.toggle('hidden', seen >= 2.1);
-  $('#whats-new-2-0')?.classList.toggle('hidden', seen >= 2.0);
-  $('#modal-whats-new')?.classList.remove('hidden');
+  if (!isFirstRun) openWhatsNew(seen);
 }
 
 // Barra de salas e canais (borda direita) e chat (borda esquerda): arrasta a borda pra mudar
@@ -4361,7 +4637,10 @@ function liveBadgesHtml(u, { compact = false } = {}) {
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
 function openStream(userId) {
   if (streamOwner(userId) === appState.myId) {
-    if (appState.activeStreams.has(userId)) focusStream(userId);
+    const preview = appState.localPreviews.get(userId);
+    if (!preview) return;
+    if (!appState.activeStreams.has(userId)) registerScreenStream(userId, preview.label, preview.stream, true);
+    focusStream(userId);
     return;
   }
   if (!appState.activeStreams.has(userId)) {
@@ -4909,8 +5188,34 @@ function placeGutter(grid, gutter, i) {
   gutter.style.left = `${padL + (inner * before) / total + gap * i + gap / 2}px`;
 }
 
+// Cada controle aparece junto da ação que está disponível na sala.
+function updateStageControls() {
+  const inCall = Boolean(appState.currentChannelId);
+  const watching = appState.activeStreams.size > 0;
+  const watchingOthers = [...appState.activeStreams.values()].some((info) => !info.isLocal);
+  $('#stage-controls-bar')?.classList.toggle('hidden', !inCall && !watching);
+  $('#stage-controls-bar')?.classList.toggle('has-streams', watching);
+  $('.stage-controls-left')?.classList.toggle('hidden', !watching);
+  $('.reactions-bar')?.classList.toggle('hidden', !inCall);
+  $('.lounge-cta')?.classList.toggle('hidden', !inCall);
+  for (const id of ['btn-share-screen', 'btn-share-camera', 'btn-soundboard']) {
+    document.getElementById(id)?.classList.toggle('hidden', !inCall);
+  }
+  $('#btn-stage-stop-watching')?.classList.toggle('hidden', !watchingOthers);
+  for (const id of ['btn-stage-pip', 'btn-stage-fullscreen']) {
+    document.getElementById(id)?.classList.toggle('hidden', !watching);
+  }
+  if (!inCall) {
+    closeCallReactions();
+    $('#soundboard-popover')?.classList.add('hidden');
+    $('#btn-soundboard')?.setAttribute('aria-expanded', 'false');
+    $('#reactions-layer')?.replaceChildren();
+  }
+}
+
 function updateStageLayout() {
   updateTextLayout();
+  updateStageControls();
   syncWatching();
   renderStreamViewers();
   const grid = document.getElementById('videos-grid');
@@ -4922,8 +5227,10 @@ function updateStageLayout() {
 
   if (count === 0) {
     if (grid) grid.classList.add('hidden');
-    if (lounge) lounge.classList.remove('hidden');
-    if (watchingLabel) watchingLabel.textContent = 'Nenhuma transmissão';
+    if (lounge) lounge.classList.toggle('hidden', !appState.currentChannelId);
+    $('#server-home')?.classList.toggle('hidden', Boolean(appState.currentChannelId));
+    if (!appState.currentChannelId) renderServerHome();
+    if (watchingLabel) watchingLabel.textContent = '';
     if (streamTabs) streamTabs.innerHTML = '';
     $('#stream-volume-control')?.classList.add('hidden');
     return;
@@ -4931,6 +5238,7 @@ function updateStageLayout() {
 
   if (grid) grid.classList.remove('hidden');
   if (lounge) lounge.classList.add('hidden');
+  $('#server-home')?.classList.add('hidden');
 
   // Render stream tabs in topbar
   if (streamTabs) {
@@ -4942,14 +5250,22 @@ function updateStageLayout() {
       tab.addEventListener('click', () => {
         focusStream(uid);
       });
-      if (!info.isLocal) {
+      if (!info.isLocal || prefs.hideOwnStream) {
         const close = document.createElement('span');
         close.className = 'stream-tab-close';
         close.textContent = '✕';
-        close.title = 'Parar de assistir';
-        close.addEventListener('click', (e) => {
+        close.title = info.isLocal ? 'Esconder esta prévia' : 'Parar de assistir';
+        close.setAttribute('role', 'button');
+        close.tabIndex = 0;
+        close.setAttribute('aria-label', close.title);
+        const hide = (e) => {
           e.stopPropagation();
-          unwatchScreen(uid);
+          if (info.isLocal) removeScreenStream(uid);
+          else unwatchScreen(uid);
+        };
+        close.addEventListener('click', hide);
+        close.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hide(e); }
         });
         tab.appendChild(close);
       }
@@ -5725,8 +6041,6 @@ async function onMicrophoneToggle(isMicOn) {
           }
         }
       }
-
-      showToast('🎙️ Microfone ativado!');
     } catch (err) {
       console.error('[WebRTC] Failed to acquire microphone:', err);
       appState.myUser.isMicOn = false;
@@ -5759,8 +6073,6 @@ async function onMicrophoneToggle(isMicOn) {
         console.log('[WebRTC Isolation] Screen loopback audio confirmed LIVE despite mic mute.');
       }
     }
-
-    showToast('🔇 Microfone desligado.');
   }
 }
 
@@ -6432,8 +6744,8 @@ function updateShareButton() {
   const live = appState.myUser.isSharing || appState.extraScreens.size > 0;
   document.getElementById('btn-share-screen')?.classList.toggle('sharing', live);
   // O botão grande do meio abre o mesmo menu quando já tem tela no ar
-  const lounge = document.getElementById('btn-lounge-start-share');
-  if (lounge) lounge.textContent = live ? '🖥️ Gerenciar minhas telas' : '🖥️ Transmitir Minha Tela';
+  const label = document.getElementById('lounge-share-label');
+  if (label) label.textContent = live ? 'Gerenciar minhas telas' : 'Transmitir minha tela';
 }
 
 function extraScreensState() {
@@ -6777,6 +7089,8 @@ function initApp() {
   initAudioSystem();
   updateUserDockProfile();
   setupDockControls();
+  setupServerHome();
+  setupWhatsNew();
   setupChatAndReactions();
   setupChatImages();
   setupTextChannels();
@@ -6790,7 +7104,8 @@ function initApp() {
   setupSoundboard();
   setupModals();
   setupUserPopover();
-  setupProfileModal();
+  setupProfileSettings();
+  setupImageCrop();
   setupHotkeys();
   setupSidebarResize();
   setupMasterVolume();
@@ -6840,7 +7155,7 @@ function initApp() {
   updateTopBar();
   renderChannelChat(appState.currentChannelId);
   updateVoiceLounge();
-  if (isFirstRun) openProfileModal();
+  if (isFirstRun) openProfileSettings();
   showWhatsNewOnce();
 }
 

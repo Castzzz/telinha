@@ -102,14 +102,16 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 
 | Quero… | Como |
 |---|---|
-| **Entrar numa chamada** | Abrir o site ou entrar no servidor pelo app mostra os canais sem ligar a voz. Clique num canal de voz quando quiser entrar; os canais de texto funcionam antes disso |
-| **Mutar o microfone** | Botão 🎙️ ou tecla `M`. Ao entrar na call o microfone já abre |
+| **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, sem entrar automaticamente na call. Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
+| **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app começa mutado; entrar, trocar de canal ou reconectar preserva o estado escolhido no botão. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
+| **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
-| **Transmitir minha tela** | Botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
+| **Transmitir minha tela** | Entre num canal de voz e use o botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
-| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda: foto e banner com GIF até 10 MB (fotos paradas são reduzidas), cor do nome, gradiente, moldura, som de entrada (até 5 s / 1 MB, toca pra todo mundo quando você entra) e bio |
-| **Ver o perfil de alguém** | Clique na pessoa e depois na foto (ou na foto dela no chat): abre o perfil grande. Clique na foto de novo pra ver ela grande |
+| **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda, ou em ⚙️ → **Perfil**. O editor tem prévia ao lado em janelas largas, foto e banner com GIF até 10 MB, cores, gradiente, moldura, bio e som de entrada (até 5 s / 1 MB). Arraste e ajuste o zoom ao escolher uma imagem; **Ajustar foto/banner** permite reenquadrar depois. Confirme em **Salvar perfil**; **Descartar alterações** volta ao último perfil salvo |
+| **Ver o perfil de alguém** | Clique na pessoa e depois na foto (ou na foto dela no chat): abre o perfil grande. Clique na foto de novo pra ver ela grande. Os GIFs animam no perfil aberto e na ampliação, mesmo com o modo leve ligado |
+| **Ver meu ping** | Em call, passe o mouse sobre **Voz conectada**, no canto inferior esquerdo do visual novo: mostra o tempo de ida e volta até o servidor. Verde abaixo de 150 ms, amarelo de 150 a 299 ms e vermelho a partir de 300 ms; sem resposta ou durante a reconexão, também fica vermelho |
 | **Escolher os áudios de entrar/sair** | ⚙️ → *Som*: sorteado, um fixo ou nenhum (só pra você). O som de entrada do perfil de cada um continua tocando pra todos |
 | **Sair da call** | Botão vermelho no painel *Voz conectada*, lá embaixo à esquerda |
 | **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
@@ -117,22 +119,23 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mandar imagem ou GIF no chat** | 📎 do lado do campo, `Ctrl+V` ou arraste pro chat (até 15 MB; GIF continua animado). O texto vai como legenda. Clique na imagem pra ver grande |
 | **Enviar vídeo ou arquivo** | Use o mesmo 📎 ou arraste pro chat (até 20 MB por arquivo). MP4/WebM têm player; outros formatos ficam disponíveis para baixar. Nos canais de texto os anexos ficam salvos; no chat da call são temporários |
 | **Sons ao mutar/desmutar** | Em ⚙️ → *Som* → *Áudios dos controles*, escolha a opção 1 (quatro sons separados) ou a opção 2 (a nova dupla, igual para microfone e áudio). Dá para desligar os avisos; só você ouve, seguindo o volume geral, inclusive ao ensurdecer |
-| **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️. Some só da sua tela: os amigos continuam vendo |
+| **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️ → *Transmissão*. A prévia fica escondida automaticamente, mas clicar no seu **AO VIVO** ou **CÂMERA** abre só a prévia escolhida. O **✕** na aba volta a escondê-la. Os amigos continuam vendo e a preferência fica salva |
 | **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
 | **Fixar mensagem** | Canal de texto: passe o mouse na mensagem e clique no 📌. O 📌 no topo do chat lista as fixadas |
 | **Levar o perfil pra outro PC** | Clique no seu nome → *Exportar perfil*; no outro PC, *Importar perfil*. Não mande o arquivo pra ninguém: ele é a sua identidade nas salas |
 | **Marcar alguém** | Digite `@` no chat e escolha a pessoa (ou `@todos`). Ela recebe um aviso, mesmo com o Teletela minimizado |
-| **Soundboard** | 🎵 lá embaixo, do lado do ⏹: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 16, de até 10 s / 1 MB). Volume e desligar em ⚙️ → *Som* |
-| **Reagir com qualquer emoji** | Barra de baixo: os rápidos, ou **＋** pra todos (tem busca). Os que você mais usa vão tomando o lugar na barra |
+| **Soundboard** | Em call, use 🎵 lá embaixo, ao lado de **Reagir**: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 16, de até 10 s / 1 MB). Volume e desligar em ⚙️ → *Som* |
+| **Reagir com qualquer emoji** | Em call, passe o mouse sobre **Reagir** para ver os emojis mais usados. Clique em **＋** para abrir a busca completa. Também funciona por clique ou teclado; escolher um emoji envia para a call e fecha o painel |
+| **Rever as novidades da versão** | Botão **Novidades** na tela inicial ou nas configurações. Reabre o popup com o histórico, mesmo depois de ter fechado. O aviso automático continua aparecendo uma vez por versão |
 | **Tema claro / escuro / preto** | ⚙️ → *Tema* |
 | **Manter os avatares animados** | ⚙️ → *Aparência* → desmarque **Modo leve** para os GIFs animarem mesmo sem ninguém falar. Desmarque também **Pausar animações em segundo plano** para continuarem quando o app estiver sem foco ou minimizado. As duas opções são independentes e ficam salvas |
 | **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
 | **Recolher os canais** | Clique em *Canais de Voz* ou *Canais de Texto*. Recolhido, fica só o canal em que você está (com as fotos lado a lado) e os canais de texto com mensagem nova |
 | **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Admin: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até o admin desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
-| **Criar e apagar canal** | **＋ Criar Canal**. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
+| **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
 | **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
-| **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações |
+| **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
 | **Tela cheia** | Botão ⛶ no canto de baixo, tecla `F` ou duplo clique na transmissão |
@@ -205,6 +208,8 @@ A análise da transmissão e a correção do SFU incluída na versão 3.4 estão
 ## 👩‍💻 Para quem mantém o projeto
 
 📘 **Documentação completa do projeto (arquitetura, deploy, release, dados, armadilhas): [docs/PROJETO.md](docs/PROJETO.md).** Pra agentes de IA: [AGENTS.md](AGENTS.md).
+
+Ideias e melhorias para avaliar no futuro: [docs/IDEIAS-FUTURAS.md](docs/IDEIAS-FUTURAS.md).
 
 <details>
 <summary>Rodar pelo código, publicar versões e estrutura</summary>

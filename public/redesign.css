@@ -130,10 +130,6 @@
   border-radius: 50%;
 }
 
-[data-look="novo"] .btn-create-channel-row {
-  border-radius: 8px;
-}
-
 /* Painel "Voz conectada" + sair da call: só no visual novo */
 .voice-panel-info,
 .dock-leave {
@@ -218,6 +214,11 @@
   width: 14px;
   height: 14px;
 }
+
+[data-look="novo"] .voice-panel-status[data-quality="measuring"] { color: var(--text-muted); }
+[data-look="novo"] .voice-panel-status[data-quality="fair"] { color: var(--accent-yellow); }
+[data-look="novo"] .voice-panel-status[data-quality="bad"] { color: var(--accent-red); }
+[data-look="novo"] .voice-panel-status:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 3px; }
 
 [data-look="novo"] .voice-panel-channel {
   color: var(--text-muted);

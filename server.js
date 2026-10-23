@@ -12,6 +12,7 @@ import os from 'node:os';
 import { execSync } from 'node:child_process';
 import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import { normalizeImageCrop } from './public/image-crop.js';
 
 // Process-Level Defensive Error Boundaries
 process.on('uncaughtException', (err) => {
@@ -598,6 +599,7 @@ function publicUser(u) {
     frameColor: u.frameColor || '',
     bannerColor: u.bannerColor || '',
     bannerV: u.banner ? u.bannerV : 0,
+    bannerCrop: normalizeImageCrop(u.bannerCrop),
     joinSoundV: u.joinSound ? u.joinSoundV : 0,
     bio: u.bio,
     profileId: u.profileId,
@@ -605,6 +607,7 @@ function publicUser(u) {
     serverMuted: Boolean(u.serverMuted),
     serverDeafened: Boolean(u.serverDeafened),
     avatarV: u.avatar ? u.avatarV : 0,
+    avatarCrop: normalizeImageCrop(u.avatarCrop),
     channelId: u.channelId,
     isSharing: u.isSharing,
     isCameraOn: u.isCameraOn,
@@ -636,6 +639,14 @@ const FRAME_PRESETS = ['', 'cor', 'ouro', 'neon', 'fogo', 'gelo', 'arco-iris'];
 function applyProfile(user, raw) {
   const profile = safeObject(raw);
   let changed = false;
+  for (const key of ['avatarCrop', 'bannerCrop']) {
+    if (!profile[key] || typeof profile[key] !== 'object' || Array.isArray(profile[key])) continue;
+    const crop = normalizeImageCrop(profile[key]);
+    if (JSON.stringify(crop) !== JSON.stringify(normalizeImageCrop(user[key]))) {
+      user[key] = crop;
+      changed = true;
+    }
+  }
   const name = safeString(profile.name, '', 25);
   if (name && name !== user.name) {
     user.name = name;
@@ -986,6 +997,8 @@ io.use((socket, next) => {
 // ----------------------------------------------------
 
 io.on('connection', (socket) => {
+  // Mede a ida e volta até este servidor, inclusive sem ninguém mais na call.
+  socket.on('connection-ping', (callback) => safeCallback(callback)({ success: true }));
   socket.on('error', (err) => {
     console.error(`⚠️ [Socket Error] Socket ID ${socket.id}:`, err?.message || err);
   });
@@ -1056,7 +1069,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword) });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
@@ -1078,7 +1091,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     io.emit('room-password-changed', { password, by: user.name });
-    io.emit('room-info', { hasPassword: Boolean(password) });
+    io.emit('room-info', { hasPassword: Boolean(password), connectionPing: true });
     cb({ success: true });
   }));
 

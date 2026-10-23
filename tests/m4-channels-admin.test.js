@@ -188,6 +188,34 @@ async function runTests() {
     assert.equal((await once(alice2, 'user-profile-updated')).user.joinSoundV, fancy.joinSoundV, 'som acima de 1 MB é recusado');
     console.log('  ✓ Nome em gradiente, moldura, banner GIF e som de entrada; lixo e arquivo grande recusados');
 
+    // Enquadramento chega aos amigos sem alterar os bytes animados.
+    const cropSeen = once(alice2, 'user-profile-updated');
+    bob.emit('update-profile', {
+      avatarCrop: { x: 0.25, y: 0.75, zoom: 2 },
+      bannerCrop: { x: 0.8, y: 0.1, zoom: 1.5 }
+    });
+    const cropped = (await cropSeen).user;
+    assert.deepEqual(cropped.avatarCrop, { x: 0.25, y: 0.75, zoom: 2 });
+    assert.deepEqual(cropped.bannerCrop, { x: 0.8, y: 0.1, zoom: 1.5 });
+    assert.equal(cropped.avatarV, fancy.avatarV, 'enquadrar não troca a mídia');
+    assert.equal(cropped.bannerV, fancy.bannerV);
+    assert.deepEqual(Buffer.from(await (await fetch(`${URL_BASE}/api/avatar/${bob.id}`)).arrayBuffer()), gif);
+    const summary = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === bob.id);
+    assert.deepEqual(summary.bannerCrop, cropped.bannerCrop, 'quem chega depois recebe o enquadramento');
+    const invalidCropSeen = once(alice2, 'user-profile-updated');
+    bob.emit('update-profile', {
+      avatarCrop: { x: -100, y: 100, zoom: 100 },
+      bannerCrop: { x: 'url(javascript:alert(1))', y: null, zoom: '2' }
+    });
+    const safeCrop = (await invalidCropSeen).user;
+    assert.deepEqual(safeCrop.avatarCrop, { x: 0, y: 1, zoom: 4 });
+    assert.deepEqual(safeCrop.bannerCrop, { x: 0.5, y: 0.5, zoom: 1 });
+    const ping = await new Promise((resolve, reject) => {
+      alice2.timeout(1500).emit('connection-ping', (err, result) => err ? reject(err) : resolve(result));
+    });
+    assert.deepEqual(ping, { success: true });
+    console.log('  ✓ Enquadramento compartilhado, GIF preservado, valores limitados e ping respondido');
+
     // 8. Várias telas: extras 2 e 3 chegam pros outros (lixo é ignorado) e cada uma tem sala no SFU
     const screensSeen = new Promise((resolve) => {
       alice2.on('user-state-changed', (st) => { if (st.userId === bob.id && st.extraScreens?.length) resolve(st); });

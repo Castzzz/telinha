@@ -70,8 +70,9 @@ Pontos importantes:
 - Pelo navegador também funciona: aí a página vem do próprio `server.js` (que serve `public/`).
 - Abrir o site ou a sala pelo app começa **fora da call**, inclusive ao recarregar e com
   `?channel=` ou um canal salvo por versões antigas. O perfil é enviado ao conectar para
-  usar texto sem voz. Clicar num canal entra na call e abre o mic; reconectar após uma queda
-  de rede retoma apenas a call já escolhida nessa janela, mantendo o estado do microfone.
+  usar texto sem voz. O microfone começa mutado; clicar num canal preserva o estado escolhido
+  no dock, inclusive ao sair e entrar de novo. Reconectar após uma queda de rede retoma apenas
+  a call já escolhida nessa janela, mantendo o estado do microfone.
 - **Sala na nuvem:** voz, tela e câmera passam pelo SFU. O `server.js` dá uma senha temporária
   (HMAC com `SFU_SECRET`) pra cada conexão no SFU (evento `sfu-token`). Salas do SFU:
   `<canal>__<id>` (tela 1), `<canal>__<id>__cam`, `<canal>__<id>__voz`, `<canal>__<id>__s2`,
@@ -182,7 +183,9 @@ go test -race ./sfu                       # SFU: erro de espectador não interro
   todos, mover de call), cor do nome, GIF de perfil, várias telas, imagens no chat, canais de
   texto (inclusive sobrevivendo a reinício), perfil 3.0 (banner, moldura, som de entrada),
   responder/editar/apagar/reagir, soundboard, fixar, "digitando" e senha da sala (com chave
-  de membro). **Quando mexer no servidor, acrescente um caso
+  de membro), enquadramento de foto/banner (inclusive validação e preservação do GIF) e
+  resposta de ping. O `m3-image-crop` confere a geometria e os limites do recorte.
+  **Quando mexer no servidor, acrescente um caso
   lá.**
 - Pra conferir a interface sem abrir o app na mão, o jeito usado até agora foi um script
   Electron "headless" (janelas `offscreen: true`) com dois ou três clientes conectados num
@@ -198,8 +201,8 @@ Uma versão nova é o que faz os apps da galera atualizarem sozinhos.
    - `WHATS_NEW_VERSION` em `public/app.js` (ex: `'3.2'`);
    - o texto em `#modal-whats-new` no `public/index.html`: a lista de cima é a versão nova; a
      anterior vira um bloco `<div id="whats-new-3-1" class="whats-new-older hidden">`;
-   - em `showWhatsNewOnce()` (`app.js`), uma linha mostrando o bloco pra quem pulou a versão
-     (`seen >= 3.1`).
+   - inclua o identificador da versão anterior na lista de `openWhatsNew()` (`app.js`),
+     que compara os componentes da versão para mostrar só as novidades ainda não vistas.
 3. Commit (veja [Convenções](#12-convenções): **nunca** adicione `public/sounds/`).
 4. `npm run release`
 
@@ -344,6 +347,8 @@ aceitam Range para o player. Os eventos antigos de imagem continuam compatíveis
 Sons dos controles são locais: `playControlSound` usa gravações privadas e sai
 pelo `outputGain`, seguindo o volume geral e permitindo ouvir o aviso mesmo ao ensurdecer.
 Só ações nos botões/atalhos tocam esses sons; entrar na call e moderação não os disparam.
+Entrar/sair da call e alternar microfone/áudio não exibem toast: o estado aparece nos ícones.
+Toasts de erro e moderação continuam ativos.
 `prefs.controlSounds` permite desligá-los. Trocar de aviso interrompe o anterior para evitar
 sobreposição. A reprodução não envia evento de som para os outros usuários.
 `prefs.controlSoundSet` escolhe `originais` (padrão, quatro sons) ou `alternativos` (a nova
@@ -380,6 +385,29 @@ antiga, **"Telinha"**, de propósito, pra ninguém perder perfil e configuraçõ
 as preferências ficam no `localStorage` (`telinha_prefs`). O perfil (nome, foto, banner, som
 de entrada, cor, moldura) fica nas preferências e é mandado pra sala a cada conexão.
 
+O editor fica em **Configurações → Perfil**. Clicar no próprio nome/foto ou abrir o app
+pela primeira vez leva à mesma aba (`openProfileSettings`), com um único `#form-profile`.
+Em janelas largas a prévia fica ao lado dos campos; em janelas menores vai para cima.
+Salvar e descartar ficam no rodapé fixo das configurações. Trocar de aba mantém o rascunho;
+fechar as configurações o descarta. Salvar persiste e mantém a aba aberta.
+Todas as abas usam o mesmo cartão (até 1120 × 820 px, limitado à janela), sem mudar
+de tamanho ao trocar de tópico. `selectSettingsTab` controla o painel e os botões do rodapé;
+`openSettings` inicia uma nova sessão de edição quando necessário. Os dispositivos de
+áudio só são consultados ao entrar nas abas Microfone, Som ou Transmissão.
+
+O enquadramento fica nos campos opcionais `avatarCrop` e `bannerCrop` do perfil:
+`{ x, y, zoom }`, com posições de 0 a 1 sobre a sobra da imagem e zoom de 1 a 4.
+Sem esses campos, usa o centro e zoom 1. `public/image-crop.js` compartilha a normalização
+entre cliente e servidor e calcula o recorte do canvas e o estilo da imagem animada.
+As imagens paradas novas são reduzidas mantendo a imagem inteira (lado maior de até
+1024 px na foto e 1800 px no banner, respeitando os limites de 200 KB/1 MB); os GIFs
+continuam nos bytes originais, até 10 MB cada. Assim dá para reenquadrar depois, inclusive
+GIFs, sem congelar a animação. Fotos antigas já cortadas só podem ser ajustadas dentro da
+área que ainda existe; para recuperar o resto, é preciso escolher o arquivo original.
+O recorte também vai em `publicUser`, na exportação/importação e nos estados da sala;
+clientes antigos ignoram esses campos e mostram o centro da imagem. Os banners da
+prévia, do popup e do perfil grande usam proporção 3:1 para manter o mesmo enquadramento.
+
 Identidade: cada pessoa tem um `profileId` aleatório gerado no primeiro uso e guardado nas
 preferências. Dá pra levar pra outro PC com *Exportar/Importar perfil* (no modal do perfil):
 o arquivo JSON tem o perfil inteiro, inclusive o `profileId`. É ele que identifica "quem criou o canal", "de quem é a mensagem", reações,
@@ -412,6 +440,7 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `join-channel` `{ channelId, profile, isMicOn, ... }` | entrar num canal de voz (o perfil vai junto) |
 | `leave-channel` | sair da call |
 | `update-profile` | mudou o perfil |
+| `connection-ping` (só callback) | responde `{ success: true }` para medir a ida e volta até o servidor |
 | `user-state-changed` | mic, ensurdecer, transmitindo, câmera, telas extras, falando, o que está assistindo (`watching`) |
 | `create-channel` / `delete-channel` | canais de voz |
 | `create-text-channel` / `delete-text-channel` / `text-history` / `text-message` / `text-image` | canais de texto |
@@ -435,6 +464,15 @@ app antigo), `channel-state`, `user-joined`, `user-left`, `user-state-changed` (
 `typing`, `member-key`, `room-info`, `room-password-changed`,
 `server-moderation`, `moved-by-admin`, `kicked`, `reaction`.
 
+`room-info` inclui `connectionPing: true` nos servidores com suporte ao ping. Durante
+a call, o cliente mede uma vez e espera 5 s após cada resposta antes de medir de novo.
+O limite de espera é 4 s: sem resposta, o painel fica vermelho; ao desconectar, mostra
+“Reconectando…”. Verde para menos de 150 ms, amarelo de 150 a 299 ms e vermelho a partir
+de 300 ms. Sair da call cancela as medições e respostas antigas são ignoradas.
+Sem a capacidade anunciada (servidor antigo), o indicador fica neutro e informa que o
+ping está indisponível. A medida é da sinalização Socket.IO, não do trajeto de mídia
+WebRTC/SFU nem da perda de pacotes de áudio.
+
 Rotas HTTP: `/api/health`, `/api/channels`, `/api/avatar/:userId`, `/api/banner/:userId`,
 `/api/join-sound/:userId`, `/api/soundboard/:id`, `/api/chat-image/:file`,
 `/api/text-image/:file`.
@@ -450,9 +488,11 @@ de ruído, e 11 inicialização (`initApp`).
 | Funcionalidade | Onde procurar |
 |---|---|
 | Lista de canais/pessoas (ordem alfabética, recolher, arrastar pra mover) | `renderChannelsTree`, `sortedUsers`, `setupCategoryCollapse`, `moveUserToChannel` |
+| Tela inicial e controles por contexto | `renderServerHome` e `setupServerHome`: cartões de voz/pessoas e atalhos de texto; `updateTextLayout` e `updateStageControls`: chat e controles apenas no contexto correspondente |
 | Canais de texto | `renderTextChannels`, `openTextChannel`, `loadTextHistory`; servidor: `readTextMessages`, `appendTextMessage` |
 | Chat (responder, reagir, editar, apagar) | `buildChatMessage`, `setupChatMessageActions`, `startEditMessage`; servidor: `message-edit/delete/react` |
 | @menção | `mentionify`, `mentionsMe`, `notifyMention`, `setupMentionAutocomplete` |
+| Reações da call | `setupEmojiPicker`: hover/clique/teclado abre só os atalhos; **＋** carrega o seletor completo; `renderQuickReactions`, `countReactionUse`, `closeCallReactions` |
 | Fixar mensagem | `pinMessage`, `renderPins`, `setupPins`; servidor: `message-pin`, `text-pins` |
 | "Está digitando" | `setupTyping`, `renderTyping`; servidor: `typing` |
 | Senha da sala | cliente: `roomAccess`, `openRoomPasswordModal`, `setupRoomPasswordAdmin`; servidor: `io.use`, `isMemberKey`, `setRoomPassword` |
@@ -461,16 +501,20 @@ de ruído, e 11 inicialização (`initApp`).
 | Vídeos e arquivos no chat | `sendChatImage`, `chatAttachmentHtml`; servidor: `attachmentStorage`, `prepareAttachment`, `text-file`/`chat-file` |
 | Sons ao mutar/desmutar | `playControlSound`, `setupDockControls`, `prefs.controlSounds`; quatro `.ogg` privados em `public/sounds/` |
 | Sons de entrar/sair | `playCallSound`, `callSoundChoiceUrl`, `joinSoundUrl` (som do perfil) |
-| Perfil (banner, moldura, gradiente, perfil grande) | `renderProfileDraft`, `frameClass`, `nameCss`, `bannerCss`, `openProfileCard`; servidor: `applyProfile` |
+| Perfil (banner, moldura, gradiente, perfil grande) | `renderProfileDraft`, `frameClass`, `nameCss`, `renderBanner`, `openProfileCard`; servidor: `applyProfile` |
+| Editor do próprio perfil | `openProfileSettings`, `setupProfileSettings`, `resetProfileDraft`; `#form-profile` na aba `data-settings-section="perfil"` |
+| Enquadramento de foto/banner | `editProfileImage`, `setupImageCrop`, `prepareProfileImage`, `renderBanner`; geometria/validação: `image-crop.js` |
+| Ping e cores da conexão | `syncConnectionMonitor`, `showConnectionQuality`; servidor: `connection-ping` e capacidade `room-info.connectionPing` |
 | Admin | `setupAdminSettings`, popup da pessoa (`openUserPopover`); servidor: `moderate`, `applyServerModeration` |
 | Transmissão de tela/câmera, várias telas | `startExtraScreen`, `streamKey`, `updateStageLayout`, `layoutMosaic` (mosaico redimensionável) |
+| Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
-| Configurações (abas) | `#modal-settings` no `index.html`, abas `data-settings-tab` |
-| Popup de novidades | `showWhatsNewOnce`, `#modal-whats-new` |
+| Configurações (abas) | `openSettings`, `selectSettingsTab`; `#modal-settings` no `index.html`, abas `data-settings-tab` |
+| Popup de novidades | `showWhatsNewOnce` (automático), `openWhatsNew`/`setupWhatsNew` (reabertura no início e configurações), `#modal-whats-new` |
 | Tela inicial, hospedar sala, túnel | `electron/connect.html`, `ensureLocalServer`, `startTunnel` no `main.cjs` |
 | Som de um app só | Linux: `routeAppAudio` (PipeWire/Pulse); Windows: `native/win-audio` + `start-win-audio` |
 | Auto-update | `electron-updater` no `main.cjs` (lê o `latest*.yml` do release) |
@@ -544,6 +588,24 @@ Coisas que já deram problema e o motivo:
     prevalecer sobre fala, mouse e perfil aberto. GIF não obedece `animation-play-state`:
     avatares usam o canvas de `freezeAvatar`; animações CSS precisam pausar também os
     pseudoelementos das molduras. Sem as duas opções, os avatares animam continuamente.
+19. **GIF parado no perfil grande impedindo ampliar:** `.profile-card-avatar` também
+    precisa liberar a animação no modo leve. O clique para ampliar procura a imagem dentro
+    do avatar inteiro, inclusive se o alvo do clique for o canvas estático.
+    Os avatares têm uma janela `.avatar-photo` que recorta a imagem animada; o canvas de
+    `freezeAvatar` recebe o mesmo enquadramento. A pausa em segundo plano continua
+    prevalecendo no perfil aberto.
+20. **Próprio AO VIVO sem abrir com a prévia oculta:** `hideOwnStream` controla a abertura
+    automática. `localPreviews` guarda o `MediaStream` original mesmo escondido; o clique
+    explícito usa esse mesmo objeto em `registerScreenStream(..., true)`, sem outra captura,
+    conexão SFU ou assinatura de si próprio. O ✕ na aba local chama `removeScreenStream`,
+    mantendo captura e transmissão. Parar a transmissão chama `dropLocalPreview` e limpa
+    também o registro. Não chame `unwatchScreen` nem pare faixas para esconder a prévia.
+21. **Início e hover em PC fraco:** o início usa as listas que já chegam do servidor,
+    sem consultas extras, vídeos, GIFs adicionais ou animações contínuas. Uma assinatura
+    de canais/nomes/cores evita reconstruir os cartões durante mudanças de fala.
+    O hover das reações exibe apenas sete botões já disponíveis; a importação e os dados
+    do seletor completo só são carregados pelo **＋**. Há apenas um timeout curto ao
+    sair do hover para atravessar o espaço entre botão e painel.
 
 ### Nomes que não podem mudar
 
