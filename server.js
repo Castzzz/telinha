@@ -602,6 +602,7 @@ function publicUser(u) {
     bannerCrop: normalizeImageCrop(u.bannerCrop),
     joinSoundV: u.joinSound ? u.joinSoundV : 0,
     bio: u.bio,
+    activity: u.activity || null,
     profileId: u.profileId,
     isAdmin: Boolean(u.isAdmin),
     serverMuted: Boolean(u.serverMuted),
@@ -1008,6 +1009,7 @@ io.on('connection', (socket) => {
     name: `Amigo-${socket.id.slice(0, 4)}`,
     color: USER_COLORS[colorIndex],
     bio: '',
+    activity: null,
     nameColor: '',
     nameColor2: '', // com as duas cores o nome vira gradiente
     frame: '', // moldura da foto (FRAME_PRESETS)
@@ -1439,6 +1441,27 @@ io.on('connection', (socket) => {
     const summaryList = getChannelsSummary();
     io.emit('channels-list', summaryList);
     io.emit('channels-summary', summaryList);
+  }));
+
+  let activityChanges = [];
+  socket.on('update-activity', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    let activity = null;
+    if (raw !== null) {
+      if (!isPlainObject(raw) || typeof raw.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,99}$/.test(raw.id)
+        || typeof raw.name !== 'string' || !raw.name.trim() || raw.name.length > 80
+        || !Number.isSafeInteger(raw.startedAt) || raw.startedAt < Date.now() - 30 * 86400000
+        || raw.startedAt > Date.now() + 60000) return cb({ success: false });
+      activity = { id: raw.id, name: raw.name.trim(), startedAt: Math.min(raw.startedAt, Date.now()) };
+    }
+    if (JSON.stringify(activity) === JSON.stringify(user.activity)) return cb({ success: true });
+    activityChanges = activityChanges.filter((time) => Date.now() - time < 10000);
+    if (activity && activityChanges.length >= 10) return cb({ success: false });
+    activityChanges.push(Date.now());
+    user.activity = activity;
+    io.emit('user-activity-updated', { userId: socket.id, activity });
+    if (user.channelId) broadcastChannels();
+    cb({ success: true });
   }));
 
   socket.on('user-state-changed', handleStateUpdate);
@@ -2030,6 +2053,10 @@ io.on('connection', (socket) => {
   // Disconnect Handling
   socket.on('disconnect', () => {
     try {
+      if (user.activity) {
+        user.activity = null;
+        io.emit('user-activity-updated', { userId: socket.id, activity: null });
+      }
       leaveCurrentChannel(socket);
     } catch (err) {
       console.error(`[Disconnect Error] Socket ${socket.id}:`, err);

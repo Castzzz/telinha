@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopWinAudio: () => ipcRenderer.invoke('stop-win-audio'),
   // Preferências (perfil, volumes por pessoa, atalhos) guardadas no app, não no link da sala
   getPrefs: () => ipcRenderer.invoke('prefs-get'),
+  getGameActivity: () => ipcRenderer.invoke('get-game-activity'),
   setPrefs: (patch) => ipcRenderer.invoke('prefs-set', patch),
   setGlobalHotkeys: (hotkeys) => ipcRenderer.invoke('set-global-hotkeys', hotkeys),
   onGlobalHotkey: (callback) => {

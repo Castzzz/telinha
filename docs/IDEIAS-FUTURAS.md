@@ -60,3 +60,23 @@ Sem resposta ou reconectando, fica vermelho; servidor antigo sem suporte exibe p
 - Ideia ainda em consideração pelo dono, que talvez mantenha o app só para o grupo atual,
   sem distribuir para mais pessoas.
 - Deixar o escopo e a decisão de seguir com isso em aberto.
+
+## 8. Atividade de jogos no perfil
+
+**Incluído na versão 3.6.0.** Fotos reais nos cartões da tela inicial;
+atividade abaixo do nome, na call, no popup e no perfil, com ícone de controle e tempo desde
+a detecção. Catálogo inicial para Windows/Linux (inclui Proton), consulta a cada 15 s,
+limpeza ao fechar, opção de desligar e cadastro manual em Configurações → Atividade.
+Testes de detecção, relógio e protocolo; conferência no Electron com processos locais.
+A detecção nativa no Windows ainda precisa ser conferida em um PC Windows.
+
+- Mostrar o jogo que a pessoa está jogando, inspirado nas atividades do Discord.
+- Detectar automaticamente jogos no app desktop e exibir abaixo do nome e no perfil,
+  por exemplo: **Jogando Counter-Strike 2 · há 23 min**. Limpar a atividade ao fechar o jogo.
+- Começar pelos jogos mais usados pelo grupo, com nome, ícone e tempo desde a detecção.
+- Incluir opção para desativar o compartilhamento e considerar cadastro manual de jogos
+  não reconhecidos.
+- Avaliar a detecção no Windows e no Linux, incluindo launchers e jogos via Proton.
+  Identificar o jogo localmente e enviar ao servidor apenas a atividade para os demais.
+- Detalhes como mapa, placar e fila ficam para uma etapa posterior, pois dependem de
+  integração específica com cada jogo.

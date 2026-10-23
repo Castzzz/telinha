@@ -138,6 +138,39 @@ async function runTests() {
     assert.equal((await emit(bob, 'kick-user', { userId: bob.id })).success, false, 'não tira a si mesmo');
     console.log('  ✓ Admin tira alguém da call; quem não é admin não consegue');
 
+    // Atividade: funciona antes da call, entra no estado e compartilha só os campos públicos.
+    const player = await connect();
+    clients.push(player);
+    const activity = { id: 'cs2', name: 'Counter-Strike 2', startedAt: Date.now() - 23 * 60000 };
+    const activitySeen = once(alice2, 'user-activity-updated');
+    assert.equal((await emit(player, 'update-activity', { ...activity, pid: 42, executable: '/privado/cs2', argv: ['segredo'] })).success, true);
+    assert.deepEqual(await activitySeen, { userId: player.id, activity });
+    const playerState = await join(player, 'geral', 'player-profile-01');
+    assert.deepEqual(playerState.me.activity, activity);
+    const late = await connect();
+    clients.push(late);
+    const lateState = await join(late, 'geral', 'late-profile-0001');
+    assert.deepEqual(lateState.users.find((u) => u.id === player.id).activity, activity, 'quem chega depois recebe o horário original');
+    for (const invalid of [[], 'CS2', {}, { ...activity, id: '../cs2' }, { ...activity, name: 'x'.repeat(81) },
+      { ...activity, startedAt: 'ontem' }, { ...activity, startedAt: Date.now() + 120000 }, { ...activity, startedAt: 0 }]) {
+      assert.equal((await emit(player, 'update-activity', invalid)).success, false);
+    }
+    assert.deepEqual((await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === player.id).activity, activity);
+    const stopped = once(late, 'user-activity-updated');
+    assert.equal((await emit(player, 'update-activity', null)).success, true);
+    assert.deepEqual(await stopped, { userId: player.id, activity: null });
+    assert.equal((await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === player.id).activity, null);
+    await emit(player, 'update-activity', activity);
+    const playerId = player.id;
+    const left = once(late, 'user-left');
+    const offline = once(late, 'user-activity-updated');
+    player.disconnect();
+    assert.deepEqual(await offline, { userId: playerId, activity: null }, 'perfis abertos também param de mostrar atividade');
+    await left;
+    assert.ok(!(await channelsList()).some((c) => c.users.some((u) => u.id === playerId)), 'desconectar remove também a atividade');
+    late.disconnect();
+    console.log('  ✓ Atividade: sem call, chegada tardia, validação, dados públicos, encerrar e desconectar');
+
     // 7. Cor do nome e foto GIF (até 10 MB, maior que o limite de 200 KB da foto parada)
     const colorSeen = once(alice2, 'user-profile-updated');
     bob.emit('update-profile', { nameColor: '#FF5C5C' });

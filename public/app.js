@@ -22,6 +22,7 @@ import {
   setRemoteElementMuted
 } from './audio-manager.js';
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
+import { activityElapsed } from './game-activity.js';
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -489,6 +490,7 @@ socket.on('connect', () => {
   appState.isAdmin = false;
   // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
   socket.emit('update-profile', profilePayload());
+  publishGameActivity(true);
   const adminKey = savedAdminKey();
   if (adminKey) {
     adminLogin(adminKey, (res) => {
@@ -547,6 +549,15 @@ socket.on('user-profile-updated', ({ userId, user }) => {
   if (userId !== appState.myId) applyUserVolume(userId);
   renderChannelsTree();
   updateVoiceLounge();
+});
+
+socket.on('user-activity-updated', ({ userId, activity }) => {
+  if (userId === appState.myId) appState.myUser.activity = activity;
+  for (const ch of appState.channels.values()) {
+    const user = ch.users.get(userId);
+    if (user) user.activity = activity;
+  }
+  renderUserActivity(userId, activity);
 });
 
 const handleChannelsSummary = (channelsList) => {
@@ -1307,11 +1318,11 @@ function renderChannelsTree() {
           </div>
           <span class="speaking-halo"></span>
         </div>
-        <span class="channel-user-name">
+        <span class="channel-user-info"><span class="channel-user-name">
           <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
           ${u.isAdmin ? '<span class="badge-admin" title="Admin">👑</span>' : ''}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
-        </span>
+        </span>${userActivityHtml(u)}</span>
         <div class="user-indicators">
           ${liveBadgesHtml(u, { compact: true })}
           ${muteIndicatorsHtml(u)}
@@ -1398,7 +1409,7 @@ function renderServerHome() {
   // A fala muda várias vezes por segundo; o início só precisa mudar com canais e pessoas.
   const signature = JSON.stringify([
     socket.connected,
-    channels.map((ch) => [ch.id, ch.name, sortedUsers(ch).map((u) => [u.id, u.name, u.color])]),
+    channels.map((ch) => [ch.id, ch.name, sortedUsers(ch).map((u) => [u.id, u.name, u.color, u.avatarV, u.avatarCrop, u.frame, u.frameColor])]),
     textChannels.map((ch) => [ch.id, ch.name])
   ]);
   if (signature === serverHomeSignature) return;
@@ -1412,8 +1423,7 @@ function renderServerHome() {
     const users = sortedUsers(ch);
     const names = users.slice(0, 3).map((u) => u.name).join(', ');
     const label = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : 'Livre para entrar';
-    // Iniciais estáticas evitam decodificar outra cópia dos GIFs de cada amigo no início.
-    const faces = users.slice(0, 4).map((u) => `<span class="home-person" style="background:${safeColor(u.color)}" title="${escapeHtml(u.name)}">${avatarInitials(u.name)}</span>`).join('');
+    const faces = users.slice(0, 4).map((u) => `<span class="user-avatar home-person${frameClass(u)}" style="background:${safeColor(u.color)};${frameStyle(u)}" title="${escapeHtml(u.name)}">${avatarInnerHtml(u)}</span>`).join('');
     return `<button type="button" class="home-voice-card${users.length ? ' occupied' : ''}" data-home-voice="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}>
       <span class="home-channel-icon">${HEADPHONES_ON_SVG}</span>
       <span class="home-channel-info"><strong>${escapeHtml(ch.name)}</strong><span>${escapeHtml(label)}</span></span>
@@ -1487,6 +1497,7 @@ function updateVoiceLounge() {
           <span class="speaking-halo"></span>
         </div>
         <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
+        ${userActivityHtml(u)}
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
           ${muteIndicatorsHtml(u)}
@@ -3593,6 +3604,124 @@ function findUser(userId) {
   return null;
 }
 
+// O relógio muda só o texto; não reconstrói fotos, canais nem conexões de mídia.
+const GAME_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 8a2 2 0 0 1-3.4 1.7L16 16H8l-2.6 3.2A2 2 0 0 1 2 17.5l1-8A3 3 0 0 1 6 7zM7 10v4M5 12h4M16 11h.01M19 13h.01"/></svg>';
+let localGameActivity = null;
+let publishedGameActivity;
+let gamePollTimer;
+let gamePollRun = 0;
+
+function activityContent(activity) {
+  if (!activity) return '';
+  return `${GAME_SVG}<span class="activity-game-name"><span class="activity-game-prefix">Jogando </span>${escapeHtml(activity.name)}</span><span class="activity-time" data-activity-start="${Number(activity.startedAt)}">· ${activityElapsed(activity.startedAt)}</span>`;
+}
+
+function userActivityHtml(user) {
+  const activity = user.id === appState.myId ? localGameActivity : user.activity;
+  return `<span class="game-activity${activity ? '' : ' hidden'}" data-activity-user="${escapeHtml(user.id)}" title="${activity ? escapeHtml(`Jogando ${activity.name}`) : ''}">${activityContent(activity)}</span>`;
+}
+
+function renderUserActivity(userId, activity) {
+  for (const el of $$('[data-activity-user]')) {
+    if (el.dataset.activityUser !== userId) continue;
+    el.classList.toggle('hidden', !activity);
+    el.innerHTML = activityContent(activity);
+    el.title = activity ? `Jogando ${activity.name}` : '';
+  }
+}
+
+function publishGameActivity(force = false) {
+  if (!window.electronAPI?.getGameActivity || !socket.connected) return;
+  const activity = prefs.shareGameActivity === false ? null : localGameActivity;
+  const signature = JSON.stringify(activity);
+  if (!force && signature === publishedGameActivity) return;
+  publishedGameActivity = signature;
+  socket.emit('update-activity', activity);
+}
+
+function showGameActivity(activity) {
+  localGameActivity = activity;
+  appState.myUser.activity = activity;
+  renderUserActivity(appState.myId, activity);
+  const status = $('#game-activity-status');
+  if (status) {
+    status.textContent = prefs.shareGameActivity === false ? 'Compartilhamento desligado.'
+      : activity ? `Jogando ${activity.name} · ${activityElapsed(activity.startedAt)}` : 'Nenhum jogo reconhecido aberto.';
+  }
+  publishGameActivity();
+}
+
+async function pollGameActivity() {
+  clearTimeout(gamePollTimer);
+  const run = ++gamePollRun;
+  if (!window.electronAPI?.getGameActivity || prefs.shareGameActivity === false) {
+    showGameActivity(null);
+    return;
+  }
+  try {
+    const result = await window.electronAPI.getGameActivity();
+    if (run !== gamePollRun) return;
+    showGameActivity(result.activity);
+    if (result.error) $('#game-activity-status').textContent = result.error;
+  } catch {
+    if (run !== gamePollRun) return;
+    showGameActivity(null);
+    $('#game-activity-status').textContent = 'Não consegui detectar os jogos neste PC.';
+  }
+  if (run === gamePollRun) gamePollTimer = setTimeout(pollGameActivity, 15000);
+}
+
+function setupGameActivity() {
+  const supported = window.electronAPI?.getGameActivity && ['linux', 'win32'].includes(window.electronAPI.platform);
+  const check = $('#check-game-activity');
+  const form = $('#form-custom-game');
+  check.checked = prefs.shareGameActivity !== false;
+  check.disabled = !supported;
+  form.querySelectorAll('input, button').forEach((el) => { el.disabled = !supported; });
+  if (!supported) $('#game-activity-status').textContent = 'A detecção de jogos está disponível no app para Windows e Linux. Pelo navegador você pode ver a atividade dos amigos.';
+  check.addEventListener('change', async () => {
+    // Esconde imediatamente, mesmo se uma detecção anterior ainda estiver terminando.
+    ++gamePollRun;
+    clearTimeout(gamePollTimer);
+    if (!check.checked) showGameActivity(null);
+    await savePrefs({ shareGameActivity: check.checked });
+    pollGameActivity();
+  });
+  const renderCustomGames = () => {
+    const games = Array.isArray(prefs.customGames) ? prefs.customGames : [];
+    $('#custom-games-list').innerHTML = games.map((g, i) => `<li><span><strong>${escapeHtml(g.name)}</strong><small>${escapeHtml(g.executable)}</small></span><button type="button" class="btn-secondary" data-remove-game="${i}" aria-label="Remover ${escapeHtml(g.name)}">Remover</button></li>`).join('');
+  };
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = $('#input-game-name').value.trim();
+    const executable = $('#input-game-executable').value.trim().toLowerCase();
+    if (!name || !/^[\p{L}\p{N}_. ()-]{1,100}$/u.test(executable)) {
+      showToast('Informe o nome e só o nome do executável, por exemplo: meu-jogo.exe.', 'error');
+      return;
+    }
+    const games = Array.isArray(prefs.customGames) ? prefs.customGames : [];
+    const existing = games.findIndex((g) => g.executable === executable);
+    if (existing < 0 && games.length >= 20) { showToast('Você pode cadastrar até 20 jogos.', 'error'); return; }
+    const customGames = games.filter((g) => g.executable !== executable).concat({ name, executable });
+    await savePrefs({ customGames });
+    form.reset();
+    renderCustomGames();
+    pollGameActivity();
+  });
+  $('#custom-games-list').addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-remove-game]');
+    if (!button) return;
+    await savePrefs({ customGames: prefs.customGames.filter((_, i) => i !== Number(button.dataset.removeGame)) });
+    renderCustomGames();
+    pollGameActivity();
+  });
+  renderCustomGames();
+  if (supported) pollGameActivity();
+  setInterval(() => {
+    for (const el of $$('[data-activity-start]')) el.textContent = `· ${activityElapsed(Number(el.dataset.activityStart))}`;
+  }, 15000);
+}
+
 function volumeKey(u) {
   if (u?.profileId) return u.profileId;
   return u?.name ? `name:${u.name}` : null;
@@ -3641,6 +3770,7 @@ function openUserPopover(userId, anchorEvent) {
   const banner = $('#user-popover-banner');
   renderBanner(banner, u);
   $('#user-popover-bio').textContent = u.bio || '';
+  $('#user-popover-activity').innerHTML = userActivityHtml(u);
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
   const adminRow = $('#user-popover-admin');
@@ -3688,6 +3818,7 @@ function openProfileCard(userId) {
   applyNameStyle(name, shown);
   $('#profile-card-badges').innerHTML = `${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
   $('#profile-card-bio').textContent = shown.bio || '';
+  $('#profile-card-activity').innerHTML = userActivityHtml(u);
   const ch = appState.channels.get(u.channelId);
   $('#profile-card-meta').textContent = ch ? `🔊 Na call: ${ch.name}` : '';
   $('#modal-user-profile').classList.remove('hidden');
@@ -4468,14 +4599,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.5.0';
+const WHATS_NEW_VERSION = '3.6.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -7112,6 +7243,7 @@ function initApp() {
   setupMicGain();
   setupThemeSelect();
   setupPerformanceSelect();
+  setupGameActivity();
   setupAdminSettings();
   setupShareMenu();
   updateMicButton();

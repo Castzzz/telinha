@@ -363,6 +363,7 @@
         <div class="user-avatar profile-card-avatar" id="profile-card-avatar" title="Ver a foto grande"></div>
         <h3 class="profile-card-name"><span id="profile-card-name"></span><span id="profile-card-badges"></span></h3>
         <p class="profile-card-bio" id="profile-card-bio"></p>
+        <div id="profile-card-activity"></div>
         <div class="profile-card-meta" id="profile-card-meta"></div>
       </div>
     </div>
@@ -434,11 +435,19 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.5.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.6.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Fotos na tela inicial:</strong> os cartões dos canais agora mostram as fotos dos amigos, com o recorte do perfil. Quem não tem foto continua com as iniciais.</li>
+          <li><strong>Atividade de jogos:</strong> veja o jogo e há quanto tempo seus amigos estão jogando na lista de pessoas, na call e no perfil. Ao fechar o jogo, a atividade some.</li>
+          <li><strong>Você controla o compartilhamento:</strong> em ⚙️ → Atividade, desligue quando quiser ou cadastre um jogo que não foi reconhecido.</li>
+          <li><strong>Detecção no app desktop:</strong> disponível no Windows e no Linux, incluindo jogos via Proton. Pelo navegador, você pode ver a atividade dos amigos.</li>
+        </ul>
+        <div id="whats-new-3-5-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.5.0</h4>
         <ul class="whats-new-list">
           <li><strong>Perfil com mais espaço:</strong> edite pelo seu nome ou em ⚙️ → Perfil, com prévia. Todas as abas das configurações mantêm o mesmo tamanho.</li>
           <li><strong>Ajuste foto e banner:</strong> arraste a imagem e controle o zoom antes de salvar. GIFs continuam animados e também funcionam na ampliação com o modo leve ligado.</li>
@@ -449,6 +458,7 @@
           <li><strong>Novidades sempre disponíveis:</strong> reabra este histórico pelo início ou pelas configurações.</li>
           <li><strong>Seu mute é respeitado:</strong> entrar numa call preserva o estado do microfone. Entrar, sair, mutar e ensurdecer não abrem mais popups; erros e avisos de moderação continuam aparecendo.</li>
         </ul>
+        </div>
         <div id="whats-new-3-4-1" class="whats-new-older hidden">
           <h4>E o que chegou na 3.4.1</h4>
         <ul class="whats-new-list">
@@ -582,6 +592,7 @@
         <nav class="settings-nav" aria-label="Tópicos das configurações">
           <button type="button" class="settings-tab" data-settings-tab="perfil"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg><span>Perfil</span></button>
           <button type="button" class="settings-tab active" data-settings-tab="aparencia"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M12 3a9 9 0 0 1 0 18"/></svg><span>Aparência</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="atividade"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 8a2 2 0 0 1-3.4 1.7L16 16H8l-2.6 3.2A2 2 0 0 1 2 17.5l1-8A3 3 0 0 1 6 7zM7 10v4M5 12h4M16 11h.01M19 13h.01"/></svg><span>Atividade</span></button>
           <button type="button" class="settings-tab" data-settings-tab="microfone"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></svg><span>Microfone</span></button>
           <button type="button" class="settings-tab" data-settings-tab="som"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg><span>Som</span></button>
           <button type="button" class="settings-tab" data-settings-tab="transmissao"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Transmissão</span></button>
@@ -728,6 +739,24 @@
               </label>
             </div>
 
+          </section>
+          <section class="settings-section hidden" data-settings-section="atividade">
+            <h4 class="settings-section-title">Atividade de jogos</h4>
+            <label class="checkbox-label">
+              <input type="checkbox" id="check-game-activity" />
+              <span>Mostrar aos amigos o jogo que estou jogando e há quanto tempo</span>
+            </label>
+            <p class="form-help">A atividade aparece abaixo do seu nome e no perfil. Ao fechar o jogo, ela some em até 15 segundos. Só o nome do jogo e o horário de início são compartilhados.</p>
+            <p class="game-activity-status" id="game-activity-status" role="status">Procurando jogos…</p>
+            <p class="form-help">Reconhece jogos como Counter-Strike 2, League of Legends, VALORANT, Dota 2, GTA V, Rocket League, Fortnite, Minecraft, Terraria e Stardew Valley. Abrir só o launcher não conta como jogar.</p>
+            <h5 class="settings-section-title">Não reconheceu seu jogo?</h5>
+            <p class="form-help">Cadastre o nome do executável que aparece no Gerenciador de Tarefas do Windows ou no monitor de processos do Linux. Ele só aparece como atividade enquanto estiver aberto.</p>
+            <form id="form-custom-game" class="custom-game-form">
+              <div class="form-group"><label for="input-game-name">Nome do jogo</label><input class="form-input" id="input-game-name" maxlength="80" placeholder="Meu jogo" required /></div>
+              <div class="form-group"><label for="input-game-executable">Executável</label><input class="form-input" id="input-game-executable" maxlength="100" placeholder="meu-jogo.exe" required /></div>
+              <button type="submit" class="btn-secondary">Adicionar jogo</button>
+            </form>
+            <ul id="custom-games-list" class="custom-games-list"></ul>
           </section>
           <section class="settings-section hidden" data-settings-section="microfone">
             <h4 class="settings-section-title">Microfone</h4>
@@ -956,6 +985,7 @@
       <div class="user-popover-names">
         <strong id="user-popover-name"></strong>
         <span id="user-popover-bio" class="user-popover-bio"></span>
+        <span id="user-popover-activity"></span>
       </div>
     </div>
     <label class="user-popover-label" for="user-popover-volume">Volume da voz (só pra você)</label>

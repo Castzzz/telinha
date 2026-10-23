@@ -108,6 +108,7 @@ public/                    A interface (vai dentro do app E é servida pelo serv
 electron/
   main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
                            captura de tela/áudio, atalhos globais, auto-update, preferências
+  game-activity.cjs         Catálogo de jogos, leitura local dos processos e tempo da atividade
   preload.cjs              Ponte segura (window.electronAPI) entre a página e o main
   app-protocol.cjs         Protocolo telinha://app que serve public/ empacotado
   connect.html             Tela inicial (entrar na sala do servidor / hospedar / colar link)
@@ -184,7 +185,9 @@ go test -race ./sfu                       # SFU: erro de espectador não interro
   texto (inclusive sobrevivendo a reinício), perfil 3.0 (banner, moldura, som de entrada),
   responder/editar/apagar/reagir, soundboard, fixar, "digitando" e senha da sala (com chave
   de membro), enquadramento de foto/banner (inclusive validação e preservação do GIF) e
-  resposta de ping. O `m3-image-crop` confere a geometria e os limites do recorte.
+  resposta de ping e atividade de jogos (validação, estado, chegada tardia, encerramento e
+  desconexão). O `m3-image-crop` confere a geometria e os limites do recorte; o
+  `m3-game-activity` cobre Windows/Linux/Proton, Minecraft, jogos manuais e o relógio.
   **Quando mexer no servidor, acrescente um caso
   lá.**
 - Pra conferir a interface sem abrir o app na mão, o jeito usado até agora foi um script
@@ -377,6 +380,7 @@ troca a pasta e sobe de novo).
 - o chat da call (últimas 50 mensagens por canal);
 - quem está mutado/ensurdecido pelo admin;
 - foto, banner e som de entrada de cada pessoa (cada app manda de novo quando conecta);
+- atividade de jogo (`activity: { id, name, startedAt }` ou `null`), reenviada pelo app ao reconectar;
 - canais de voz criados por link (temporários).
 
 **No PC de cada um** (preferências): no app desktop, um arquivo JSON na pasta de dados do
@@ -384,6 +388,20 @@ Electron, lido e gravado pelo `main.cjs` (`prefs-get`/`prefs-set`). A pasta cont
 antiga, **"Telinha"**, de propósito, pra ninguém perder perfil e configurações. No navegador
 as preferências ficam no `localStorage` (`telinha_prefs`). O perfil (nome, foto, banner, som
 de entrada, cor, moldura) fica nas preferências e é mandado pra sala a cada conexão.
+
+A aba **Atividade** salva `shareGameActivity` (padrão ligado) e `customGames`
+(`[{ name, executable }]`, até 20 jogos). `get-game-activity` no main consulta os processos
+locais a pedido da interface, a cada 15 s, sem bloquear a janela. No Windows usa
+[`tasklist /fo csv /nh`](https://learn.microsoft.com/windows-server/administration/windows-commands/tasklist)
+e, apenas para Java, PowerShell/CIM para distinguir Minecraft de launchers. No Linux lê
+[`/proc/<pid>/exe` e `cmdline`](https://www.kernel.org/doc/html/latest/filesystems/proc.html)
+dos processos do próprio usuário; o primeiro argumento permite reconhecer jogos via Proton.
+Launchers não entram no catálogo. O cadastro manual compara só o nome exato do executável.
+O relógio começa na detecção, preserva o início enquanto o mesmo processo existe e reinicia
+ao trocar de processo. Se houver dois jogos, mantém o já exibido até ele fechar.
+Só `{ id, name, startedAt }` chega à interface e ao servidor: PID, caminhos e argumentos
+ficam no main. Desligar limpa imediatamente a atividade compartilhada e interrompe a consulta.
+No navegador a detecção fica indisponível, mas a atividade dos amigos continua visível.
 
 O editor fica em **Configurações → Perfil**. Clicar no próprio nome/foto ou abrir o app
 pela primeira vez leva à mesma aba (`openProfileSettings`), com um único `#form-profile`.
@@ -440,6 +458,7 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `join-channel` `{ channelId, profile, isMicOn, ... }` | entrar num canal de voz (o perfil vai junto) |
 | `leave-channel` | sair da call |
 | `update-profile` | mudou o perfil |
+| `update-activity` `{ id, name, startedAt }` ou `null` | mudou/encerrou o jogo; valida nome (até 80 caracteres), identificador e início (até 30 dias atrás; tolera 1 min de relógio adiantado). Só os três campos públicos são aceitos; até 10 mudanças em 10 s, limpeza sempre permitida |
 | `connection-ping` (só callback) | responde `{ success: true }` para medir a ida e volta até o servidor |
 | `user-state-changed` | mic, ensurdecer, transmitindo, câmera, telas extras, falando, o que está assistindo (`watching`) |
 | `create-channel` / `delete-channel` | canais de voz |
@@ -458,7 +477,7 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 
 Servidor → cliente (principais): `channels-list` (e `channels-summary`, mesmo conteúdo, pra
 app antigo), `channel-state`, `user-joined`, `user-left`, `user-state-changed` (e
-`user-state-updated`), `user-profile-updated`, `chat-message`, `chat-message-updated`,
+`user-state-updated`), `user-profile-updated`, `user-activity-updated` (`{ userId, activity }`), `chat-message`, `chat-message-updated`,
 `chat-message-deleted`, `text-channels`, `text-message`, `text-message-updated`,
 `text-message-deleted`, `text-channel-deleted`, `soundboard-list`, `soundboard-played`,
 `typing`, `member-key`, `room-info`, `room-password-changed`,
@@ -505,6 +524,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Editor do próprio perfil | `openProfileSettings`, `setupProfileSettings`, `resetProfileDraft`; `#form-profile` na aba `data-settings-section="perfil"` |
 | Enquadramento de foto/banner | `editProfileImage`, `setupImageCrop`, `prepareProfileImage`, `renderBanner`; geometria/validação: `image-crop.js` |
 | Ping e cores da conexão | `syncConnectionMonitor`, `showConnectionQuality`; servidor: `connection-ping` e capacidade `room-info.connectionPing` |
+| Jogo e tempo de atividade | `setupGameActivity`, `pollGameActivity`, `renderUserActivity`; relógio: `public/game-activity.js`; detecção: `electron/game-activity.cjs`, IPC `get-game-activity`; servidor: `update-activity` |
 | Admin | `setupAdminSettings`, popup da pessoa (`openUserPopover`); servidor: `moderate`, `applyServerModeration` |
 | Transmissão de tela/câmera, várias telas | `startExtraScreen`, `streamKey`, `updateStageLayout`, `layoutMosaic` (mosaico redimensionável) |
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
@@ -601,11 +621,16 @@ Coisas que já deram problema e o motivo:
     mantendo captura e transmissão. Parar a transmissão chama `dropLocalPreview` e limpa
     também o registro. Não chame `unwatchScreen` nem pare faixas para esconder a prévia.
 21. **Início e hover em PC fraco:** o início usa as listas que já chegam do servidor,
-    sem consultas extras, vídeos, GIFs adicionais ou animações contínuas. Uma assinatura
-    de canais/nomes/cores evita reconstruir os cartões durante mudanças de fala.
+    sem consultas extras ou vídeos. As fotos usam `avatarInnerHtml`, respeitando recorte,
+    modo leve e pausa em segundo plano. Uma assinatura de canais/nomes/cores/fotos/recortes/
+    molduras evita reconstruir os cartões durante mudanças de fala, mas atualiza a foto editada.
     O hover das reações exibe apenas sete botões já disponíveis; a importação e os dados
     do seletor completo só são carregados pelo **＋**. Há apenas um timeout curto ao
     sair do hover para atravessar o espaço entre botão e painel.
+22. **Atividade sem varrer processos na interface:** só o main lê processos locais, com
+    operações assíncronas e limite de concorrência. O tempo na tela muda apenas o texto,
+    sem reconstruir canais ou fotos. Uma geração de consulta descarta detecções pendentes
+    ao desligar o compartilhamento. O preload não expõe a lista de processos.
 
 ### Nomes que não podem mudar
 

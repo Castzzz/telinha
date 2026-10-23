@@ -102,7 +102,8 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 
 | Quero… | Como |
 |---|---|
-| **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, sem entrar automaticamente na call. Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
+| **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, com as fotos de perfil e o recorte escolhido (iniciais para quem não tem foto). Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
+| **Mostrar o jogo que estou jogando** | No app para Windows e Linux, jogos reconhecidos aparecem abaixo do nome e no perfil, como **Jogando Counter-Strike 2 · há 23 min**. A atividade some ao fechar o jogo; a detecção é feita a cada 15 segundos. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável. No navegador dá para ver a atividade dos amigos |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app começa mutado; entrar, trocar de canal ou reconectar preserva o estado escolhido no botão. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |

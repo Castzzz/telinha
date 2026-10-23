@@ -6,6 +6,9 @@ const os = require('os');
 const { pathToFileURL } = require('url');
 const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
+const { createActivityTracker } = require('./game-activity.cjs');
+const gameActivity = createActivityTracker();
+let gameActivityPrefs = null;
 
 registerAppScheme();
 // O app virou Teletela, mas os dados (perfil, preferências, volumes) continuam na pasta
@@ -734,8 +737,29 @@ function setupPermissionsAndCapture() {
   });
 
   ipcMain.handle('prefs-get', () => loadPrefs());
+  ipcMain.handle('get-game-activity', async () => {
+    // Evita reler e decodificar fotos/GIFs do prefs.json a cada consulta de jogo.
+    if (!gameActivityPrefs) {
+      const { shareGameActivity, customGames } = loadPrefs();
+      gameActivityPrefs = { shareGameActivity, customGames };
+    }
+    const prefs = gameActivityPrefs;
+    if (prefs.shareGameActivity === false) { gameActivity.reset(); return { activity: null }; }
+    try {
+      return { activity: await gameActivity.sample(prefs.customGames) };
+    } catch {
+      gameActivity.reset();
+      return { activity: null, error: 'Não consegui detectar os jogos neste PC.' };
+    }
+  });
   ipcMain.handle('prefs-set', (_event, patch) => {
     const saved = savePrefs(patch);
+    if (saved && gameActivityPrefs) {
+      for (const key of ['shareGameActivity', 'customGames']) {
+        if (Object.hasOwn(patch, key)) gameActivityPrefs[key] = patch[key];
+      }
+    }
+    if (saved && (patch?.shareGameActivity === false || patch?.customGames)) gameActivity.reset();
     if (saved && typeof patch?.theme === 'string') applyThemeToWindow(patch.theme);
     return saved;
   });
