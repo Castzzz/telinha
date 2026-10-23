@@ -13,6 +13,7 @@ import { execSync } from 'node:child_process';
 import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
+import { AccountStore, AccountError, createAccountLimiter, accountClientAddress } from './account-store.js';
 
 // Process-Level Defensive Error Boundaries
 process.on('uncaughtException', (err) => {
@@ -34,6 +35,8 @@ const DATA_DIR = process.env.TELINHA_DATA_DIR || '';
 const CHANNELS_FILE = DATA_DIR ? path.join(DATA_DIR, 'channels.json') : '';
 // Senha de admin: quem digitar nas Configurações pode tirar gente da call e apagar qualquer canal
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
+const accounts = new AccountStore(DATA_DIR);
+const accountRateLimited = createAccountLimiter();
 
 const app = express();
 const server = http.createServer(app);
@@ -181,8 +184,8 @@ const DEFAULT_CHANNELS = [
 // link antigo (?channel=x) ou de versão antiga do app é temporário: some quando esvazia.
 const channels = new Map();
 
-function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now() }) {
-  return { id, name, isDefault, temporary, createdBy, createdAt, users: new Map(), messages: [] };
+function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null }) {
+  return { id, name, isDefault, temporary, createdBy, createdAt, password, users: new Map(), messages: [] };
 }
 
 for (const def of DEFAULT_CHANNELS) {
@@ -190,6 +193,10 @@ for (const def of DEFAULT_CHANNELS) {
 }
 
 const CHANNEL_ID_RE = /^[a-z0-9_-]{1,64}$/;
+function validChannelPasswordHash(password) {
+  return typeof password?.salt === 'string' && /^[a-f0-9]{32}$/.test(password.salt)
+    && typeof password?.hash === 'string' && /^[a-f0-9]{64}$/.test(password.hash);
+}
 // Cada pessoa transmite até 3 telas: a 1 (isSharing) e as extras 2 e 3
 const EXTRA_SCREEN_NUMBERS = [2, 3];
 
@@ -199,9 +206,11 @@ function loadSavedChannels() {
     const saved = JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf8'));
     for (const c of Array.isArray(saved?.channels) ? saved.channels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || channels.has(c.id)) continue;
+      // Um hash corrompido nunca deve transformar um canal protegido em aberto.
+      const password = c.password == null ? null : validChannelPasswordHash(c.password) ? c.password : { salt: '', hash: '' };
       const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim().slice(0, 30) : c.id;
       const createdBy = typeof c.createdBy === 'string' ? c.createdBy : null;
-      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now() }));
+      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password }));
     }
     for (const c of Array.isArray(saved?.textChannels) ? saved.textChannels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || textChannels.has(c.id)) continue;
@@ -223,12 +232,12 @@ function saveChannels() {
   if (!CHANNELS_FILE) return;
   const list = [...channels.values()]
     .filter((c) => !c.isDefault && !c.temporary)
-    .map(({ id, name, createdBy, createdAt }) => ({ id, name, createdBy, createdAt }));
+    .map(({ id, name, createdBy, createdAt, password }) => ({ id, name, createdBy, createdAt, ...(password ? { password } : {}) }));
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
     const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt }) => ({ id, name, createdBy, createdAt }));
-    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList }, null, 2));
+    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, CHANNELS_FILE);
   } catch (err) {
     console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
@@ -604,6 +613,7 @@ function publicUser(u) {
     bio: u.bio,
     activity: u.activity || null,
     profileId: u.profileId,
+    account: u.accountId ? { username: u.accountUsername } : null,
     isAdmin: Boolean(u.isAdmin),
     serverMuted: Boolean(u.serverMuted),
     serverDeafened: Boolean(u.serverDeafened),
@@ -712,7 +722,8 @@ function applyProfile(user, raw) {
       changed = true;
     }
   }
-  if (typeof profile.profileId === 'string' && PROFILE_ID_RE.test(profile.profileId)) {
+  if (user.accountId) user.profileId = user.accountId;
+  else if (typeof profile.profileId === 'string' && PROFILE_ID_RE.test(profile.profileId) && !profile.profileId.toLowerCase().startsWith('conta-')) {
     user.profileId = profile.profileId;
   }
   if (profile.avatar === '' && user.avatar) {
@@ -731,6 +742,36 @@ function applyProfile(user, raw) {
   return changed;
 }
 
+function accountProfile(user) {
+  const profile = { id: user.profileId };
+  for (const key of ['name', 'color', 'bio', 'nameColor', 'nameColor2', 'frame', 'frameColor', 'bannerColor']) profile[key] = user[key] || '';
+  for (const key of ['avatarCrop', 'bannerCrop']) profile[key] = normalizeImageCrop(user[key]);
+  for (const key of ['avatar', 'banner', 'joinSound']) profile[key] = user[key] ? `data:${user[key].mime};base64,${user[key].data.toString('base64')}` : '';
+  return profile;
+}
+
+function setAccountIdentity(user, account, profile) {
+  user.accountId = account?.id || null;
+  user.accountUsername = account?.username || '';
+  user.accountProfileDirty = false;
+  user.accountProfileRevision = 0;
+  user.profileId = account?.id || randomUUID();
+  for (const key of ['nameColor', 'nameColor2', 'frame', 'frameColor', 'bannerColor', 'bio']) user[key] = '';
+  for (const key of ['avatar', 'banner', 'joinSound']) { user[key] = null; user[`${key}V`] = 0; }
+  applyProfile(user, { ...safeObject(profile), profileId: account?.id || profile?.id });
+  applyServerModeration(user);
+}
+
+const accountRoom = (id) => `account:${id}`;
+const accountIsOnline = (id) => [...(io.sockets.adapter.rooms.get(accountRoom(id)) || [])]
+  .some((socketId) => accounts.resolve(io.sockets.sockets.get(socketId)?.data.accountToken));
+function notifyAccountFriends(accountId, extra = []) {
+  if (!accountId) return;
+  for (const id of new Set([accountId, ...accounts.contacts(accountId), ...extra])) {
+    io.to(accountRoom(id)).emit('friends-state', accounts.friendState(id, accountIsOnline));
+  }
+}
+
 function getChannelsSummary() {
   const list = [];
   for (const channel of channels.values()) {
@@ -742,6 +783,7 @@ function getChannelsSummary() {
       name: channel.name,
       isDefault: channel.isDefault,
       createdBy: channel.createdBy,
+      hasPassword: Boolean(channel.password),
       userCount: channel.users.size,
       activeStreams: sharers.length,
       sharers,
@@ -891,9 +933,7 @@ function safeCallback(callback) {
 
 function safeHandler(fn) {
   return function (...args) {
-    try {
-      return fn.apply(this, args);
-    } catch (err) {
+    const failed = (err) => {
       console.error(`💥 [Socket Error] Handler "${fn.name || 'anonymous'}" encountered unhandled exception:`, err);
       const lastArg = args[args.length - 1];
       if (typeof lastArg === 'function') {
@@ -901,7 +941,11 @@ function safeHandler(fn) {
           lastArg({ success: false, error: 'Internal server error' });
         } catch {}
       }
-    }
+    };
+    try {
+      const result = fn.apply(this, args);
+      return result?.catch ? result.catch(failed) : result;
+    } catch (err) { failed(err); }
   };
 }
 
@@ -993,6 +1037,18 @@ io.use((socket, next) => {
   next(err);
 });
 
+// Uma sessão de conta identifica o perfil; a senha da sala continua sendo independente.
+io.use(async (socket, next) => {
+  const session = accounts.resolve(socket.handshake.auth?.accountToken);
+  if (session) {
+    try {
+      socket.data.accountSession = { ...session, profile: await accounts.readProfile(session.account.id) };
+      socket.data.accountToken = socket.handshake.auth.accountToken;
+    } catch (err) { console.error('⚠️ [Contas] Não deu para carregar o perfil:', err.code || 'perfil inválido'); }
+  }
+  next();
+});
+
 // ----------------------------------------------------
 // Socket.IO Real-time Signaling
 // ----------------------------------------------------
@@ -1038,6 +1094,21 @@ io.on('connection', (socket) => {
   };
 
   socket.data.user = user;
+  if (socket.data.accountSession) {
+    const session = socket.data.accountSession;
+    setAccountIdentity(user, session.account, session.profile);
+    socket.join(accountRoom(session.account.id));
+  }
+
+  // Scrypt tem custo alto; limita criações e tentativas antes de calcular qualquer hash.
+  let channelPasswordAttempts = [];
+  const channelPasswordRateLimited = () => {
+    const now = Date.now();
+    channelPasswordAttempts = channelPasswordAttempts.filter((at) => now - at < 10000);
+    if (channelPasswordAttempts.length >= 10) return true;
+    channelPasswordAttempts.push(now);
+    return false;
+  };
 
   // Send initial channel list and identity to client
   const summary = getChannelsSummary();
@@ -1050,6 +1121,93 @@ io.on('connection', (socket) => {
     io.emit('channels-list', list);
     io.emit('channels-summary', list);
   };
+
+  socket.emit('account-state', {
+    supported: accounts.available,
+    account: user.accountId ? accounts.publicAccount(socket.data.accountSession.account) : null,
+    profile: user.accountId ? accountProfile(user) : null,
+    expiresAt: socket.data.accountSession?.expiresAt || null,
+    sessionExpired: Boolean(socket.handshake.auth?.accountToken && !user.accountId)
+  });
+  if (user.accountId) notifyAccountFriends(user.accountId);
+
+  let changingAccount = false;
+  const accountHandler = (fn, { auth = false, credentials = false, identity = false } = {}) => async (raw, callback) => {
+    const cb = safeCallback(callback);
+    try {
+      if (!accounts.available) throw new AccountError('Contas indisponíveis nesta sala. Você pode continuar como visitante.');
+      const payload = safeObject(raw);
+      const session = accounts.resolve(socket.data.accountToken);
+      if (auth && !session) throw new AccountError('Entre na sua conta para usar os amigos.', 'session-expired');
+      if (changingAccount) throw new AccountError('Espere a troca de conta terminar.');
+      if (credentials) {
+        const address = accountClientAddress(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+        const username = typeof payload.username === 'string' ? payload.username.trim().toLowerCase().slice(0, 25) : '';
+        if (accountRateLimited(`ip:${address}`, 15) || accountRateLimited(`user:${username}`, 10)) throw new AccountError('Muitas tentativas. Espere um minuto e tente de novo.');
+      } else if (!identity && accountRateLimited(`action:${session?.account.id || socket.id}`, 30)) throw new AccountError('Muitas ações seguidas. Espere um minuto.');
+      if (credentials || identity) changingAccount = true;
+      try { cb({ success: true, ...await fn(payload, session) }); }
+      finally { if (credentials || identity) changingAccount = false; }
+    } catch (err) {
+      if (!(err instanceof AccountError)) console.error('⚠️ [Contas] Operação não concluída:', err.code || 'erro interno');
+      cb({ success: false, code: err instanceof AccountError ? err.code : 'account-error', error: err instanceof AccountError ? err.message : 'Não deu para salvar no servidor. Tente de novo.' });
+    }
+  };
+  const publishIdentity = () => {
+    io.emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
+    broadcastChannels();
+  };
+  const attachAccount = async (result) => {
+    if (!socket.connected) { await accounts.logout(result.token); return result; }
+    socket.data.accountToken = result.token;
+    setAccountIdentity(user, result.account, result.profile);
+    socket.join(accountRoom(user.accountId));
+    publishIdentity();
+    notifyAccountFriends(user.accountId);
+    return { ...result, profile: accountProfile(user) };
+  };
+  socket.on('account-register', accountHandler(async (payload, session) => {
+    if (session) throw new AccountError('Saia da conta atual antes de criar outra.');
+    const draft = { ...user };
+    applyProfile(draft, payload.profile);
+    return attachAccount(await accounts.register(payload.username, payload.password, accountProfile(draft)));
+  }, { credentials: true }));
+  socket.on('account-login', accountHandler(async (payload, session) => {
+    if (session) throw new AccountError('Saia da conta atual antes de entrar em outra.');
+    return attachAccount(await accounts.login(payload.username, payload.password));
+  }, { credentials: true }));
+  socket.on('account-logout', accountHandler(async (payload, session) => {
+    const previousId = user.accountId;
+    if (session) await accounts.logout(socket.data.accountToken);
+    for (const other of io.sockets.sockets.values()) {
+      if (other !== socket && other.data.accountToken && other.data.accountToken === socket.data.accountToken) {
+        other.emit('account-session-ended');
+        other.disconnect(true);
+      }
+    }
+    if (previousId) socket.leave(accountRoom(previousId));
+    socket.data.accountToken = null;
+    setAccountIdentity(user, null, payload.profile);
+    publishIdentity();
+    notifyAccountFriends(previousId);
+    return { account: null, profile: accountProfile(user) };
+  }, { identity: true }));
+  socket.on('friends-list', accountHandler((_payload, session) => accounts.friendState(session.account.id, accountIsOnline), { auth: true }));
+  for (const action of ['request', 'accept', 'reject', 'cancel', 'remove']) {
+    socket.on(`friend-${action}`, accountHandler(async (payload, session) => {
+      const otherId = await accounts.friendAction(session.account.id, action, payload);
+      notifyAccountFriends(session.account.id, [otherId]);
+      return {};
+    }, { auth: true }));
+  }
+  const sessionCheck = setInterval(() => {
+    if (user.accountId && !accounts.resolve(socket.data.accountToken)) {
+      socket.emit('account-session-ended');
+      socket.disconnect(true);
+    }
+  }, 30000);
+  sessionCheck.unref();
+  socket.on('disconnect', () => { clearInterval(sessionCheck); notifyAccountFriends(user.accountId); });
 
   // Vira admin com a senha (o app manda sozinho ao conectar, se já tiver salvo)
   socket.on('admin-login', safeHandler((rawPayload, maybeCallback) => {
@@ -1071,7 +1229,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, accounts: accounts.available });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
@@ -1093,7 +1251,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     io.emit('room-password-changed', { password, by: user.name });
-    io.emit('room-info', { hasPassword: Boolean(password), connectionPing: true });
+    io.emit('room-info', { hasPassword: Boolean(password), connectionPing: true, accounts: accounts.available });
     cb({ success: true });
   }));
 
@@ -1120,6 +1278,7 @@ io.on('connection', (socket) => {
     if (!targetUser?.channelId) return cb({ success: false, error: 'Essa pessoa não está em nenhuma call.' });
     if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
     if (targetUser.channelId === channel.id) return cb({ success: true });
+    if (channel.password) return cb({ success: false, error: 'Esse canal tem senha. A pessoa precisa entrar por conta própria.' });
     target.emit('moved-by-admin', { channelId: channel.id, channelName: channel.name, by: user.name });
     cb({ success: true });
   }));
@@ -1206,8 +1365,13 @@ io.on('connection', (socket) => {
 
     const data = safeObject(payload);
     const cb = safeCallback(callback);
+    const password = data.password ?? '';
+    if (typeof password !== 'string' || (password && (password.length < 4 || password.length > 100))) {
+      return cb({ success: false, error: 'A senha precisa ter de 4 a 100 caracteres.' });
+    }
+    if (password && channelPasswordRateLimited()) return cb({ success: false, error: 'Muitas tentativas. Espere 10 segundos e tente de novo.' });
     // Quem cria fora da call ainda não mandou o perfil: o id dele vem junto pra poder apagar depois
-    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId)) {
+    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId) && !data.profileId.toLowerCase().startsWith('conta-')) {
       user.profileId = data.profileId;
     }
 
@@ -1229,7 +1393,9 @@ io.on('connection', (socket) => {
     }
 
     if (!channels.has(finalId)) {
-      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId }));
+      const salt = password ? randomBytes(16).toString('hex') : null;
+      const protectedPassword = password ? { salt, hash: hashRoomPassword(password, salt) } : null;
+      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId, password: protectedPassword }));
       saveChannels();
       const summaryList = getChannelsSummary();
       io.emit('channels-list', summaryList);
@@ -1238,6 +1404,7 @@ io.on('connection', (socket) => {
         channel: {
           id: finalId,
           name: cleanName,
+          hasPassword: Boolean(password),
           userCount: 0,
           activeStreams: 0
         }
@@ -1248,10 +1415,29 @@ io.on('connection', (socket) => {
   }));
 
   // Channel Joining & Switching (Defensive)
-  socket.on('join-channel', safeHandler((rawPayload) => {
+  socket.on('join-channel', safeHandler((rawPayload, maybeCallback) => {
     const payload = safeObject(rawPayload);
+    const cb = safeCallback(maybeCallback);
     const rawChanId = typeof payload.channelId === 'string' ? payload.channelId.trim().toLowerCase() : '';
     const cleanChannelId = rawChanId.slice(0, 64).replace(/[^a-z0-9_-]/g, '') || 'geral';
+
+    // Confere antes de mexer no perfil ou sair da call atual. Admin e criador também precisam.
+    const destination = channels.get(cleanChannelId);
+    if (destination?.password && user.channelId !== cleanChannelId) {
+      let reason = payload.password ? 'wrong' : 'required';
+      let allowed = false;
+      if (channelPasswordRateLimited()) reason = 'rate-limited';
+      else if (validChannelPasswordHash(destination.password) && typeof payload.password === 'string' && payload.password.length >= 4 && payload.password.length <= 100) {
+        const hash = Buffer.from(hashRoomPassword(payload.password, destination.password.salt), 'hex');
+        allowed = timingSafeEqual(hash, Buffer.from(destination.password.hash, 'hex'));
+      }
+      if (!allowed) {
+        const result = { success: false, code: 'channel-password', reason, channelId: cleanChannelId,
+          error: reason === 'rate-limited' ? 'Muitas tentativas. Espere 10 segundos e tente de novo.' : 'Esse canal precisa da senha certa para entrar.' };
+        if (typeof maybeCallback !== 'function') socket.emit('channel-join-error', result);
+        return cb(result);
+      }
+    }
 
     const userName = safeString(payload.userName, '', 25);
     if (payload.profile) applyProfile(user, payload.profile);
@@ -1282,7 +1468,7 @@ io.on('connection', (socket) => {
       const summaryList = getChannelsSummary();
       io.emit('channels-list', summaryList);
       io.emit('channels-summary', summaryList);
-      return;
+      return cb({ success: true });
     }
 
     if (userName) {
@@ -1336,6 +1522,7 @@ io.on('connection', (socket) => {
     const summaryList = getChannelsSummary();
     io.emit('channels-list', summaryList);
     io.emit('channels-summary', summaryList);
+    cb({ success: true });
   }));
 
   // State Change: AO VIVO badge, Mic Mute, Deafen, VAD Speaking
@@ -1435,12 +1622,40 @@ io.on('connection', (socket) => {
   }));
 
   // Perfil (nome, cor, bio, foto): vale pra todas as salas, então avisa todo mundo
-  socket.on('update-profile', safeHandler((rawPayload) => {
-    if (!applyProfile(user, rawPayload)) return;
+  socket.on('update-profile', safeHandler(async (rawPayload, callback) => {
+    const cb = safeCallback(callback);
+    if (changingAccount) return cb({ success: false, error: 'Espere a troca de conta terminar.' });
+    if (user.accountId && !accounts.resolve(socket.data.accountToken)) return cb({ success: false, error: 'Entre na conta de novo.' });
+    if (user.accountId && accountRateLimited(`profile:${user.accountId}`, 10, 10000)) return cb({ success: false, error: 'Muitas alterações de perfil. Espere 10 segundos.' });
+    if (!applyProfile(user, rawPayload) && !user.accountProfileDirty) return cb({ success: true });
+    if (user.accountId) {
+      const profileAccountId = user.accountId;
+      user.accountProfileDirty = true;
+      const revision = ++user.accountProfileRevision;
+      try { await accounts.saveProfile(profileAccountId, accountProfile(user)); }
+      catch {
+        socket.emit('account-error', { error: 'Não deu para salvar seu perfil na conta. Tente salvar de novo.' });
+        return cb({ success: false, error: 'Não deu para salvar seu perfil na conta.' });
+      }
+      if (!socket.connected || user.accountId !== profileAccountId) return cb({ success: true });
+      if (user.accountProfileRevision === revision) user.accountProfileDirty = false;
+      // As outras sessões da mesma conta recebem o perfil confirmado pelo servidor.
+      const profile = accountProfile(user);
+      for (const id of io.sockets.adapter.rooms.get(accountRoom(user.accountId)) || []) {
+        const other = io.sockets.sockets.get(id);
+        if (other && other !== socket) {
+          applyProfile(other.data.user, { ...profile, profileId: user.accountId });
+          other.emit('account-profile', profile);
+          io.emit('user-profile-updated', { userId: id, user: publicUser(other.data.user) });
+        }
+      }
+      notifyAccountFriends(user.accountId);
+    }
     io.emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
     const summaryList = getChannelsSummary();
     io.emit('channels-list', summaryList);
     io.emit('channels-summary', summaryList);
+    cb({ success: true });
   }));
 
   let activityChanges = [];
@@ -1816,7 +2031,7 @@ io.on('connection', (socket) => {
   socket.on('create-text-channel', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     const data = safeObject(rawPayload);
-    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId)) {
+    if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId) && !data.profileId.toLowerCase().startsWith('conta-')) {
       user.profileId = data.profileId;
     }
     const cleanName = (typeof data.name === 'string' ? data.name.trim() : '').slice(0, 30);

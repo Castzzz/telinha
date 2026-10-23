@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, session, shell, safeStorage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -8,6 +8,8 @@ const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
 const { createActivityTracker } = require('./game-activity.cjs');
 const gameActivity = createActivityTracker();
+const { createAccountSessionVault } = require('./account-sessions.cjs');
+const accountSessionVault = createAccountSessionVault(safeStorage);
 let gameActivityPrefs = null;
 
 registerAppScheme();
@@ -64,15 +66,17 @@ function prefsPath() {
 
 function loadPrefs() {
   try {
-    return JSON.parse(fs.readFileSync(prefsPath(), 'utf8'));
+    return accountSessionVault.restore(JSON.parse(fs.readFileSync(prefsPath(), 'utf8')));
   } catch {
-    return {};
+    return accountSessionVault.restore({});
   }
 }
 
 function savePrefs(patch) {
   if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return false;
-  const next = JSON.stringify({ ...loadPrefs(), ...patch });
+  let next;
+  try { next = JSON.stringify(accountSessionVault.prepare({ ...loadPrefs(), ...patch })); }
+  catch { return false; }
   if (next.length > MAX_PREFS_BYTES) return false;
   try {
     fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });

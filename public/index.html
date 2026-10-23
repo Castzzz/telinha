@@ -28,6 +28,11 @@
     </div>
 
     <div class="topbar-right">
+      <button type="button" id="btn-open-friends" class="btn-topbar-tool" aria-haspopup="dialog">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 21v-2a6 6 0 0 0-3-5.2"/></svg>
+        Amigos <span id="friends-request-count" class="friends-count hidden" aria-label="Pedidos de amizade"></span>
+      </button>
+      <button type="button" id="btn-open-account" class="btn-topbar-tool" aria-haspopup="dialog"><span id="account-button-label">Conta</span></button>
       <button id="btn-toggle-chat" class="btn-topbar-tool hidden" title="Alternar Chat do Canal" aria-expanded="false">
         💬 Chat
       </button>
@@ -335,6 +340,57 @@
 
   <!-- ==================== MODALS & OVERLAYS ==================== -->
 
+  <!-- Conta opcional e amizades -->
+  <div id="modal-account" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-account-title">
+    <div class="modal-card account-card">
+      <div class="modal-header">
+        <h3 id="modal-account-title">Conta e amigos</h3>
+        <button type="button" class="modal-close-btn" id="btn-close-account" aria-label="Fechar conta e amigos">✕</button>
+      </div>
+      <div class="account-tabs" role="tablist" aria-label="Conta e amigos">
+        <button type="button" role="tab" id="account-tab-account" data-account-tab="account" aria-controls="account-panel-account" aria-selected="true">Sua conta</button>
+        <button type="button" role="tab" id="account-tab-friends" data-account-tab="friends" aria-controls="account-panel-friends" aria-selected="false" tabindex="-1">Amigos</button>
+      </div>
+      <p class="form-help account-feedback hidden" id="account-feedback" role="status" aria-live="polite"></p>
+      <div class="account-content">
+        <section id="account-panel-account" role="tabpanel" aria-labelledby="account-tab-account">
+          <div id="account-unavailable" class="hidden"><p>Contas não estão disponíveis nesta sala agora.</p><p class="form-help">Você pode continuar usando o Teletela como visitante.</p></div>
+          <div id="account-guest">
+            <p class="account-intro">Uma conta pra encontrar seus amigos.</p>
+            <p class="form-help">Criar conta é opcional. Como visitante, você continua usando voz, transmissões e chat do jeito de sempre.</p>
+            <div class="account-auth-modes" aria-label="Acesso à conta">
+              <button type="button" id="account-mode-login" data-account-mode="login" class="btn-secondary" aria-pressed="true">Entrar</button>
+              <button type="button" id="account-mode-register" data-account-mode="register" class="btn-secondary" aria-pressed="false">Criar conta</button>
+            </div>
+            <form id="form-account-auth">
+              <div class="form-group"><label for="input-account-username">Usuário</label><input id="input-account-username" class="form-input" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" minlength="3" maxlength="24" pattern="[A-Za-z0-9_]{3,24}" placeholder="ex: castzin" required aria-describedby="account-username-help" /><p class="form-help" id="account-username-help">De 3 a 24 letras, números ou _. Seus amigos te adicionam por esse @usuário.</p></div>
+              <div class="form-group"><label for="input-account-password">Senha</label><input id="input-account-password" class="form-input" type="password" autocomplete="current-password" maxlength="128" required /></div>
+              <div class="form-group hidden" id="account-confirm-field"><label for="input-account-confirm">Repita a senha</label><input id="input-account-confirm" class="form-input" type="password" autocomplete="new-password" minlength="8" maxlength="128" disabled /></div>
+              <p class="form-help" id="account-auth-help">Entre na conta que você criou nesta sala.</p>
+              <div class="modal-actions"><button type="button" class="btn-secondary" id="btn-account-guest">Continuar como visitante</button><button type="submit" class="btn-primary" id="btn-account-submit">Entrar</button></div>
+            </form>
+          </div>
+          <div id="account-logged" class="hidden">
+            <p class="account-intro">Você está conectado como <strong id="account-username"></strong>.</p>
+            <p class="form-help">Seu perfil e seus amigos ficam salvos na conta desta sala. Você pode entrar com ela em outro PC.</p>
+            <div class="account-summary"><span>Amigos</span><strong id="account-friends-total">0</strong></div>
+            <div class="account-logged-actions"><button type="button" class="btn-primary" id="btn-account-edit-profile">Editar meu perfil</button><button type="button" class="btn-secondary" id="btn-account-logout">Sair da conta</button></div>
+            <p class="form-help">Ao sair, você volta ao seu perfil de visitante neste dispositivo.</p>
+          </div>
+        </section>
+        <section id="account-panel-friends" class="hidden" role="tabpanel" aria-labelledby="account-tab-friends">
+          <div id="friends-guest"><p class="account-intro">Seus amigos, por perto.</p><p class="form-help">Entre ou crie uma conta para adicionar amigos. Você pode continuar usando a sala como visitante.</p><div class="account-logged-actions"><button type="button" class="btn-primary" id="btn-friends-register">Criar conta</button><button type="button" class="btn-secondary" id="btn-friends-login">Já tenho conta</button></div></div>
+          <div id="friends-logged" class="hidden">
+            <form id="form-add-friend"><label for="input-friend-username">Adicionar amigo pelo @usuário</label><div class="friend-add-row"><input type="text" id="input-friend-username" class="form-input" placeholder="@usuario" maxlength="25" autocomplete="off" autocapitalize="none" spellcheck="false" required /><button type="submit" class="btn-primary">Enviar pedido</button></div></form>
+            <section class="friends-section" aria-labelledby="friends-incoming-title"><h4 id="friends-incoming-title">Pedidos recebidos <span id="friends-incoming-count">0</span></h4><ul class="friends-list" id="friends-incoming"></ul></section>
+            <section class="friends-section" aria-labelledby="friends-list-title"><h4 id="friends-list-title">Seus amigos <span id="friends-total">0</span></h4><ul class="friends-list" id="friends-list"></ul></section>
+            <section class="friends-section" aria-labelledby="friends-outgoing-title"><h4 id="friends-outgoing-title">Pedidos enviados <span id="friends-outgoing-count">0</span></h4><ul class="friends-list" id="friends-outgoing"></ul></section>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
   <!-- Sala com senha -->
   <div id="modal-room-password" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-room-password-title">
     <div class="modal-card">
@@ -423,9 +479,36 @@
           </div>
         </div>
 
+        <div class="form-group" id="channel-password-field">
+          <label for="input-channel-password-new">Senha do canal (opcional)</label>
+          <input type="password" id="input-channel-password-new" class="form-input" placeholder="Sem senha, qualquer pessoa pode entrar" autocomplete="new-password" minlength="4" maxlength="100" aria-describedby="channel-password-new-help" />
+          <p class="form-help" id="channel-password-new-help">De 4 a 100 caracteres. Todo mundo precisa da senha, inclusive admin.</p>
+        </div>
+
         <div class="modal-actions">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-channel">Cancelar</button>
           <button type="submit" class="btn-primary" id="btn-submit-channel">Criar Canal</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="modal-channel-password" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-channel-password-title" aria-describedby="channel-password-help">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="modal-channel-password-title">Canal com senha</h3>
+        <button type="button" class="modal-close-btn" data-close-modal="modal-channel-password" aria-label="Cancelar entrada">✕</button>
+      </div>
+      <form id="form-channel-password">
+        <p class="form-help" id="channel-password-help">Digite a senha de <strong id="channel-password-name"></strong>. Todo mundo precisa dela, inclusive admin.</p>
+        <div class="form-group">
+          <label for="input-channel-password">Senha do canal</label>
+          <input type="password" id="input-channel-password" class="form-input" autocomplete="off" maxlength="100" required aria-describedby="channel-password-error" />
+          <p class="form-help room-password-error hidden" id="channel-password-error" role="alert"></p>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" data-close-modal="modal-channel-password">Cancelar</button>
+          <button type="submit" class="btn-primary">Entrar</button>
         </div>
       </form>
     </div>
@@ -984,6 +1067,7 @@
       <div class="user-avatar user-popover-avatar" id="user-popover-avatar"></div>
       <div class="user-popover-names">
         <strong id="user-popover-name"></strong>
+        <span id="user-popover-account" class="user-popover-bio"></span>
         <span id="user-popover-bio" class="user-popover-bio"></span>
         <span id="user-popover-activity"></span>
       </div>

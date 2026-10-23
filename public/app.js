@@ -23,6 +23,7 @@ import {
 } from './audio-manager.js';
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
 import { activityElapsed } from './game-activity.js';
+import { setupAccounts } from './accounts.js';
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -150,6 +151,7 @@ const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" strok
 const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
 const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
 const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
+const CHANNEL_LOCK_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/><path d="M12 14v3"/></svg>';
 const CAMERA_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
 // Balão do chat da call (no canal de voz em que você está)
 const CHAT_BUBBLE_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
@@ -193,6 +195,13 @@ const myProfile = {
   joinSound: prefs.profile?.joinSound || ''
 };
 if (isFirstRun) savePrefs({ profile: { ...myProfile } });
+const visitorProfileDefaults = { ...myProfile };
+
+function persistCurrentProfile() {
+  // O perfil de visitante continua separado da identidade da conta.
+  if (!appState.account) return savePrefs({ profile: { ...myProfile } });
+  return Promise.resolve();
+}
 
 function profilePayload() {
   return {
@@ -339,8 +348,9 @@ function saveRoomAccess(patch) {
 
 const socket = io(SERVER_URL, {
   auth: (cb) => cb({
-    profileId: myProfile.id,
+    profileId: roomAccess().memberProfileId || myProfile.id,
     memberKey: roomAccess().memberKey || '',
+    accountToken: prefs.accountSessions?.[SERVER_URL] || '',
     roomPassword: roomAccess().password || '',
     adminKey: prefs.adminKeys?.[SERVER_URL] || ''
   }),
@@ -351,6 +361,42 @@ const socket = io(SERVER_URL, {
   reconnectionDelayMax: 5000,
   timeout: 20000
 });
+
+setupAccounts({
+  socket, showToast, escapeHtml,
+  getProfile: profilePayload,
+  getGuestProfile: () => ({ ...visitorProfileDefaults, ...prefs.profile }),
+  saveSession: (token) => {
+    const sessions = { ...(prefs.accountSessions || {}) };
+    if (token) sessions[SERVER_URL] = token;
+    else delete sessions[SERVER_URL];
+    return savePrefs({ accountSessions: sessions });
+  },
+  onIdentity: (profile, account) => {
+    appState.account = account;
+    Object.assign(myProfile, profile, { id: account?.id || profile.id, avatarCrop: normalizeImageCrop(profile.avatarCrop), bannerCrop: normalizeImageCrop(profile.bannerCrop) });
+    appState.myUser.name = myProfile.name;
+    appState.myUser.color = myProfile.color;
+    profileDraft = null;
+    ++imageCropRequest;
+    if (isProfileEditorOpen()) resetProfileDraft();
+    updateUserDockProfile();
+    renderChannelsTree();
+    updateVoiceLounge();
+  },
+  onReady: () => finishConnectionProfile(),
+  editProfile: () => openProfileSettings()
+});
+let connectionProfileReadyId = null;
+
+function finishConnectionProfile() {
+  if (!socket.connected || connectionProfileReadyId === socket.id) return;
+  connectionProfileReadyId = socket.id;
+  // Espera o perfil da conta para não sobrescrever os dados da nuvem com o visitante.
+  socket.emit('update-profile', profilePayload());
+  publishGameActivity(true);
+  if (appState.currentChannelId) requestChannelJoin(appState.currentChannelId, activeChannelPassword);
+}
 
 let connectionProbeTimer = null;
 let connectionProbeRun = 0;
@@ -465,7 +511,7 @@ function setupRoomPassword() {
 }
 
 socket.on('member-key', ({ profileId, key } = {}) => {
-  if (profileId === myProfile.id && typeof key === 'string') saveRoomAccess({ memberKey: key });
+  if (typeof profileId === 'string' && typeof key === 'string') saveRoomAccess({ memberKey: key, memberProfileId: profileId });
 });
 
 socket.on('room-password-changed', ({ password, by } = {}) => {
@@ -474,11 +520,12 @@ socket.on('room-password-changed', ({ password, by } = {}) => {
   showToast(password ? `🔒 ${by || 'O admin'} colocou senha na sala (o seu app já guardou).` : `🔓 ${by || 'O admin'} tirou a senha da sala.`);
 });
 
-socket.on('room-info', ({ hasPassword, connectionPing } = {}) => {
+socket.on('room-info', ({ hasPassword, connectionPing, accounts } = {}) => {
   appState.roomHasPassword = Boolean(hasPassword);
   connectionPingSupported = connectionPing === true;
   syncConnectionMonitor();
   renderAdminSettings();
+  if (accounts !== true) finishConnectionProfile();
 });
 
 socket.on('connect', () => {
@@ -488,9 +535,6 @@ socket.on('connect', () => {
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
   appState.isAdmin = false;
-  // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
-  socket.emit('update-profile', profilePayload());
-  publishGameActivity(true);
   const adminKey = savedAdminKey();
   if (adminKey) {
     adminLogin(adminKey, (res) => {
@@ -499,35 +543,15 @@ socket.on('connect', () => {
     });
   }
 
-  // Uma queda de conexão retoma a call escolhida nesta janela; abrir a sala não escolhe uma.
-  if (!appState.currentChannelId) return;
-  socket.emit('join-channel', {
-    channelId: appState.currentChannelId,
-    userName: appState.myUser.name,
-    profile: profilePayload(),
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
+  // A retomada da call espera a identidade em account-state (ou room-info no servidor antigo).
 });
 
 socket.on('disconnect', (reason) => {
+  pendingChannelJoin = null;
   syncConnectionMonitor();
   renderServerHome();
   console.warn(`[Socket.IO] Desconectado: ${reason}`);
   showToast('Desconectado do servidor. Reconectando...', 'error');
-});
-
-socket.on('reconnect', () => {
-  showToast('Reconectado com sucesso!', 'success');
-  if (!appState.currentChannelId) return;
-  socket.emit('join-channel', {
-    channelId: appState.currentChannelId,
-    userName: appState.myUser.name,
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
 });
 
 // Nome e cor vêm do nosso perfil; o servidor só sugere um aleatório antes do join
@@ -581,6 +605,7 @@ const handleChannelsSummary = (channelsList) => {
       name: ch.name,
       isDefault: ch.isDefault,
       createdBy: ch.createdBy || null,
+      hasPassword: Boolean(ch.hasPassword),
       userCount: ch.userCount ?? userMap.size,
       activeStreams: ch.activeStreams ?? 0,
       users: userMap
@@ -598,6 +623,13 @@ const handleChannelsSummary = (channelsList) => {
 socket.on('channels-list', handleChannelsSummary);
 
 socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages, soundSeed }) => {
+  const attempt = pendingChannelJoin?.channelId === channelId ? pendingChannelJoin : null;
+  if (attempt) {
+    activeChannelPassword = attempt.password;
+    pendingChannelJoin = null;
+    closeChannelPasswordModal();
+  }
+  if (channelId !== appState.currentChannelId) activateVoiceChannel(channelId);
   // Eu entrei: ouço o mesmo áudio que tocou pra quem já estava no canal
   playCallSound(soundSeed, joinSoundUrl(myProfile));
   if (me) {
@@ -649,6 +681,7 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
   updateTopBar();
   renderChannelChat(channelId);
   updateVoiceLounge();
+  if (attempt?.streamKey) openStream(attempt.streamKey);
 });
 
 const handleUserJoined = (data) => {
@@ -1004,11 +1037,67 @@ setupWebRTCSignaling(socket);
 // -----------------------------------------------------------------------------
 // 5. CHANNEL NAVIGATION & LIFECYCLE
 // -----------------------------------------------------------------------------
-function switchChannel(targetChannelId) {
+// A senha fica só na memória da call atual para retomar após uma queda de rede.
+let activeChannelPassword = '';
+let pendingChannelJoin = null;
+let channelPasswordTarget = null;
+
+function closeChannelPasswordModal() {
+  $('#modal-channel-password').classList.add('hidden');
+  $('#input-channel-password').value = '';
+  channelPasswordTarget = null;
+}
+
+function openChannelPasswordModal(channelId, error = '', streamKey = null) {
+  channelPasswordTarget = { channelId, streamKey };
+  $('#channel-password-name').textContent = appState.channels.get(channelId)?.name || channelId;
+  $('#channel-password-error').textContent = error;
+  $('#channel-password-error').classList.toggle('hidden', !error);
+  $('#modal-channel-password').classList.remove('hidden');
+  const input = $('#input-channel-password');
+  input.value = '';
+  input.focus();
+}
+
+function requestChannelJoin(channelId, password = '', streamKey = null) {
+  if (pendingChannelJoin) return;
+  if (!socket.connected) return showToast('Espere a conexão voltar para entrar no canal.', 'error');
+  const attempt = { channelId, password, streamKey };
+  pendingChannelJoin = attempt;
+  socket.emit('join-channel', {
+    channelId,
+    password,
+    userName: appState.myUser.name,
+    profile: profilePayload(),
+    isMicOn: appState.myUser.isMicOn,
+    isDeafened: appState.myUser.isDeafened,
+    isSharing: appState.myUser.isSharing
+  }, (res) => {
+    if (pendingChannelJoin !== attempt) return;
+    pendingChannelJoin = null;
+    if (res?.success) return;
+    if (channelId === appState.currentChannelId) leaveCallLocally();
+    if (res?.code === 'channel-password') {
+      const error = res.reason === 'required' ? '' : res.reason === 'wrong' ? 'Senha errada, tenta de novo.' : res.error;
+      openChannelPasswordModal(channelId, error, streamKey);
+    } else showToast(res?.error || 'Não deu pra entrar no canal.', 'error');
+  });
+}
+
+function switchChannel(targetChannelId, password, streamKey = null) {
   if (!targetChannelId) return;
   const cleanId = targetChannelId.toLowerCase();
   if (cleanId === appState.currentChannelId) return;
+  if (pendingChannelJoin) return;
+  if (appState.channels.get(cleanId)?.hasPassword && password === undefined) {
+    openChannelPasswordModal(cleanId, '', streamKey);
+    return;
+  }
+  requestChannelJoin(cleanId, password || '', streamKey);
+}
 
+// Só troca a interface e as conexões de mídia depois que o servidor aceita a entrada.
+function activateVoiceChannel(cleanId) {
   const oldChannelId = appState.currentChannelId;
   // Entrar e trocar de canal preservam o mute escolhido no dock.
   appState.currentChannelId = cleanId;
@@ -1031,16 +1120,6 @@ function switchChannel(targetChannelId) {
   renderChannelChat(cleanId);
   updateVoiceLounge();
 
-  // Notify server
-  socket.emit('join-channel', {
-    channelId: cleanId,
-    userName: appState.myUser.name,
-    profile: profilePayload(),
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
-
   const targetCh = appState.channels.get(cleanId);
   const targetName = targetCh ? targetCh.name : cleanId;
   addSystemChatMessage(`Você entrou no canal #${targetName}.`, cleanId);
@@ -1057,6 +1136,7 @@ function leaveCall() {
 
 // Desliga voz e transmissões e fica fora dos canais (o servidor já sabe ou vai saber à parte)
 function leaveCallLocally() {
+  activeChannelPassword = '';
   const oldChannelId = appState.currentChannelId;
   if (!oldChannelId) return;
   onWebRTCChannelChange(oldChannelId, null);
@@ -1249,7 +1329,7 @@ function renderChannelsTree() {
     const userCount = ch.users.size;
 
     row.innerHTML = `
-      <span class="channel-speaker-icon">${icon}</span>
+      <span class="channel-speaker-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : icon}</span>
       <span class="channel-name">${escapeHtml(ch.name)}</span>
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
@@ -1352,7 +1432,8 @@ function renderChannelsTree() {
         liveBadge.addEventListener('click', (e) => {
           e.stopPropagation();
           if (chId !== appState.currentChannelId) {
-            switchChannel(chId);
+            switchChannel(chId, undefined, liveBadge.dataset.streamKey);
+            return;
           }
           openStream(liveBadge.dataset.streamKey);
         });
@@ -1409,7 +1490,7 @@ function renderServerHome() {
   // A fala muda várias vezes por segundo; o início só precisa mudar com canais e pessoas.
   const signature = JSON.stringify([
     socket.connected,
-    channels.map((ch) => [ch.id, ch.name, sortedUsers(ch).map((u) => [u.id, u.name, u.color, u.avatarV, u.avatarCrop, u.frame, u.frameColor])]),
+    channels.map((ch) => [ch.id, ch.name, ch.hasPassword, sortedUsers(ch).map((u) => [u.id, u.name, u.color, u.avatarV, u.avatarCrop, u.frame, u.frameColor])]),
     textChannels.map((ch) => [ch.id, ch.name])
   ]);
   if (signature === serverHomeSignature) return;
@@ -1422,12 +1503,12 @@ function renderServerHome() {
   $('#home-voice-channels').innerHTML = channels.map((ch) => {
     const users = sortedUsers(ch);
     const names = users.slice(0, 3).map((u) => u.name).join(', ');
-    const label = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : 'Livre para entrar';
+    const label = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : ch.hasPassword ? 'Canal com senha' : 'Livre para entrar';
     const faces = users.slice(0, 4).map((u) => `<span class="user-avatar home-person${frameClass(u)}" style="background:${safeColor(u.color)};${frameStyle(u)}" title="${escapeHtml(u.name)}">${avatarInnerHtml(u)}</span>`).join('');
     return `<button type="button" class="home-voice-card${users.length ? ' occupied' : ''}" data-home-voice="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}>
-      <span class="home-channel-icon">${HEADPHONES_ON_SVG}</span>
+      <span class="home-channel-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : HEADPHONES_ON_SVG}</span>
       <span class="home-channel-info"><strong>${escapeHtml(ch.name)}</strong><span>${escapeHtml(label)}</span></span>
-      <span class="home-card-bottom"><span class="home-people">${faces || '<span class="home-empty-mark" aria-hidden="true"></span>'}</span><span class="home-enter">Entrar <span aria-hidden="true">→</span></span></span>
+      <span class="home-card-bottom"><span class="home-people">${faces || '<span class="home-empty-mark" aria-hidden="true"></span>'}</span><span class="home-enter">${ch.hasPassword ? 'Entrar com senha' : 'Entrar'} <span aria-hidden="true">→</span></span></span>
     </button>`;
   }).join('');
   $('#home-text-section').classList.toggle('hidden', !textChannels.length);
@@ -2431,7 +2512,7 @@ function setupProfileTransfer() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast('💾 Perfil exportado. Guarde o arquivo: ele também é a sua "identidade" nas salas.');
+    showToast(appState.account ? '💾 Aparência exportada. Para acessar sua conta em outro PC, use o login.' : '💾 Perfil exportado. Guarde o arquivo: ele também é a sua "identidade" nas salas.');
   });
   $('#input-profile-import')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -2444,10 +2525,10 @@ function setupProfileTransfer() {
       if (data?.app !== 'teletela' || !p || typeof p.id !== 'string' || !/^[a-z0-9-]{8,64}$/i.test(p.id) || typeof p.name !== 'string') {
         throw new Error('Esse arquivo não é um perfil do Teletela.');
       }
-      if (!window.confirm(`Trocar o seu perfil pelo de "${p.name}"? O app vai recarregar.`)) return;
+      if (!window.confirm(appState.account ? `Usar a aparência do perfil "${p.name}" na sua conta?` : `Trocar o seu perfil pelo de "${p.name}"? O app vai recarregar.`)) return;
       const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
       const profile = {
-        id: p.id,
+        id: appState.account?.id || (p.id.toLowerCase().startsWith('conta-') ? randomId() : p.id),
         name: str(p.name, 24) || myProfile.name,
         color: HEX_RE.test(p.color || '') ? p.color : myProfile.color,
         bio: str(p.bio, 140),
@@ -2462,9 +2543,22 @@ function setupProfileTransfer() {
         bannerCrop: normalizeImageCrop(p.bannerCrop),
         joinSound: /^data:audio\//.test(p.joinSound || '') ? p.joinSound : ''
       };
+      if (appState.account) {
+        await new Promise((resolve, reject) => socket.timeout(15000).emit('update-profile', { ...profile, profileId: profile.id }, (err, result) => {
+          if (err || !result?.success) reject(new Error(result?.error || 'Não deu para salvar o perfil na conta.'));
+          else resolve();
+        }));
+        Object.assign(myProfile, profile);
+        appState.myUser.name = profile.name;
+        appState.myUser.color = profile.color;
+        resetProfileDraft();
+        updateUserDockProfile();
+        showToast('Aparência importada para sua conta.', 'success');
+        return;
+      }
       // A chave de membro é do perfil antigo: a do novo vem ao conectar
       const roomAccessAll = { ...(prefs.roomAccess || {}) };
-      for (const k of Object.keys(roomAccessAll)) roomAccessAll[k] = { ...roomAccessAll[k], memberKey: undefined };
+      for (const k of Object.keys(roomAccessAll)) roomAccessAll[k] = { ...roomAccessAll[k], memberKey: undefined, memberProfileId: undefined };
       await savePrefs({ profile, roomAccess: roomAccessAll });
       location.reload();
     } catch (err) {
@@ -3389,10 +3483,27 @@ function openSettings(name = $('.settings-tab.active')?.dataset.settingsTab || '
 }
 
 function setupModals() {
+  const syncChannelPasswordField = () => {
+    const isVoice = document.querySelector('input[name="channel-type"]:checked')?.value === 'voice';
+    $('#channel-password-field').classList.toggle('hidden', !isVoice);
+    $('#input-channel-password-new').disabled = !isVoice;
+  };
+  $$('input[name="channel-type"]').forEach((radio) => radio.addEventListener('change', syncChannelPasswordField));
+  $('#form-channel-password').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!channelPasswordTarget) return;
+    const { channelId, streamKey } = channelPasswordTarget;
+    requestChannelJoin(channelId, $('#input-channel-password').value, streamKey);
+  });
+  $('#modal-channel-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeChannelPasswordModal();
+  });
   // Open create channel modal
   const openCreateModal = (type = 'voice') => {
     const radio = document.querySelector(`input[name="channel-type"][value="${type}"]`);
     if (radio) radio.checked = true;
+    $('#input-channel-password-new').value = '';
+    syncChannelPasswordField();
     $('#modal-create-channel')?.classList.remove('hidden');
     $('#input-channel-name')?.focus();
   };
@@ -3408,6 +3519,7 @@ function setupModals() {
       if (modalId) $(`#${modalId}`)?.classList.add('hidden');
       if (modalId === 'modal-settings') { profileDraft = null; ++imageCropRequest; }
       if (modalId === 'modal-whats-new') whatsNewReturnFocus?.focus();
+      if (modalId === 'modal-channel-password') closeChannelPasswordModal();
     });
   });
 
@@ -3431,21 +3543,27 @@ function setupModals() {
     if (!name) return;
 
     const type = document.querySelector('input[name="channel-type"]:checked')?.value;
+    const password = type === 'voice' ? $('#input-channel-password-new').value : '';
+    const finish = () => {
+      input.value = '';
+      $('#input-channel-password-new').value = '';
+      $('#modal-create-channel').classList.add('hidden');
+    };
+    if (!socket.connected) return showToast('Espere a conexão voltar para criar o canal.', 'error');
     if (type === 'text') {
       socket.emit('create-text-channel', { name, profileId: myProfile.id }, (response) => {
-        if (response?.success) openTextChannel(response.channelId);
+        if (response?.success) { finish(); openTextChannel(response.channelId); }
         else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
       });
     } else {
-      socket.emit('create-channel', { name, profileId: myProfile.id }, (response) => {
-        if (response && response.channelId) {
-          switchChannel(response.channelId);
+      socket.emit('create-channel', { name, profileId: myProfile.id, password }, (response) => {
+        if (response?.success && response.channelId) {
+          finish();
+          switchChannel(response.channelId, password);
         }
+        else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
       });
     }
-
-    input.value = '';
-    $('#modal-create-channel')?.classList.add('hidden');
   });
 
   // Stream volume slider (0-300% GainNode boost)
@@ -3770,6 +3888,7 @@ function openUserPopover(userId, anchorEvent) {
   const banner = $('#user-popover-banner');
   renderBanner(banner, u);
   $('#user-popover-bio').textContent = u.bio || '';
+  $('#user-popover-account').textContent = u.account?.username ? `@${u.account.username}` : '';
   $('#user-popover-activity').innerHTML = userActivityHtml(u);
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
@@ -3820,7 +3939,7 @@ function openProfileCard(userId) {
   $('#profile-card-bio').textContent = shown.bio || '';
   $('#profile-card-activity').innerHTML = userActivityHtml(u);
   const ch = appState.channels.get(u.channelId);
-  $('#profile-card-meta').textContent = ch ? `🔊 Na call: ${ch.name}` : '';
+  $('#profile-card-meta').textContent = [u.account?.username ? `@${u.account.username}` : '', ch ? `🔊 Na call: ${ch.name}` : ''].filter(Boolean).join(' · ');
   $('#modal-user-profile').classList.remove('hidden');
 }
 
@@ -4253,7 +4372,7 @@ function setupProfileSettings() {
     renderProfileDraft();
   });
 
-  $('#form-profile')?.addEventListener('submit', (e) => {
+  $('#form-profile')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('#input-profile-name').value.trim().slice(0, 24);
     if (!name || !profileDraft) return;
@@ -4261,11 +4380,21 @@ function setupProfileSettings() {
       name,
       bio: $('#input-profile-bio').value.trim().slice(0, 140)
     });
-    savePrefs({ profile: { ...myProfile } });
+    persistCurrentProfile();
 
     appState.myUser.name = myProfile.name;
     appState.myUser.color = myProfile.color;
-    socket.emit('update-profile', profilePayload());
+    if (appState.account) {
+      const button = $('#btn-profile-save');
+      button.disabled = true;
+      try {
+        await new Promise((resolve, reject) => socket.timeout(15000).emit('update-profile', profilePayload(), (err, result) => {
+          if (err || !result?.success) reject(new Error(result?.error || 'Não deu para salvar o perfil na conta. Tente de novo.'));
+          else resolve();
+        }));
+      } catch (err) { showToast(err.message, 'error'); return; }
+      finally { button.disabled = false; }
+    } else socket.emit('update-profile', profilePayload());
 
     updateUserDockProfile();
     renderChannelsTree();

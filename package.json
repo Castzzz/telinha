@@ -48,6 +48,7 @@
       "electron/**",
       "public/**",
       "server.js",
+      "account-store.js",
       "package.json"
     ],
     "linux": {

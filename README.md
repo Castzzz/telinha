@@ -103,6 +103,9 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | Quero… | Como |
 |---|---|
 | **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, com as fotos de perfil e o recorte escolhido (iniciais para quem não tem foto). Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
+| **Criar conta (opcional)** | **Conta** na barra de cima → **Criar conta**. Escolha um usuário (3 a 24 letras, números ou _) e senha (8 a 128 caracteres). Seu perfil atual é copiado para a conta desta sala. Você continua podendo usar voz, tela e chat como visitante, sem cadastro. Por enquanto não há recuperação de senha por e-mail |
+| **Entrar e sair da conta** | **Conta** → **Entrar**; o perfil e os amigos são carregados do servidor. **Sair da conta** restaura o perfil de visitante deste dispositivo. Canais e mensagens antigos do visitante continuam pertencendo a esse perfil. A conta vale na sala onde foi criada |
+| **Adicionar amigos** | **Amigos** na barra de cima → digite o **@usuário** → **Enviar pedido**. A outra pessoa aceita ou recusa nos pedidos recebidos. Você pode cancelar pedidos enviados, remover amigos e ver quem está online. O @usuário aparece no perfil de quem tem conta |
 | **Mostrar o jogo que estou jogando** | No app para Windows e Linux, jogos reconhecidos aparecem abaixo do nome e no perfil, como **Jogando Counter-Strike 2 · há 23 min**. A atividade some ao fechar o jogo; a detecção é feita a cada 15 segundos. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável. No navegador dá para ver a atividade dos amigos |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app começa mutado; entrar, trocar de canal ou reconectar preserva o estado escolhido no botão. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
@@ -123,7 +126,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️ → *Transmissão*. A prévia fica escondida automaticamente, mas clicar no seu **AO VIVO** ou **CÂMERA** abre só a prévia escolhida. O **✕** na aba volta a escondê-la. Os amigos continuam vendo e a preferência fica salva |
 | **Responder, reagir, editar e apagar mensagens** | Passe o mouse na mensagem do chat: ↩ responde, 😊 reage, ✏️ edita e 🗑️ apaga (as suas; admin apaga qualquer uma). `↑` com o campo vazio edita a sua última |
 | **Fixar mensagem** | Canal de texto: passe o mouse na mensagem e clique no 📌. O 📌 no topo do chat lista as fixadas |
-| **Levar o perfil pra outro PC** | Clique no seu nome → *Exportar perfil*; no outro PC, *Importar perfil*. Não mande o arquivo pra ninguém: ele é a sua identidade nas salas |
+| **Levar o perfil pra outro PC** | Com conta, entre com usuário e senha na mesma sala. Como visitante, clique no seu nome → *Exportar perfil*; no outro PC, *Importar perfil*. Não mande o arquivo do visitante pra ninguém: ele é a sua identidade nas salas. Exportar um perfil de conta copia só a aparência; não dá acesso à conta |
 | **Marcar alguém** | Digite `@` no chat e escolha a pessoa (ou `@todos`). Ela recebe um aviso, mesmo com o Teletela minimizado |
 | **Soundboard** | Em call, use 🎵 lá embaixo, ao lado de **Reagir**: toca um som pra toda a call. *＋ Adicionar som* sobe os seus (até 16, de até 10 s / 1 MB). Volume e desligar em ⚙️ → *Som* |
 | **Reagir com qualquer emoji** | Em call, passe o mouse sobre **Reagir** para ver os emojis mais usados. Clique em **＋** para abrir a busca completa. Também funciona por clique ou teclado; escolher um emoji envia para a call e fecha o painel |
@@ -135,6 +138,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Admin: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até o admin desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
+| **Canal de voz com senha** | Ao criar, preencha a senha opcional (4 a 100 caracteres). O cadeado indica um canal protegido: quem entra precisa da senha, inclusive quem criou e admin. Errar ou cancelar mantém você na call atual. Admin não pode arrastar alguém pra um canal com senha. Ao sair e voltar, a senha é pedida de novo |
 | **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |

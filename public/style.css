@@ -3980,6 +3980,44 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
   30% { transform: translateY(-3px); opacity: 1; }
 }
 
+.account-card { max-width: 560px; max-height: calc(100dvh - 40px); }
+.account-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border-medium); }
+.account-tabs button { flex: 1; padding: 10px; color: var(--text-muted); border-bottom: 2px solid transparent; }
+.account-tabs button[aria-selected="true"] { color: var(--text-header); border-bottom-color: var(--accent-brand); }
+.account-content { overflow-y: auto; min-height: 0; }
+.account-intro { color: var(--text-header); font-size: 16px; line-height: 1.5; margin-bottom: 8px; }
+.account-auth-modes, .account-logged-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.account-auth-modes [aria-pressed="true"] { background: var(--bg-active); box-shadow: inset 0 0 0 1px var(--accent-brand); }
+#form-account-auth .form-input { width: 100%; }
+.account-feedback { padding: 10px 12px; background: var(--bg-tertiary); border-radius: var(--radius-md); margin: 0; }
+.account-feedback[data-error="true"] { color: var(--accent-red); }
+.account-summary { display: flex; align-items: center; justify-content: space-between; padding: 16px; margin-top: 20px; background: var(--bg-tertiary); border-radius: var(--radius-md); }
+.friend-add-row { display: flex; gap: 8px; margin-top: 8px; }
+.friend-add-row input { flex: 1; min-width: 0; }
+.friends-section { margin-top: 24px; }
+.friends-section h4 { color: var(--text-header); font-size: 13px; display: flex; gap: 8px; margin-bottom: 8px; }
+.friends-section h4 span { color: var(--text-muted); }
+.friends-list { list-style: none; margin: 0; padding: 0; }
+.friend-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border-medium); }
+.friend-initials { flex-shrink: 0; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; color: var(--text-header); background: var(--bg-tertiary); font-size: 12px; font-weight: 600; }
+.friend-info { flex: 1; min-width: 0; }
+.friend-info strong, .friend-info small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.friend-info strong { color: var(--text-header); font-size: 13px; }
+.friend-info small { color: var(--text-muted); margin-top: 3px; font-size: 12px; }
+.friend-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.friend-actions button { font-size: 12px; padding: 6px 8px; }
+.friend-online { color: var(--accent-green); }
+.friends-empty { color: var(--text-muted); font-size: 13px; padding: 12px 0; line-height: 1.5; }
+.friends-count { min-width: 18px; height: 18px; display: inline-grid; place-items: center; border-radius: 9px; padding: 0 4px; background: var(--accent-brand); color: var(--text-on-accent, #fff); font-size: 11px; }
+#btn-open-account { max-width: 180px; }
+#account-button-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 600px) {
+  .friend-add-row { flex-direction: column; }
+  .friend-row { flex-wrap: wrap; }
+  .friend-actions { width: 100%; }
+  #btn-open-account { max-width: 110px; }
+}
+
 .room-password-error {
   color: var(--accent-red);
 }

@@ -32,9 +32,9 @@ async function connect() {
   return client;
 }
 
-async function join(client, channelId, profileId) {
+async function join(client, channelId, profileId, password) {
   const state = once(client, 'channel-state');
-  client.emit('join-channel', { channelId, userName: profileId, profile: { profileId, name: profileId } });
+  client.emit('join-channel', { channelId, password, userName: profileId, profile: { profileId, name: profileId } });
   return state;
 }
 
@@ -73,6 +73,7 @@ async function runTests() {
     assert.deepEqual((await channelsList()).map((c) => c.id), ['geral']);
     const alice = await connect();
     clients.push(alice);
+    assert.equal((await emit(alice, 'friends-list', {})).success, false, 'amizades exigem conta, canais continuam livres para visitantes');
     const created = await emit(alice, 'create-channel', { name: 'Resenha', profileId: 'alice-profile-0001' });
     assert.equal(created.channelId, 'resenha');
     const saved = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'channels.json'), 'utf8'));
@@ -137,6 +138,53 @@ async function runTests() {
     assert.ok(!geral.users.some((u) => u.id === carol.id), 'quem foi tirado não está mais no canal');
     assert.equal((await emit(bob, 'kick-user', { userId: bob.id })).success, false, 'não tira a si mesmo');
     console.log('  ✓ Admin tira alguém da call; quem não é admin não consegue');
+
+    // Senha do canal: nem criador, admin ou chave de membro pulam a validação.
+    for (const password of ['abc', 'x'.repeat(101), 1234, {}, []]) {
+      assert.equal((await emit(carol, 'create-channel', { name: 'Inválido', password })).success, false);
+    }
+    const cofre = await emit(carol, 'create-channel', { name: 'Cofre', password: 'segredo do canal' });
+    const twin = await emit(carol, 'create-channel', { name: 'Outro Cofre', password: 'segredo do canal' });
+    const passwordsSaved = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'channels.json'), 'utf8'));
+    const protectedSaved = passwordsSaved.channels.find((c) => c.id === cofre.channelId);
+    assert.match(protectedSaved.password.salt, /^[a-f0-9]{32}$/);
+    assert.match(protectedSaved.password.hash, /^[a-f0-9]{64}$/);
+    assert.notDeepEqual(protectedSaved.password, passwordsSaved.channels.find((c) => c.id === twin.channelId).password, 'cada canal tem seu próprio sal');
+    assert.ok(!JSON.stringify(passwordsSaved).includes('segredo do canal'), 'senha nunca fica em texto puro');
+    const protectedPublic = (await channelsList()).find((c) => c.id === cofre.channelId);
+    assert.equal(protectedPublic.hasPassword, true);
+    assert.equal(protectedPublic.password, undefined);
+    assert.equal((await channelsList()).find((c) => c.id === 'geral').hasPassword, false);
+    await join(carol, 'geral', 'carol-profile-0003');
+    const statesReceived = [];
+    const recordState = (state) => statesReceived.push(state);
+    carol.on('channel-state', recordState);
+    for (const password of [undefined, 'errada', {}, 'x'.repeat(101)]) {
+      const deniedJoin = await emit(carol, 'join-channel', { channelId: cofre.channelId, password });
+      assert.equal(deniedJoin.success, false, 'criador precisa da senha');
+      assert.equal(deniedJoin.code, 'channel-password');
+    }
+    assert.equal(statesReceived.length, 0, 'não recebe histórico nem estado do canal protegido');
+    assert.ok((await channelsList()).find((c) => c.id === 'geral').users.some((u) => u.id === carol.id), 'senha errada preserva a call anterior');
+    assert.equal((await emit(bob, 'join-channel', { channelId: cofre.channelId })).success, false, 'admin também precisa da senha');
+    assert.equal((await emit(bob, 'join-channel', { channelId: cofre.channelId, password: ADMIN_KEY })).success, false, 'senha de admin não substitui a do canal');
+    assert.equal((await emit(bob, 'admin-move-user', { userId: carol.id, channelId: cofre.channelId })).success, false, 'arrastar não contorna a senha');
+    const legacyError = once(carol, 'channel-join-error');
+    carol.emit('join-channel', { channelId: cofre.channelId });
+    assert.equal((await legacyError).code, 'channel-password', 'cliente antigo também é barrado');
+    await join(carol, cofre.channelId, 'carol-profile-0003', 'segredo do canal');
+    assert.equal((await emit(bob, 'sfu-token', { ownerId: carol.id, role: 'viewer', kind: 'voice' })).ok, false, 'mídia não atravessa canais');
+    await join(bob, cofre.channelId, 'bob-profile-00002', 'segredo do canal');
+    await emit(carol, 'leave-channel', {});
+    assert.equal((await emit(carol, 'join-channel', { channelId: cofre.channelId })).success, false, 'sair e voltar exige senha de novo');
+    carol.off('channel-state', recordState);
+    await join(bob, 'geral', 'bob-profile-00002');
+    const limited = await connect();
+    clients.push(limited);
+    for (let i = 0; i < 10; i++) assert.equal((await emit(limited, 'join-channel', { channelId: cofre.channelId, password: 'errada' })).success, false);
+    assert.equal((await emit(limited, 'join-channel', { channelId: cofre.channelId, password: 'segredo do canal' })).reason, 'rate-limited');
+    limited.disconnect();
+    console.log('  ✓ Canal com senha: hash e sal, validação, criador e admin sem exceção, call preservada, movimento e mídia barrados, limite de tentativas');
 
     // Atividade: funciona antes da call, entra no estado e compartilha só os campos públicos.
     const player = await connect();
@@ -356,6 +404,10 @@ async function runTests() {
     proc = await startServer();
     const reader = await connect();
     clients.push(reader);
+    assert.equal((await channelsList()).find((c) => c.id === cofre.channelId).hasPassword, true, 'proteção sobrevive ao reinício');
+    assert.equal((await emit(reader, 'join-channel', { channelId: cofre.channelId })).success, false);
+    await join(reader, cofre.channelId, 'carol-profile-0003', 'segredo do canal');
+    await emit(reader, 'leave-channel', {});
     attachmentsHistory = await emit(reader, 'text-history', { channelId: 'arquivos' });
     assert.equal(attachmentsHistory.messages.length, 3, 'metadados dos anexos e GIF sobrevivem ao reinício');
     const gifAfter = await fetch(`${URL_BASE}${attachmentsHistory.messages[2].image.url}`);

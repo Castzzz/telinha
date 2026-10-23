@@ -87,13 +87,15 @@ Pontos importantes:
 ## 3. Organização das pastas
 
 ```
-server.js                  Servidor da sala (Express + Socket.IO). Um arquivo só.
+server.js                  Servidor da sala (Express + Socket.IO).
+account-store.js           Contas, sessões, perfis salvos e relações de amizade.
 sfu/main.go                SFU em Go (Pion). Compilado no deploy.
 go.mod, go.sum             Dependências do SFU.
 
 public/                    A interface (vai dentro do app E é servida pelo server.js)
   index.html               Toda a estrutura da tela, modais e o popup de novidades
   app.js                   Toda a lógica do cliente (~6400 linhas, dividido em seções numeradas)
+  accounts.js              Modal de conta opcional, login e lista de amigos/pedidos
   audio-manager.js         Mixer de volume, ensurdecer, captura de áudio, VAD
   style.css                Estilos base + temas (escuro / preto / claro)
   redesign.css             O visual 3.0 (vale com <html data-look="novo">, fixo no index.html)
@@ -109,6 +111,7 @@ electron/
   main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
                            captura de tela/áudio, atalhos globais, auto-update, preferências
   game-activity.cjs         Catálogo de jogos, leitura local dos processos e tempo da atividade
+  account-sessions.cjs      Cofre das sessões de conta usando safeStorage
   preload.cjs              Ponte segura (window.electronAPI) entre a página e o main
   app-protocol.cjs         Protocolo telinha://app que serve public/ empacotado
   connect.html             Tela inicial (entrar na sala do servidor / hospedar / colar link)
@@ -175,6 +178,7 @@ Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
 npm test                                   # runner próprio: 62 testes, devem passar todos
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js
 node tests/m4-channels-admin.test.js       # integração: sobe o server.js de verdade
+node --test tests/m4-accounts.test.js       # integração de contas e amigos, sem cadastro obrigatório
 go test -race ./sfu                       # SFU: erro de espectador não interrompe os demais
 ```
 
@@ -231,6 +235,7 @@ atrás se esquecer).
 |---|---|---|
 | `public/` (interface) | **sim** | sim (pra quem usa pelo navegador) |
 | `server.js` | não | **sim** |
+| `account-store.js` | **sim** (também vai no servidor hospedado pelo app) | **sim** |
 | `sfu/` | não | **sim** |
 | `electron/`, `build/`, `package.json` (build) | **sim** | não |
 | `deploy/oracle/install.sh` | não | **sim** |
@@ -247,7 +252,7 @@ npm run deploy:oracle
 O que o `deploy/oracle/deploy.sh` faz, no seu PC:
 
 1. Detecta a arquitetura da VM pelo SSH e compila o SFU pra `linux/amd64` ou `linux/arm64`.
-2. Empacota `server.js`, `package.json`, `package-lock.json` e `public/` com
+2. Empacota `server.js`, `account-store.js`, `package.json`, `package-lock.json` e `public/` com
    `npm ci --omit=dev` (sem as dependências do app desktop).
 3. Descobre a versão LTS mais nova do Node e a mais nova do Caddy (ou usa `NODE_VERSION` e
    `CADDY_VERSION`, se definidos).
@@ -331,6 +336,8 @@ trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
+| `accounts/accounts.json` | contas, hashes/sais de senha, verificadores das sessões e amizades/pedidos; acesso 0600 |
+| `accounts/profiles/<conta-id>.json` | perfil completo da conta, incluindo fotos, banner, som e recortes; acesso 0600 |
 | `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
 | `chat-files/` | vídeos e arquivos da call (20 MB por envio, até 1 GB; **apagados a cada reinício**) |
 
@@ -379,7 +386,7 @@ troca a pasta e sobe de novo).
 
 - o chat da call (últimas 50 mensagens por canal);
 - quem está mutado/ensurdecido pelo admin;
-- foto, banner e som de entrada de cada pessoa (cada app manda de novo quando conecta);
+- foto, banner e som de entrada de visitantes (cada app manda de novo quando conecta; perfis de contas também têm cópia em disco);
 - atividade de jogo (`activity: { id, name, startedAt }` ou `null`), reenviada pelo app ao reconectar;
 - canais de voz criados por link (temporários).
 
@@ -429,8 +436,84 @@ prévia, do popup e do perfil grande usam proporção 3:1 para manter o mesmo en
 Identidade: cada pessoa tem um `profileId` aleatório gerado no primeiro uso e guardado nas
 preferências. Dá pra levar pra outro PC com *Exportar/Importar perfil* (no modal do perfil):
 o arquivo JSON tem o perfil inteiro, inclusive o `profileId`. É ele que identifica "quem criou o canal", "de quem é a mensagem", reações,
-moderação do admin e o volume que você deu pra cada amigo. **Não existe conta nem senha
-pessoal.**
+moderação do admin e o volume que você deu pra cada amigo. Visitantes continuam usando essa
+identidade local. As contas opcionais têm identidade autenticada, descrita abaixo.
+
+### Contas opcionais e amigos
+
+- A entrada continua livre para visitantes. **Conta** e **Amigos** na barra superior abrem
+  um modal opcional, sem tela de login obrigatória. Cadastro pede usuário único nesta sala
+  (3–24 caracteres ASCII, letras/números/_, sem diferenciar maiúsculas) e senha de 8–128
+  caracteres, preservando os espaços. Não há e-mail nem recuperação de senha nesta etapa.
+- `AccountStore` usa apenas módulos nativos do Node, sem serviço externo. Requer
+  `TELINHA_DATA_DIR`; sem persistência ou com base inválida, desliga somente as contas e
+  mantém os visitantes funcionando. Nunca substitui uma base inválida por uma vazia.
+  Os arquivos ficam em `data/accounts/` e já entram no backup/restauração completos.
+- Senhas usam scrypt assíncrono com sal aleatório, N=131072, r=8, p=1 e até dois cálculos
+  simultâneos, conforme os parâmetros da [OWASP](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt)
+  e a [API nativa do Node](https://nodejs.org/api/crypto.html#cryptoscryptpassword-salt-keylen-options-callback).
+  O event loop de voz não faz esse cálculo. Há limites de 15 tentativas/min por endereço,
+  10/min por usuário e 30 ações de amigos/min por conta; reconectar não zera os limites.
+  Perfis de contas têm limite de 10 atualizações a cada 10 s. Logout continua disponível
+  mesmo depois de atingir o limite de ações.
+  Para o limite por IP, `X-Forwarded-For` só é aceito de conexões de loopback (Caddy local);
+  usa o último endereço válido da cadeia. Clientes remotos não podem escolher esse IP.
+- Sessões usam 32 bytes aleatórios; só SHA-256 do token fica no servidor, com validade
+  fixa de 30 dias e até oito sessões por conta. Logout revoga a sessão e encerra conexões
+  que compartilham aquele token. Outras sessões independentes continuam válidas.
+  O servidor também encerra sessões expiradas online em até 30 s. Tokens não vão em
+  `publicUser`, listas de canais, exportação de perfil ou eventos de amigos.
+- O cliente envia `auth.accountToken` no handshake, após passar pela senha da sala.
+  O servidor restaura a identidade e envia `account-state` antes do perfil do visitante.
+  `finishConnectionProfile` espera esse estado para publicar perfil/atividade e retomar
+  a call; `room-info.accounts` permite o fallback em servidores antigos. Sessão inválida
+  volta ao visitante. Conta nunca substitui senha da sala, senha do canal ou senha de admin.
+- O perfil da conta usa `profileId = conta-<UUID>` gerado no servidor. Esse prefixo é
+  reservado: visitantes não podem assumi-lo por `update-profile`, `join-channel` ou
+  `create-channel`/`create-text-channel`. O servidor força a identidade autenticada ao
+  aplicar o perfil. Canais, mensagens e sons anteriores continuam com a identidade de
+  visitante; logout permite voltar a ela. Cadastro copia apenas a aparência atual.
+- `prefs.profile` continua sendo o perfil do visitante. Alterações de uma conta são
+  persistidas no servidor e propagadas às outras sessões. Importar perfil enquanto logado
+  troca só a aparência; exportar/importar nunca autentica uma conta. `memberProfileId`
+  em `roomAccess` mantém a chave de membro independente das trocas de identidade.
+- Sessões locais são separadas por servidor em `accountSessions`. No Electron, o main
+  serializa apenas `accountSessionsEncrypted` usando `safeStorage`; com backend inseguro
+  (`basic_text`) ou indisponível, mantém os tokens só na memória até fechar o app.
+  No navegador, as sessões ficam nas preferências locais da origem da sala.
+- Amigos são adicionados pelo @usuário. Pedidos podem ser aceitos/recusados somente pelo
+  destinatário e cancelados pelo remetente; amizade pode ser removida por qualquer lado.
+  Cada par tem uma única relação, com limite de 500 amigos/pedidos por conta. A escrita
+  atômica é serializada para evitar cadastro duplicado e pedidos concorrentes.
+- `friends-state` é privado, enviado apenas às conexões da própria conta. Online significa
+  ter pelo menos uma sessão autenticada conectada à sala, mesmo fora da call. A lista
+  inclui nomes e @usuários, sem presença detalhada, jogos, mensagens privadas ou convites.
+  O modal usa navegação por teclado, prende o foco e devolve o foco ao fechar.
+- Testes: `m3-accounts` cobre validação, concorrência, expiração, escrita falhando, base
+  inválida, limites e cofre local; `m4-accounts` cobre visitantes, cadastro, proteção de
+  identidade, pedidos privados, duas sessões, sincronização de perfil, logout e reinício.
+  A interface também foi conferida em dois clientes Electron nos três temas.
+
+### Senha dos canais de voz
+
+- `create-channel` aceita `password` opcional, de 4 a 100 caracteres (sem remover espaços).
+  Cada canal guarda somente `{ salt, hash }` com scrypt em `channels.json`; os canais antigos
+  continuam abertos. Hash corrompido mantém o canal bloqueado. As listas públicas e
+  `channel-created` mostram apenas `hasPassword`, nunca senha, sal ou hash.
+- `join-channel` recebe `password` e valida no servidor antes de alterar perfil, sair da call
+  atual ou enviar estado/histórico. Criador, admin, senha da sala e chave de membro não dão
+  acesso especial. Entrar novamente após sair exige a senha; atualizar os flags de quem já
+  está no canal continua funcionando sem redigitar. Há limite de 10 operações com senha por
+  conexão a cada 10 s, incluindo criação e tentativas de entrada.
+- O callback devolve `{ success: false, code: 'channel-password', channelId, reason, error }`,
+  com `reason` igual a `required`, `wrong` ou `rate-limited`. Sem callback, o servidor envia
+  `channel-join-error`. Apps antigos não conseguem entrar nesses canais, mesmo sendo admin.
+- O cliente só troca interface e mídia ao receber `channel-state`. Senha errada ou cancelar
+  deixa a call atual intacta. O cadeado aparece na lista e nos cartões do início. A senha fica
+  apenas na memória da call atual para reconexão; sair, recarregar ou reabrir pede de novo.
+  Clicar em AO VIVO em outro canal também espera a entrada ser aceita antes de abrir a tela.
+- `admin-move-user` rejeita destinos com senha; a pessoa deve entrar por conta própria.
+  Admin continua podendo apagar canais. A funcionalidade exige release do app e deploy do servidor.
 
 ### Senha da sala e chave de membro
 
@@ -455,13 +538,13 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 
 | Evento | Pra quê |
 |---|---|
-| `join-channel` `{ channelId, profile, isMicOn, ... }` | entrar num canal de voz (o perfil vai junto) |
+| `join-channel` `{ channelId, password?, profile, isMicOn, ... }` | entrar num canal de voz; senha obrigatória nos canais protegidos, inclusive para admin |
 | `leave-channel` | sair da call |
 | `update-profile` | mudou o perfil |
 | `update-activity` `{ id, name, startedAt }` ou `null` | mudou/encerrou o jogo; valida nome (até 80 caracteres), identificador e início (até 30 dias atrás; tolera 1 min de relógio adiantado). Só os três campos públicos são aceitos; até 10 mudanças em 10 s, limpeza sempre permitida |
 | `connection-ping` (só callback) | responde `{ success: true }` para medir a ida e volta até o servidor |
 | `user-state-changed` | mic, ensurdecer, transmitindo, câmera, telas extras, falando, o que está assistindo (`watching`) |
-| `create-channel` / `delete-channel` | canais de voz |
+| `create-channel` / `delete-channel` | canais de voz; criar aceita `password` opcional (4 a 100 caracteres) |
 | `create-text-channel` / `delete-text-channel` / `text-history` / `text-message` / `text-image` | canais de texto |
 | `text-file` / `chat-file` | enviar vídeo/arquivo de até 20 MB para texto/call |
 | `chat-message` / `chat-image` | chat da call (aceitam `replyTo`) |
@@ -469,6 +552,11 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `message-pin` / `text-pins` | fixar/desfixar e listar as fixadas (só canal de texto) |
 | `typing` `{ scope, channelId? }` | "está digitando" (o app manda a cada ~3 s enquanto digita) |
 | `admin-set-room-password` / `admin-reset-members` | senha da sala e chaves de membro |
+| `account-register` / `account-login` | `{ username, password, profile? }`; cadastro opcional/login, devolvem conta, perfil, token e validade somente ao solicitante |
+| `account-logout` | `{ profile }` do visitante; revoga a sessão e restaura o visitante |
+| `friends-list` | lista privada de amigos e pedidos da própria conta |
+| `friend-request` | `{ username }`; aceita @usuário e envia pedido |
+| `friend-accept` / `friend-reject` / `friend-cancel` / `friend-remove` | `{ userId }` da outra conta; servidor valida o vínculo e o lado da relação |
 | `soundboard-add` / `soundboard-delete` / `soundboard-play` | soundboard |
 | `reaction` | emoji flutuando na call |
 | `sfu-token` | senha temporária pra entrar numa sala do SFU |
@@ -482,6 +570,11 @@ app antigo), `channel-state`, `user-joined`, `user-left`, `user-state-changed` (
 `text-message-deleted`, `text-channel-deleted`, `soundboard-list`, `soundboard-played`,
 `typing`, `member-key`, `room-info`, `room-password-changed`,
 `server-moderation`, `moved-by-admin`, `kicked`, `reaction`.
+
+Contas: `account-state` (`supported`, `account`, `profile`, `expiresAt`, `sessionExpired`),
+`account-profile` (perfil sincronizado entre sessões), `account-session-ended`, `account-error`
+e `friends-state` (`friends`, `incoming`, `outgoing`). `publicUser.account` inclui somente
+`{ username }` de contas autenticadas. Visitantes recebem `account: null`.
 
 `room-info` inclui `connectionPing: true` nos servidores com suporte ao ping. Durante
 a call, o cliente mede uma vez e espera 5 s após cada resposta antes de medir de novo.
@@ -515,6 +608,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Fixar mensagem | `pinMessage`, `renderPins`, `setupPins`; servidor: `message-pin`, `text-pins` |
 | "Está digitando" | `setupTyping`, `renderTyping`; servidor: `typing` |
 | Senha da sala | cliente: `roomAccess`, `openRoomPasswordModal`, `setupRoomPasswordAdmin`; servidor: `io.use`, `isMemberKey`, `setRoomPassword` |
+| Conta opcional e amigos | cliente: `public/accounts.js`, `finishConnectionProfile`; servidor: `account-store.js`, eventos `account-*`/`friend-*`; cofre: `electron/account-sessions.cjs` |
 | Exportar/importar perfil | `setupProfileTransfer` |
 | Soundboard | `setupSoundboard`, `renderSoundboard`, `playSoundboard`; servidor: bloco `SOUNDBOARD` |
 | Vídeos e arquivos no chat | `sendChatImage`, `chatAttachmentHtml`; servidor: `attachmentStorage`, `prepareAttachment`, `text-file`/`chat-file` |
@@ -650,8 +744,8 @@ Mudar qualquer um destes quebra a atualização automática ou faz a galera perd
 
 1. Ler a seção certa do `app.js`/`server.js` (tabela da §11) e seguir o estilo do redor.
 2. Mexeu no servidor: validar entrada, pensar em app antigo e acrescentar caso no `m4`.
-3. Rodar `npm test`, `node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js`
-   e `node tests/m4-channels-admin.test.js`.
+3. Rodar `npm test`, `node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js`,
+   `node tests/m4-channels-admin.test.js` e `node --test tests/m4-accounts.test.js`.
 4. Conferir na tela (`npm run app`, de preferência com dois apps num servidor local).
 5. Atualizar o README (tabela "Como usar") se mudou algo que o usuário vê, e este arquivo se
    mudou arquitetura, deploy, dados ou uma armadilha nova.
