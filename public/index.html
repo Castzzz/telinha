@@ -435,15 +435,14 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.6.1</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.6.2</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
-          <li><strong>Microfones mais altos:</strong> corrigida uma perda de volume no envio da voz com o filtro de ruído com IA.</li>
-          <li><strong>Equilíbrio automático da voz:</strong> ajuda microfones baixos e protege contra picos. Pode ser desligado em ⚙️ → Microfone, sem mexer no volume do sistema.</li>
-          <li><strong>Comece em 100%:</strong> experimente seu microfone e o volume dos amigos em 100%. O controle manual continua disponível e o teste mostra o nível enviado.</li>
+          <li><strong>Reversão da atualização dos microfones:</strong> retiradas as mudanças da 3.6.1 após relatos de falhas visuais e no cancelamento de ruído.</li>
+          <li><strong>Áudio como na 3.6.0:</strong> o processamento do microfone e os controles voltaram ao comportamento anterior, sem o novo equilíbrio automático de volume.</li>
         </ul>
         <div id="whats-new-3-6-0" class="whats-new-older hidden">
           <h4>E o que chegou na 3.6.0</h4>
@@ -776,16 +775,12 @@
 
             <!-- Ganho do microfone -->
             <div class="form-group">
-              <label class="hotkey-global"><input type="checkbox" id="check-mic-auto-volume" checked /> Equilibrar automaticamente o volume da voz</label>
-              <p class="form-help">Ajuda microfones baixos dentro do Teletela, sem mexer no volume do sistema. A proteção contra picos evita estouros.</p>
-            </div>
-            <div class="form-group">
               <label for="input-mic-gain">Volume do seu microfone</label>
               <div class="master-volume-row">
                 <input type="range" id="input-mic-gain" min="0" max="300" step="5" value="100" />
                 <span id="mic-gain-text" class="master-volume-text">100%</span>
               </div>
-              <p class="form-help">Comece em 100% com o ajuste automático ligado. Use esta barra para ajustar o volume enviado aos amigos.</p>
+              <p class="form-help">Se os amigos te ouvem baixo (ou o Windows fica abaixando o seu mic), aumente aqui. Veja o efeito no teste de voz lá embaixo.</p>
             </div>
 
             <!-- Cancelamento de ruído do microfone -->
@@ -794,7 +789,7 @@
               <select id="select-noise-suppression" class="form-select">
                 <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
                 <option value="basico">Básico (filtro do navegador)</option>
-                <option value="off">Desligado (sem filtro de ruído)</option>
+                <option value="off">Desligado (som cru do microfone)</option>
               </select>
               <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
             </div>
@@ -806,7 +801,6 @@
                 <div id="vad-meter-bar" class="vad-meter-bar"></div>
               </div>
               <p class="form-help">O anel verde no seu avatar acende automaticamente quando você fala.</p>
-              <p class="form-help" id="mic-level-status" role="status" aria-live="polite">Ative o microfone e fale para conferir o volume enviado.</p>
             </div>
       
           </section>

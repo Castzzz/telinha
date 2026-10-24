@@ -95,9 +95,6 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   index.html               Toda a estrutura da tela, modais e o popup de novidades
   app.js                   Toda a lógica do cliente (~6400 linhas, dividido em seções numeradas)
   audio-manager.js         Mixer de volume, ensurdecer, captura de áudio, VAD
-  microphone.js            Grafo mono da voz, RNNoise, ganho e ciclo de vida
-  microphone-level.js      Equilíbrio do volume e limitador, compartilhado com os testes
-  microphone-worklet.js    Processamento da voz fora da thread da interface
   style.css                Estilos base + temas (escuro / preto / claro)
   redesign.css             O visual 3.0 (vale com <html data-look="novo">, fixo no index.html)
   icon.png                 Ícone (favicon, logo da barra de cima, janela)
@@ -533,7 +530,6 @@ de ruído, e 11 inicialização (`initApp`).
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
-| Volume baixo do microfone | `microphone.js`, `microphone-level.js`, `microphone-worklet.js`, `setupMicGain`, `renderMicrophoneLevel`; diagnóstico em `DIAGNOSTICO-MICROFONES.md` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
@@ -562,6 +558,13 @@ de ruído, e 11 inicialização (`initApp`).
   cliente só escuta um. Evento novo não pode quebrar quem ainda não atualizou.
 
 ## 13. Armadilhas conhecidas
+
+- **Reversão dos microfones na 3.6.2:** a 3.6.1 foi revertida após relatos de flicker
+  e falha na redução de ruído. O grafo de áudio e os controles voltaram aos da 3.6.0;
+  o nivelador, o worklet novo e a atualização periódica do nível na interface foram retirados.
+  Os testes locais anteriores não reproduziram os problemas relatados; a causa não foi
+  isolada. Não reaplicar essa mudança sem investigar nos dispositivos afetados. O código
+  e o diagnóstico da tentativa continuam no histórico do commit `e5ac540`.
 
 Coisas que já deram problema e o motivo:
 

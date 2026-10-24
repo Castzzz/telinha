@@ -145,7 +145,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–300%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
-| **Volume do seu microfone** | ⚙️ → **Microfone** → **Equilibrar automaticamente o volume da voz** ajuda entradas baixas, com proteção contra picos e sem alterar o volume do sistema. Comece com seu microfone e o volume dos amigos em 100%. O ajuste manual de 0–300% continua valendo na hora; o teste informa o nível enviado |
+| **Volume do seu microfone** | ⚙️ → *Volume do seu microfone* (0–300%): sobe se os amigos te ouvem baixo, vale na hora |
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |
 | **Parou de ouvir alguém** | Clique na pessoa → *🔄 Reconectar a voz* (a conexão também se refaz sozinha se cair) |
@@ -164,7 +164,7 @@ O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
 Em ⚙️ → *Cancelamento de ruído do microfone*:
 - **Forte, com IA** (padrão): tira teclado, ventilador, barulho da rua;
 - **Básico**: o filtro do navegador;
-- **Desligado**: sem filtro de ruído. O equilíbrio de volume é uma opção separada.
+- **Desligado**: som cru do microfone.
 
 Só afeta a sua voz, nunca o som da transmissão.
 

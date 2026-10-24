@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "3.6.1",
+  "version": "3.6.2",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
