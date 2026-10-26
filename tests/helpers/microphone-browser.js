@@ -1,5 +1,6 @@
 import { createMicrophonePipeline } from '/microphone.js';
 import { enhanceOpusVoiceSdp, VolumeMixerManager } from '/audio-manager.js';
+import { runNoiseComparison } from '/__noise-test.js';
 
 const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const check = (ok, message) => { if (!ok) throw new Error(message); };
@@ -24,7 +25,7 @@ async function measure(ctx, stream, duration = 350) {
   return { db: db(Math.sqrt(energy / count)), peak };
 }
 
-async function fixture({ noise = false, speech = false, useRnnoise = false, boost = true, level = -38, gain = 1 } = {}) {
+async function fixture({ noise = false, speech = false, useRnnoise = false, noiseFilter = useRnnoise ? 'rnnoise' : 'off', boost = true, level = -38, gain = 1 } = {}) {
   const ctx = new AudioContext({ sampleRate: 48000 });
   let source;
   if (speech) {
@@ -69,7 +70,7 @@ async function fixture({ noise = false, speech = false, useRnnoise = false, boos
   source.connect(volume).connect(dest); source.start();
   await ctx.resume();
   let stops = 0;
-  const pipeline = await createMicrophonePipeline(dest.stream, { useRnnoise, boost, gain, onStop: () => stops++ });
+  const pipeline = await createMicrophonePipeline(dest.stream, { noiseFilter, boost, gain, onStop: () => stops++ });
   await pause(1400);
   return { ctx, pipeline, volume, raw: dest.stream, get stops() { return stops; },
     async close() { pipeline.stop(); source.stop(); await ctx.close(); } };
@@ -202,6 +203,30 @@ export async function run() {
     console.log(JSON.stringify({ noiseRaw: results.noiseRaw, noiseFiltered: results.noiseFiltered }));
     check(results.noiseRaw.db - results.noiseFiltered.db > 15, 'RNNoise deve remover o ruído grave mesmo com reforço ligado');
   } finally { await noisy.close(); }
-  console.log('Microfone: mono, reforço, ganho manual, picos, Opus, mute, RNNoise e liberação passaram.');
+  const strong = await fixture({ speech: true, noiseFilter: 'ia', boost: true, level: -38 });
+  try {
+    check(strong.pipeline.noiseFilter === 'ia', 'A IA forte precisa carregar, sem cair silenciosamente na IA leve');
+    results.strongAI = await measure(strong.ctx, strong.pipeline.stream, 800);
+    check(results.strongAI.db > -33 && results.strongAI.db < -20, 'A IA forte precisa preservar e reforçar a voz baixa');
+    const peer = await peerStream(strong.pipeline.stream);
+    try {
+      await pause(500);
+      results.strongAIReceived = await measure(strong.ctx, peer.stream, 800);
+      check(Math.abs(results.strongAIReceived.db - results.strongAI.db) < 3, 'A voz da IA forte precisa chegar ao receptor sem perder volume');
+    } finally { peer.close(); }
+    const originalFetch = window.fetch;
+    let fallback, fallbacks = 0;
+    try {
+      window.fetch = (url, init) => String(url).endsWith('/gtcrn.wasm')
+        ? Promise.resolve(new Response(new Uint8Array([0, 1, 2, 3]))) : originalFetch(url, init);
+      const { createMicrophonePipeline: createWithFailedModel } = await import('/microphone.js?modelo-invalido');
+      fallback = await createWithFailedModel(strong.raw.clone(), { noiseFilter: 'ia', onFallback: () => fallbacks++ });
+      check(fallback.noiseFilter === 'rnnoise' && fallbacks === 1, 'Falhar ao iniciar o modelo forte precisa avisar e carregar a IA leve');
+      await pause(700);
+      check((await measure(strong.ctx, fallback.stream, 800)).db > -45, 'O fallback não pode deixar uma faixa viva enviando silêncio');
+    } finally { window.fetch = originalFetch; fallback?.stop(); }
+  } finally { await strong.close(); }
+  results.noiseComparison = await runNoiseComparison();
+  console.log('Microfone: mono, reforço, ganho, picos, Opus, mute, IA forte/leve, teclas durante a fala e liberação passaram.');
   return results;
 }

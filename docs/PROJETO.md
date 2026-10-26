@@ -98,6 +98,9 @@ Pontos importantes:
   compressão nativa para reforçar vozes baixas em todos os filtros, seguida do ganho
   manual e proteção de picos. Não usa o nivelador/worklet da 3.6.1 nem altera o AGC do SO.
   `prefs.micVoiceBoost` controla o reforço; `prefs.micOn` continua lembrando o mute.
+  A branch atual `melhoria/perfis-cargos-e-canais` troca a IA forte para GTCRN, mantém
+  RNNoise como IA leve e aguarda a confirmação de inicialização do worklet. Detalhes e
+  comparação durante a fala no diagnóstico abaixo; básico/desligado mantêm o mesmo caminho.
   Medições e limites em [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
 - **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais e Você.
   A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
@@ -140,7 +143,8 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   sounds/audio-*.ogg       Avisos locais de desativar/restaurar o áudio (fora do git)
   sounds/controle-alternativo-*.ogg  Segunda dupla de avisos, compartilhada entre mic/áudio
   vendor/emoji-picker/     Seletor de emojis (emoji-picker-element, copiado; ver README.txt dele)
-  vendor/noise-suppressor/ RNNoise (cancelamento de ruído com IA)
+  noise-processor.js       Worklet que confirma inicialização dos modelos de IA
+  vendor/noise-suppressor/ GTCRN (forte) e RNNoise (leve), WASM local e licenças
 
 electron/
   main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
@@ -564,7 +568,8 @@ entre quem já tem acesso; não restringe o microfone. Sem restrição, todos co
 enviar. O Geral permanece público e salva nome, descrição, senha e escrita em
 `defaultSettings.geral`. Regras inválidas carregadas do disco falham fechadas.
 
-O botão de configurações em cada canal usa `get-channel-settings` / `channel-settings`.
+O botão de configurações fica no fim da linha, depois da lixeira, e aparece no hover,
+foco pelo teclado ou canal ativo. O botão de configurações em cada canal usa `get-channel-settings` / `channel-settings`.
 `manageChannels` exige que o ator veja o canal. A alteração valida todos os campos antes
 de salvar; uma falha de gravação restaura as configurações anteriores. Senhas de voz são
 scrypt com sal, não são retornadas pelo editor e continuam obrigatórias para todos.
@@ -633,6 +638,10 @@ a call, o cliente mede uma vez e espera 5 s após cada resposta antes de medir d
 O limite de espera é 4 s: sem resposta, o painel fica vermelho; ao desconectar, mostra
 “Reconectando…”. Verde para menos de 150 ms, amarelo de 150 a 299 ms e vermelho a partir
 de 300 ms. Sair da call cancela as medições e respostas antigas são ignoradas.
+O `title` nativo foi substituído por `#connection-tooltip`, um cartão com ping/qualidade e
+cores dos temas, fora da barra lateral para evitar corte por overflow. Abre por hover ou
+foco, permite passar o mouse sobre o cartão e fecha com Escape, blur da janela ou saída
+da call. O cálculo de ping e o protocolo não mudaram; o visual não exige deploy do Node.
 Sem a capacidade anunciada (servidor antigo), o indicador fica neutro e informa que o
 ping está indisponível. A medida é da sinalização Socket.IO, não do trajeto de mídia
 WebRTC/SFU nem da perda de pacotes de áudio.
@@ -669,14 +678,14 @@ de ruído, e 11 inicialização (`initApp`).
 | Perfil (banner, moldura, gradiente, perfil grande) | `renderProfileDraft`, `frameClass`, `nameCss`, `renderBanner`, `openProfileCard`; servidor: `applyProfile` |
 | Editor do próprio perfil | `openProfileSettings`, `setupProfileSettings`, `resetProfileDraft`; `#form-profile` na aba `data-settings-section="perfil"` |
 | Enquadramento de foto/banner | `editProfileImage`, `setupImageCrop`, `prepareProfileImage`, `renderBanner`; geometria/validação: `image-crop.js` |
-| Ping e cores da conexão | `syncConnectionMonitor`, `showConnectionQuality`; servidor: `connection-ping` e capacidade `room-info.connectionPing` |
+| Ping e cores da conexão | `syncConnectionMonitor`, `showConnectionQuality`, `setupConnectionTooltip`; servidor: `connection-ping` e capacidade `room-info.connectionPing` |
 | Jogo e tempo de atividade | `setupGameActivity`, `pollGameActivity`, `renderUserActivity`; relógio: `public/game-activity.js`; detecção: `electron/game-activity.cjs`, IPC `get-game-activity`; servidor: `update-activity` |
 | Admin | `setupAdminSettings`, popup da pessoa (`openUserPopover`); servidor: `moderate`, `applyServerModeration` |
 | Transmissão de tela/câmera, várias telas | `startExtraScreen`, `streamKey`, `updateStageLayout`, `layoutMosaic` (mosaico redimensionável) |
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
-| Volume do microfone | `microphone.js`: mono, reforço nativo e ganho; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
+| Volume e IA do microfone | `microphone.js`, `noise-processor.js`: mono, reforço nativo e ganho; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |

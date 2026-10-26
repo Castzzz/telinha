@@ -375,13 +375,49 @@ let connectionProbeRun = 0;
 let connectionProbeActive = false;
 let connectionPingSupported = false;
 
-function showConnectionQuality(quality, text, detail) {
+function showConnectionQuality(quality, text, detail, ping = null) {
   const status = $('#voice-panel-status');
   if (!status) return;
   status.dataset.quality = quality;
-  status.title = detail;
   status.setAttribute('aria-label', `${text}. ${detail}`);
   $('#voice-panel-status-text').textContent = text;
+  const tooltip = $('#connection-tooltip');
+  tooltip.dataset.quality = quality;
+  $('#connection-tooltip-ping').textContent = ping === null ? '—' : ping;
+  $('#connection-tooltip-unit').classList.toggle('hidden', ping === null);
+  $('#connection-tooltip-quality').textContent = ping === null ? text : { good: 'Boa', fair: 'Regular', bad: 'Alta latência' }[quality];
+  $('#connection-tooltip-detail').textContent = ping === null ? detail : 'Tempo de ida e volta até o servidor.';
+  if (!appState.currentChannelId) tooltip.classList.add('hidden');
+}
+
+function setupConnectionTooltip() {
+  const status = $('#voice-panel-status'), tooltip = $('#connection-tooltip');
+  let closeTimer;
+  const close = () => { clearTimeout(closeTimer); tooltip.classList.add('hidden'); };
+  const open = () => {
+    clearTimeout(closeTimer);
+    const anchor = status.getBoundingClientRect();
+    if (!appState.currentChannelId || !anchor.width || !anchor.height) return;
+    tooltip.classList.remove('hidden');
+    const box = tooltip.getBoundingClientRect();
+    tooltip.style.left = `${Math.max(12, Math.min(anchor.left, innerWidth - box.width - 12))}px`;
+    tooltip.style.top = `${Math.max(12, anchor.top - box.height - 10)}px`;
+  };
+  const scheduleClose = () => {
+    closeTimer = setTimeout(() => {
+      if (document.activeElement !== status && !status.matches(':hover') && !tooltip.matches(':hover')) close();
+    }, 100);
+  };
+  status.addEventListener('mouseenter', open);
+  status.addEventListener('focus', open);
+  status.addEventListener('mouseleave', scheduleClose);
+  status.addEventListener('blur', scheduleClose);
+  tooltip.addEventListener('mouseenter', () => clearTimeout(closeTimer));
+  tooltip.addEventListener('mouseleave', scheduleClose);
+  document.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+  document.addEventListener('pointerdown', event => { if (!status.contains(event.target) && !tooltip.contains(event.target)) close(); });
+  window.addEventListener('resize', close);
+  window.addEventListener('blur', close);
 }
 
 function syncConnectionMonitor() {
@@ -416,7 +452,7 @@ function syncConnectionMonitor() {
         const ping = Math.round(performance.now() - started);
         const quality = ping < 150 ? 'good' : ping < 300 ? 'fair' : 'bad';
         const description = quality === 'good' ? 'Boa' : quality === 'fair' ? 'Regular' : 'Ruim';
-        showConnectionQuality(quality, 'Voz conectada', `Ping até o servidor: ${ping} ms · Conexão ${description.toLowerCase()}.`);
+        showConnectionQuality(quality, 'Voz conectada', `Ping até o servidor: ${ping} ms · Conexão ${description.toLowerCase()}.`, ping);
       }
       connectionProbeTimer = setTimeout(measure, 5000);
     });
@@ -1323,8 +1359,8 @@ function renderChannelsTree() {
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
         : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
-      ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
       ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+      ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
     `;
 
     row.querySelector('.channel-settings-btn')?.addEventListener('click', e => { e.stopPropagation(); permissionUI.openChannelSettings('voice', chId); });
@@ -2870,8 +2906,8 @@ function renderTextChannels() {
         <span class="channel-speaker-icon channel-hash">#</span>
         <span class="channel-name">${escapeHtml(ch.name)}</span>
         ${appState.textMentions.has(ch.id) && !active ? '<span class="channel-mention-badge" title="Te marcaram aqui">@</span>' : ''}
-        ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
       ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+        ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
       </div>
     `;
     const row = li.querySelector('.channel-row');
@@ -6166,11 +6202,11 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
 
 // -----------------------------------------------------------------------------
 // CANCELAMENTO DE RUÍDO DO MICROFONE
-// 'ia': RNNoise (rede neural, tira teclado/ventilador/barulho de fundo)
+// 'ia': GTCRN (separa voz e ruído, inclusive durante a fala); 'ia-leve': RNNoise
 // 'basico': o filtro do próprio Chromium · 'off': microfone cru
 // -----------------------------------------------------------------------------
 function noiseMode() {
-  return ['ia', 'basico', 'off'].includes(prefs.noiseSuppression) ? prefs.noiseSuppression : 'ia';
+  return ['ia', 'ia-leve', 'basico', 'off'].includes(prefs.noiseSuppression) ? prefs.noiseSuppression : 'ia';
 }
 
 // Ganho do microfone (Configurações): 0–300%, aplicado pelo próprio Telinha. Serve pra quem
@@ -6181,9 +6217,10 @@ function micGainValue() {
 }
 
 // A mesma faixa processada alimenta o VAD, o P2P e o SFU.
-async function processMicrophone(raw, useRnnoise) {
+async function processMicrophone(raw, noiseFilter) {
   const pipeline = await createMicrophonePipeline(raw, {
-    useRnnoise, gain: micGainValue(), boost: prefs.micVoiceBoost !== false,
+    noiseFilter, gain: micGainValue(), boost: prefs.micVoiceBoost !== false,
+    onFallback: () => showToast('A IA forte não carregou. Usando a IA leve nesta captura.', 'error'),
     onStop: () => { if (appState.micProcessor === pipeline) appState.micProcessor = null; }
   });
   appState.micProcessor = pipeline;
@@ -6196,19 +6233,19 @@ async function openMicrophone(deviceId) {
   const raw = await manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, {
     noiseSuppression: mode === 'basico'
   });
-  if (mode === 'ia') {
+  if (mode === 'ia' || mode === 'ia-leve') {
     try {
-      return await processMicrophone(raw, true);
+      return await processMicrophone(raw, mode === 'ia' ? 'ia' : 'rnnoise');
     } catch (err) {
-      console.warn('[Mic] RNNoise indisponível, usando o filtro básico:', err);
+      console.warn('[Mic] IA indisponível, usando o filtro básico:', err);
       showToast('⚠️ Cancelamento de ruído com IA indisponível; usando o básico.', 'error');
       raw.getTracks().forEach((t) => t.stop());
       const basic = await manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, { noiseSuppression: true });
-      return processMicrophone(basic, false).catch(() => basic);
+      return processMicrophone(basic, 'off').catch(() => basic);
     }
   }
   // Sem IA: só o ganho (se o Web Audio falhar, vai o microfone cru)
-  return processMicrophone(raw, false).catch((err) => {
+  return processMicrophone(raw, 'off').catch((err) => {
     console.warn('[Mic] Ganho indisponível, usando o microfone direto:', err);
     return raw;
   });
@@ -7366,6 +7403,7 @@ function initApp() {
   setupChatMessageActions();
   setupRoomPassword();
   setupTyping();
+  setupConnectionTooltip();
   setupPins();
   setupProfileTransfer();
   setupMentionAutocomplete();

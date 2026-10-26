@@ -105,6 +105,19 @@ aplicar a visibilidade dos canais. O PiP pode ser trabalhado separadamente no An
   Falta ouvir com os dispositivos reais e decidir a próxima publicação. A sala oficial
   e a versão 3.7.0 não foram modificadas por esta retomada.
 
+## Ajustes pedidos durante a revisão
+
+- [x] Hover do ping simples no estilo do app: cartão próprio, valor em destaque, qualidade
+  por cor e foco pelo teclado. Sem mudar a medição ou exigir deploy para o visual.
+- [x] Configurações de canal na ponta direita da linha, aparecendo no hover/foco ou
+  enquanto estiver naquele canal. Ajustado em voz e texto.
+- [x] Investigar teclas com IA, inclusive durante a fala. IA forte passou para GTCRN,
+  IA anterior mantida como opção leve. Modelos inicializam com confirmação e fallback.
+  Comparação de voz + teclas melhorou sem baixar a voz junto; números e limites em
+  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md). Nenhuma gravação privada usada.
+- [ ] Ouvir o novo filtro com o teclado/microfone reais do dono e validar CPU/bateria no
+  Android real. Os testes locais não substituem essa escuta.
+
 ## Outras pendências da conversa
 
 Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas amanhã:

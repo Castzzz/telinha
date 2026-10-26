@@ -124,7 +124,8 @@ entrada do servidor e conteúdo. A hierarquia vai de 1 a 99: a moderação só a
 próprio cargo. Quem gerencia cargos também só altera pessoas e cargos abaixo de si, sem
 conceder poderes que não possui.
 
-Use o botão **Configurações do canal** na lista de voz ou texto para mudar nome, descrição,
+O botão **Configurações do canal** fica na ponta direita da linha e aparece ao passar o
+mouse, focar pelo teclado ou estar naquele canal. Use-o na lista de voz ou texto para mudar nome, descrição,
 visibilidade e quem pode enviar no chat. O envio pode ser liberado por pessoa ou cargo;
 na call essa regra afeta o chat, preservando o microfone. Canais invisíveis só aparecem
 para quem tem acesso. A revogação também bloqueia histórico e anexos; em voz, retira da
@@ -175,7 +176,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
 | **Mudar meu perfil** | Clique no seu nome, no canto de baixo à esquerda, ou em ⚙️ → **Perfil**. O editor tem prévia ao lado em janelas largas, foto e banner com GIF até 10 MB, cores, gradiente, moldura, bio e som de entrada (até 5 s / 1 MB). Arraste e ajuste o zoom ao escolher uma imagem; **Ajustar foto/banner** permite reenquadrar depois. Confirme em **Salvar perfil**; **Descartar alterações** volta ao último perfil salvo |
 | **Ver o perfil de alguém** | Clique na pessoa e depois na foto (ou na foto dela no chat): abre o perfil grande. Clique na foto de novo pra ver ela grande. Os GIFs animam no perfil aberto e na ampliação, mesmo com o modo leve ligado |
-| **Ver meu ping** | Em call, passe o mouse sobre **Voz conectada**, no canto inferior esquerdo do visual novo: mostra o tempo de ida e volta até o servidor. Verde abaixo de 150 ms, amarelo de 150 a 299 ms e vermelho a partir de 300 ms; sem resposta ou durante a reconexão, também fica vermelho |
+| **Ver meu ping** | Em call, passe o mouse ou foque pelo teclado em **Voz conectada**, no canto inferior esquerdo: o cartão mostra o ping em destaque e o tempo de ida e volta até o servidor. Verde abaixo de 150 ms, amarelo de 150 a 299 ms e vermelho a partir de 300 ms; sem resposta ou durante a reconexão, também fica vermelho |
 | **Escolher os áudios de entrar/sair** | ⚙️ → *Som*: sorteado, um fixo ou nenhum (só pra você). O som de entrada do perfil de cada um continua tocando pra todos |
 | **Sair da call** | Botão vermelho no painel *Voz conectada*, lá embaixo à esquerda |
 | **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
@@ -225,11 +226,14 @@ O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
 
 ### 🧠 Cancelamento de ruído
 Em ⚙️ → *Cancelamento de ruído do microfone*:
-- **Forte, com IA** (padrão): tira teclado, ventilador, barulho da rua;
+- **Forte, com IA** (padrão): na branch `melhoria/perfis-cargos-e-canais`, usa um modelo mais forte para reduzir teclas e ruído também durante a fala;
+- **IA leve**: mantém o filtro anterior com menor uso de CPU;
 - **Básico**: o filtro do navegador;
 - **Desligado**: som cru do microfone.
 
-Só afeta a sua voz, nunca o som da transmissão.
+Só afeta a sua voz, nunca o som da transmissão. Se a IA forte não carregar, o app avisa
+e tenta a IA leve; se as duas falharem, usa o básico. As mudanças ainda não foram publicadas.
+O resultado com cada teclado/microfone precisa ser conferido no aparelho real.
 
 ### ⌨️ Atalhos com o jogo aberto
 Os atalhos funcionam mesmo com o Teletela minimizado se forem `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita; a tecla continua indo pro jogo), uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.
@@ -335,7 +339,7 @@ no disco. Esse servidor local usa P2P; testar o repasse do SFU exige subir o SFU
 - `electron/main.cjs`: app desktop (hospedar, túnel, captura de tela, atualização, atalhos globais)
 - `electron/connect.html`: tela inicial
 - `native/win-audio/`: auxiliar do Windows que captura o som de um processo só
-- `public/vendor/noise-suppressor/`: RNNoise (cancelamento de ruído)
+- `public/vendor/noise-suppressor/`: GTCRN e RNNoise (cancelamento de ruído local)
 
 Pelo navegador também funciona (`npm start` + `cloudflared tunnel --url http://localhost:8080`), mas transmitir o som do PC só funciona bem no app desktop ou no Chrome/Edge.
 </details>

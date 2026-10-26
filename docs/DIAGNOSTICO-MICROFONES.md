@@ -95,3 +95,67 @@ receptor evita somar os aumentos antigos ao novo processamento.
   microfones reais, principalmente no Windows. Portátil de teste gerado com `--publish never`
   em `dist/microfone-teste/Teletela-Portatil.exe` (versão de pacote `3.7.1-mic.1`).
   A versão publicada continua 3.7.0. A correção exige um novo release para os apps instalados.
+
+
+## Teclas vazando durante a voz: retomada na branch de cargos
+
+O dono relatou teclas nas duas situações, principalmente enquanto fala. O RNNoise estava
+ativo nas preferências verificadas; o reforço também aumenta resíduos que o modelo deixa
+passar. Em uma referência de teclas impulsivas, o modelo anterior atenuou pouco parte do
+ruído. Usar apenas um gate entre as falas não atende ao caso simultâneo relatado.
+
+A IA forte agora usa **GTCRN**, já disponível na dependência 0.4.1. RNNoise permanece como
+**IA leve** (`prefs.noiseSuppression = 'ia-leve'`). `ia` mantém a preferência existente, mas
+usa o modelo forte; `basico` e `off` continuam disponíveis. Não acrescentamos gate por
+volume nem alteramos o reforço/ganho/limite de picos. O filtro continua antes desses nós,
+e o mesmo stream mono chega ao VAD, P2P e SFU.
+
+`public/noise-processor.js` usa os núcleos da biblioteca e manda `ready` ou `error` ao
+cliente. Antes, o construtor voltava enquanto o WASM ainda carregava, sem confirmação
+de que o modelo estava pronto. Agora `microphone.js` espera até 5 s. Falha na IA forte
+tenta RNNoise e avisa; falha nas duas chega ao fallback básico já existente. O teste
+injeta um WASM inválido e confere que o fallback produz áudio em vez de uma faixa viva
+silenciosa. Os arquivos dos modelos são empacotados e processam localmente.
+
+### Comparação de referência
+
+Foi usada a mesma voz e o mesmo ruído, com correção do atraso de cada modelo. Além do
+nível total, a comparação estima a projeção da voz limpa e a energia residual: baixar
+ou mutar tudo não basta para passar. Valores aproximados em Electron 42/Linux:
+
+| Referência | RNNoise | GTCRN |
+|---|---:|---:|
+| Vogal sintética + teclas de igual RMS: relação voz/resíduo | 7,2 dB | 14,9 dB |
+| Ganho da voz nessa mistura | −0,25 dB | −0,74 dB |
+| Teclas isoladas, entrada em −30 dBFS | −37,6 dBFS | −79,9 dBFS |
+
+Também foi avaliado um trecho público de voz natural da
+[demonstração do autor do RNNoise](https://jmvalin.ca/demo/rnnoise/), misturado às mesmas
+teclas sintéticas, sem adicionar a gravação ao repositório. Nessa referência, a relação
+voz/resíduo passou de aproximadamente 5,5 para 16,5 dB; a voz projetada ficou cerca de
+0,28 dB abaixo da entrada. A voz natural limpa em −45 dBFS foi preservada na avaliação.
+Os números são dessas referências, não de uma gravação do teclado/microfone do dono.
+
+A implementação usada vem de
+[@sapphi-red/web-noise-suppressor](https://github.com/sapphi-red/web-noise-suppressor),
+com [GTCRN WASM](https://github.com/sapphi-red/gtcrn-wasm) e o
+[modelo GTCRN](https://github.com/Xiaobin-Rong/gtcrn). Foram acrescentados apenas exports
+nos bundles para reutilizar os núcleos com confirmação de inicialização; algoritmos e
+pesos permanecem os da biblioteca. Instruções e licenças em `public/vendor/noise-suppressor/`.
+
+GTCRN gastou mais CPU que RNNoise na renderização local. A opção leve permite escolher
+o custo menor; ainda falta conferir uso de CPU/bateria e ouvir o resultado nos aparelhos
+reais. O atraso do modelo nessa referência foi de cerca de 32 ms, antes do restante do
+caminho Web Audio/Opus/rede; não é uma medição da latência total da chamada.
+
+### Verificação da retomada
+
+- `npm run test:microphone`: modelos reais, fala limpa/baixa, teclas isoladas e simultâneas,
+  voz reforçada passando por Opus, mute, ganhos, picos e recuperação de modelo inválido.
+- `npm run test:microphone:ui`: escolha real de IA forte/leve/básico/desligado e manutenção
+  do mute, reforço/ganho na mesma faixa e avatar estável.
+- Hover do ping: cartão nos três temas, latência real e alta, servidor sem suporte,
+  Escape e fechamento ao sair da call, verificados no Electron com servidor isolado.
+- Configurações dos canais na ponta direita, visíveis no hover/foco ou canal ativo.
+
+Nenhum release/deploy foi executado nesta retomada. A versão oficial continua 3.7.0.

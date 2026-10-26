@@ -52,13 +52,14 @@ app.whenReady().then(async () => {
     for (let i = 0; i < 8; i++) { appState.vadDetector.onSpeakingChange(i % 2 === 0); await pause(80); }
     check(document.querySelector('.lounge-user-card .user-avatar') === avatar, 'Atualizar a fala não pode recriar o avatar');
     document.querySelector('#btn-toggle-mic').click();
-    for (const mode of ['ia', 'basico', 'off']) {
+    for (const mode of ['ia', 'ia-leve', 'basico', 'off']) {
       const oldTrack = appState.localMicStream.getAudioTracks()[0];
       noise.value = mode; noise.dispatchEvent(new Event('change'));
       await until(() => appState.localMicStream.getAudioTracks()[0] !== oldTrack);
       check(oldTrack.readyState === 'ended', 'Trocar filtro deve liberar a captura anterior');
       check(!appState.localMicStream.getAudioTracks()[0].enabled && !appState.myUser.isMicOn, 'Trocar filtro precisa manter o mute');
       check(appState.micProcessor, 'O reforço deve existir com qualquer filtro');
+      check(appState.micProcessor.noiseFilter === (mode === 'ia' ? 'ia' : mode === 'ia-leve' ? 'rnnoise' : 'off'), 'O filtro escolhido precisa carregar de verdade');
     }
   })()`);
   for (const theme of ['escuro', 'preto', 'claro']) {

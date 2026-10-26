@@ -163,7 +163,7 @@
       <footer id="user-dock" class="user-dock">
         <!-- Visual novo: em call, mostra o canal e o botão de sair aqui embaixo -->
         <div class="voice-panel-info" id="voice-panel-info">
-          <span class="voice-panel-status" id="voice-panel-status" tabindex="0" title="Medindo a conexão com o servidor">
+          <span class="voice-panel-status" id="voice-panel-status" tabindex="0" aria-describedby="connection-tooltip">
             <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20v-4M9 20v-8M14 20V8M19 20V4"/></svg>
             <span id="voice-panel-status-text">Voz conectada</span>
           </span>
@@ -937,11 +937,12 @@
             <div class="form-group">
               <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
               <select id="select-noise-suppression" class="form-select">
-                <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
+                <option value="ia">Forte, com IA (voz e ruídos de fundo)</option>
+                <option value="ia-leve">IA leve (menor uso de CPU)</option>
                 <option value="basico">Básico (filtro do navegador)</option>
                 <option value="off">Desligado (sem filtro de ruído)</option>
               </select>
-              <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
+              <p class="form-help">A IA forte reduz teclas e ruídos mesmo enquanto você fala. Se pesar no aparelho, use a IA leve. Só afeta o microfone; o som da transmissão de tela não passa pelo filtro.</p>
             </div>
 
             <!-- VAD Test Meter -->
@@ -1285,6 +1286,12 @@
         <button type="button" id="btn-image-crop-save" class="btn-primary">Aplicar</button>
       </div>
     </div>
+  </div>
+
+  <div id="connection-tooltip" class="connection-tooltip hidden" role="tooltip" data-quality="measuring">
+    <div class="connection-tooltip-heading"><span>Conexão de voz</span><span class="connection-tooltip-quality" id="connection-tooltip-quality">Medindo…</span></div>
+    <div class="connection-tooltip-metric"><strong id="connection-tooltip-ping">—</strong><span id="connection-tooltip-unit" class="hidden">ms</span><span class="connection-tooltip-label">Ping</span></div>
+    <p id="connection-tooltip-detail">Medindo a conexão com o servidor…</p>
   </div>
 
   <!-- SCRIPTS -->
