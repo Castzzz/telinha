@@ -3,6 +3,46 @@
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
+## Próxima sessão: pedidos acrescentados após a 3.7.0
+
+Anotados em 26/10/2026. O dono pediu **somente registrar, sem implementar agora**, pois
+vai esperar o limite de uso resetar. Estes itens têm prioridade na próxima retomada:
+
+- [ ] **Corrigir cargos que somem após atualizar o app.** Relato do dono: a pessoa
+  atualiza e perde o cargo. Investigar antes de atribuir uma causa. A implementação já
+  tem identificação assinada por instalação (`permissionToken` nas preferências e
+  vínculos em `permissions.json` no servidor), mas a atualização deveria preservá-la.
+  Conferir instalação/atualização real, caminhos dos dados, criação/troca/importação de
+  perfil e eventual emissão de outra identificação. Não contornar criando um novo ID
+  a cada atualização e exigindo redistribuir os cargos.
+- [ ] **Identidade fixa para cada perfil, sem exigir conta se possível.** O dono quer
+  um ID que permaneça ao atualizar o app. Avaliar a ligação entre o ID do perfil local
+  e a identificação usada pelos cargos, com migração que preserve os vínculos atuais.
+  Conta não é obrigatória para uma identidade persistente no aparelho; preservar também
+  a credencial que comprova a identidade, pois um UUID público informado pelo cliente
+  sozinho não deve conceder cargos. Diferenciar atualização normal de apagar dados ou
+  mudar de aparelho. Contas/amigos continuam podendo ficar para depois.
+- [ ] **Configuração própria para cada chat/canal, como no Discord.** Incluir canais
+  privados e públicos, com entrada clara para abrir suas configurações e administrar
+  acesso/permissões por cargo ou pessoa. Na retomada, alinhar quais opções pertencem
+  ao canal de texto, canal de voz e chat da call; o pedido não se limita aos invisíveis.
+- [ ] **Dono do servidor separado dos cargos.** O proprietário da sala deve ser o dono
+  do projeto (quem fez este pedido), com identidade persistente e poderes de propriedade
+  nas configurações gerais do servidor. Substituir o modelo atual de “admin pela senha”
+  por essa distinção: poderes de moderação/administração comuns passam a ser definidos
+  pelos cargos. Planejar a migração da senha atual para a propriedade sem perder acesso
+  à sala nem permitir que alguém se declare dono pelo cliente. Definir recuperação e
+  eventual transferência de propriedade ao desenhar o fluxo.
+- [ ] **Cargos no perfil ao clicar na pessoa.** Tirar os cargos do lado do nome por
+  padrão; mostrá-los no perfil/popover aberto ao clicar na pessoa. Oferecer opção para
+  a própria pessoa exibir o cargo junto ao nome, se quiser. Definir a escolha quando há
+  vários cargos. Essa preferência muda a apresentação, preservando as permissões.
+
+Ordem sugerida: reproduzir a perda da identidade/cargos → persistência e migração →
+propriedade do servidor e poderes dos cargos → configurações por canal → exibição dos
+cargos. Validar a atualização por cima da versão instalada, além de reinício e reconexão.
+Nenhuma dessas mudanças foi implementada ao fazer esta anotação.
+
 ## Pedidos do dono
 
 - [x] **Lembrar o estado do microfone ao reabrir.** Pedido acrescentado na retomada:
@@ -14,8 +54,9 @@ Retomado com o dono; os itens concluídos ficam marcados abaixo.
   transmissão real por WebRTC e testes de seleção/troca/saída na interface.
 - [ ] **Acertar contas e amigos.** Levantar os problemas percebidos e revisar cadastro,
   login/logout, sessão após reabrir o app, perfil entre PC e celular, pedidos de amizade,
-  aceitar/recusar/remover e indicação de presença. A implementação experimental já existe
-  nesta branch; precisa ser revisada junto com a compatibilidade do servidor da sala.
+  aceitar/recusar/remover e indicação de presença. A implementação experimental está na
+  branch `teste/contas-amigos-e-canais-com-senha`; precisa ser revisada junto com a
+  compatibilidade do servidor da sala e não é requisito para os pedidos acima.
 - [x] **Cargos e permissões de administração sem conta.** Só quem usa a senha de admin
   cria/edita/atribui cargos. Permissões separadas para tirar/mover da call, mutar,
   ensurdecer e gerenciar canais. Hierarquia de 1 a 99; moderadores só agem abaixo deles.
@@ -62,6 +103,9 @@ Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas a
 
 ## Onde o trabalho ficou
 
+- Branch atual: `correcao/volume-microfone`; código do reforço no commit `059e36a`.
+  O portátil de teste está pronto, mas a correção ainda não foi publicada. Aguardar
+  a validação dos microfones reais e o pedido do dono antes de outra publicação.
 - Branch de lançamento: `release/3.7-sem-contas`, baseada na `main` 3.6.2.
 - Contas/amigos e reforço de microfone preservados em
   `teste/contas-amigos-e-canais-com-senha`, commit `08b262e`. Não entram na 3.7.0.
