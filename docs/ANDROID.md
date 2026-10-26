@@ -129,7 +129,7 @@ adb shell am start -n com.castzin.teletela.mobile/.MainActivity --es serverUrl h
 `10.0.2.2` é o PC visto pelo emulador. O app precisa estar fechado para o extra de teste
 ser aplicado na criação da atividade. A sala oficial pode pedir sua senha antes de conectar.
 
-Validação desta implementação: build/lint sem erros, suítes existentes (62 + 82 testes),
+Validação desta implementação: build/lint sem erros, suítes existentes (62 + 78 testes),
 navegação móvel/desktop, câmera frontal 720×1280 e voz entre Electron e Android. Com o
 emulador em segundo plano e tela apagada, a call permaneceu ativa e o sinal de referência
 do PC continuou presente no mixer, com pico próximo de 0,086. Não é uma medição de voz

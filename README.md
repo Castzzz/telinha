@@ -80,7 +80,9 @@ Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
 
 ## 📱 Android (versão de teste)
 
-Já dá para gerar um APK para Android 8 ou mais novo. Ele abre a sala oficial, com canais,
+Baixe o [APK Android de teste](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Android-teste.apk) para Android 8 ou mais novo.
+
+Também dá para gerar o APK no PC. Ele abre a sala oficial, com canais,
 chat, voz, câmera e reprodução das transmissões do PC. No celular, a navegação é própria:
 **Canais** e **Você**. A call abre uma tela com participantes e controles grandes;
 ao voltar, fica numa faixa compacta. O chat ocupa a tela inteira, e as opções de cada

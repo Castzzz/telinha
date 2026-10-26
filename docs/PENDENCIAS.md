@@ -28,7 +28,10 @@ Retomado com o dono; os itens concluídos ficam marcados abaixo.
 Implementação atual: PiP nativo no Android, cargos atribuídos por instalação e regras de
 visibilidade por pessoa/cargo. Testados em servidor local, interface Electron e emulador.
 Só quem usa a senha de admin define/atribui cargos; moderadores agem abaixo de sua hierarquia.
-A revisão de contas/amigos segue pendente. Não houve release desktop nem deploy da VM.
+A revisão de contas/amigos segue pendente. Servidor oficial atualizado para 3.7.0, com backup anterior em
+`~/Teletela-backups/teletela-dados-2026-10-26_11-38-47.tar.gz`. Instaladores Windows/Linux
+e APK publicados em [v3.7.0](https://github.com/Castzzz/telinha/releases/tag/v3.7.0),
+com atualização automática desktop conferida. Contas e amigos não entraram no lançamento.
 
 Sugestão de sequência original: acertar a identidade das contas, definir cargos/permissões e então
 aplicar a visibilidade dos canais. O PiP pode ser trabalhado separadamente no Android.
@@ -59,6 +62,7 @@ Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas a
   e `public/mobile.css`.
 - Experimento de reforço de voz: diagnóstico e código permanecem na branch de testes.
   A versão publicada mantém o processamento estável da 3.6.2.
-- Há alterações locais ainda sem commit; preservá-las ao retomar. Os sons privados
-  continuam fora do Git, conforme `AGENTS.md`.
-- Release desktop e deploy da VM continuam dependendo de pedido explícito do dono.
+- O código da 3.7.0 está na `main`; a branch de testes também foi enviada ao GitHub.
+  Os sons privados continuam no disco e fora do Git, conforme `AGENTS.md`.
+- Release desktop e deploy 3.7.0 foram autorizados pelo dono nesta retomada e concluídos.
+  Publicações seguintes continuam dependendo de pedido explícito.
