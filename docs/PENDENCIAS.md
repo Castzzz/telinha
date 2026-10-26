@@ -6,7 +6,7 @@ Retomado com o dono; os itens concluídos ficam marcados abaixo.
 ## Próxima sessão: pedidos acrescentados após a 3.7.0
 
 Anotados em 26/10/2026 e retomados depois do reset, com autorização do dono.
-Implementados na branch `melhoria/perfis-cargos-e-canais`, ainda sem publicação:
+Implementados na branch `melhoria/perfis-cargos-e-canais` e publicados na 3.8.0:
 
 - [x] **Corrigir cargos que somem após atualizar o app.** Relato do dono: a pessoa
   atualiza e perde o cargo. Investigar antes de atribuir uma causa. A implementação já
@@ -43,9 +43,9 @@ Resultado da retomada:
 - Preferências desktop com gravação atômica, cópia independente da identidade e migração
   da credencial 3.7 para a mesma identificação de membro. Chave Ed25519 persistente por
   perfil, provada por assinatura; ID público sozinho não recupera cargos.
-- Propriedade persistente e única. A chave atual assume inicialmente; depois os poderes
+- Propriedade persistente e única. Uma chave exclusiva de propriedade é usada; depois os poderes
   comuns são delegados pelos cargos. Recuperação explícita com a chave do servidor e
-  transferência pelo dono disponíveis. Nenhum dono foi definido na sala oficial ainda.
+  transferência pelo dono disponíveis. A sala oficial já teve o dono vinculado por sua credencial comprovada.
 - Botão de configurações em cada canal de voz/texto: nome, descrição, acesso por pessoa
   ou cargo, escrita do chat e senha da call. Texto privado protege eventos, histórico,
   fixadas e downloads de imagens/anexos. Revogação retira acesso imediatamente.
@@ -58,8 +58,7 @@ Resultado da retomada:
   e propriedade; testou nova URL e recuperação após prefs ilegível. A causa exata do relato
   original não foi reproduzida numa atualização normal. Falta conferir o instalador/atualizador
   no Windows real e o aparelho Android; nenhuma alteração nos dados reais dos amigos.
-- A correção do microfone foi preservada nesta branch. Release/deploy continuam dependendo
-  de pedido explícito; versão oficial segue 3.7.0.
+- A correção do microfone foi preservada nesta branch. Release/deploy 3.8.0 foram autorizados e concluídos ao final da retomada.
 
 ## Pedidos do dono
 
@@ -167,5 +166,10 @@ HMAC verificada do perfil do dono para vinculá-lo, preservando cargos/canais. A
 foi reproduzida contra o servidor 3.7 real e passou após a correção.
 
 Versões preparadas: desktop 3.8.0 e Android 3.8.0/versionCode 5. Backup anterior íntegro:
-`~/Teletela-backups/teletela-dados-2026-10-26_17-23-58.tar.gz`. Publicação em andamento;
-registrar a conclusão depois das verificações da sala e dos artefatos.
+`~/Teletela-backups/teletela-dados-2026-10-26_17-23-58.tar.gz`. Publicação concluída: [v3.8.0](https://github.com/Castzzz/telinha/releases/tag/v3.8.0).
+Oito arquivos verificados por tamanho/SHA256, atualização automática Windows/Linux
+conferida por SHA512 e APK com a assinatura anterior preservada. Node/SFU ativos,
+propriedade confirmada e cargos preservados. Novo backup após a migração:
+`~/Teletela-backups/teletela-dados-2026-10-26_17-37-35.tar.gz`.
+Código publicado em `main`, commit de release `364043e`. Os sons privados continuam
+fora do Git. Seguem pendentes os testes de escuta e aparelhos físicos.

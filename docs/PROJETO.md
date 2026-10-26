@@ -93,15 +93,12 @@ Pontos importantes:
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
   no volume geral. Veja `VolumeMixerManager` em `public/audio-manager.js`.
-- **Microfone:** a versão publicada 3.7.0 usa RNNoise opcional e ganho manual. Na branch
-  `correcao/volume-microfone`, `public/microphone.js` mantém todo o envio em mono e aplica
-  compressão nativa para reforçar vozes baixas em todos os filtros, seguida do ganho
-  manual e proteção de picos. Não usa o nivelador/worklet da 3.6.1 nem altera o AGC do SO.
-  `prefs.micVoiceBoost` controla o reforço; `prefs.micOn` continua lembrando o mute.
-  A branch atual `melhoria/perfis-cargos-e-canais` troca a IA forte para GTCRN, mantém
-  RNNoise como IA leve e aguarda a confirmação de inicialização do worklet. Detalhes e
-  comparação durante a fala no diagnóstico abaixo; básico/desligado mantêm o mesmo caminho.
-  Medições e limites em [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
+- **Microfone (3.8.0):** envio mono, GTCRN na IA forte e RNNoise na IA leve, com opções
+  básico/desligado. O reforço nativo fica depois do filtro, seguido de ganho manual e
+  proteção de picos. Não altera o AGC do sistema. `prefs.micVoiceBoost` controla o reforço
+  e `prefs.micOn` lembra o mute. O worklet confirma a inicialização antes do envio; falha
+  na IA forte tenta a leve e depois o básico. Comparações e limites em
+  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
 - **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais e Você.
   A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
   disponíveis ao navegar. Os botões móveis disparam os controles originais, sem duplicar
@@ -840,3 +837,20 @@ O operador pode fornecer `/etc/telinha/owner-bootstrap.json` (root, 0600) conten
 preserva os cargos e apaga o pedido. UUID público/nome não são aceitos como comprovação.
 O script não imprime a credencial; o arquivo nunca deve entrar no Git. O backup anterior
 à migração precisa incluir `data/permissions.json` e `telinha/telinha.env`.
+
+
+### Publicação 3.8.0 concluída em 26/10/2026
+
+Código de release: `364043e`, tag [v3.8.0](https://github.com/Castzzz/telinha/releases/tag/v3.8.0).
+Node/SFU/Caddy ativos na VM; perfil do proprietário comprovado por HMAC e vinculado antes
+do início do Node novo. Cargos e atribuições anteriores foram comparados ao backup e
+preservados. API `get-channel-settings` e protocolo de propriedade v2 conferidos na sala.
+
+Windows Setup/portátil, Linux AppImage/tar.gz, blockmap, `latest.yml`, `latest-linux.yml`
+e APK publicados (8 arquivos), tamanhos/SHA256 verificados contra o GitHub. SHA512 dos
+metadados Windows/Linux corresponde aos instaladores. APK 3.8.0/versionCode 5 usa a mesma
+assinatura da 3.7.0. Ainda falta escuta dos microfones/teclados e teste físico no Android.
+
+Backups íntegros antes/depois: `~/Teletela-backups/teletela-dados-2026-10-26_17-23-58.tar.gz`
+e `~/Teletela-backups/teletela-dados-2026-10-26_17-37-35.tar.gz`. O segundo inclui a
+propriedade e a chave exclusiva de recuperação; o pedido privado de migração foi removido.

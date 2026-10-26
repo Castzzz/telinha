@@ -94,7 +94,7 @@ receptor evita somar os aumentos antigos ao novo processamento.
 - A execução foi no Electron 42/Linux, sem mexer na VM. Ainda é necessário ouvir com os
   microfones reais, principalmente no Windows. Portátil de teste gerado com `--publish never`
   em `dist/microfone-teste/Teletela-Portatil.exe` (versão de pacote `3.7.1-mic.1`).
-  A versão publicada continua 3.7.0. A correção exige um novo release para os apps instalados.
+  Essa primeira comparação precedeu a publicação; a correção foi incluída na 3.8.0.
 
 
 ## Teclas vazando durante a voz: retomada na branch de cargos
@@ -158,4 +158,5 @@ caminho Web Audio/Opus/rede; não é uma medição da latência total da chamada
   Escape e fechamento ao sair da call, verificados no Electron com servidor isolado.
 - Configurações dos canais na ponta direita, visíveis no hover/foco ou canal ativo.
 
-Nenhum release/deploy foi executado nesta retomada. A versão oficial continua 3.7.0.
+Publicado na 3.8.0 em 26/10/2026, após autorização do dono para release/deploy.
+Os instaladores e o APK incluem o novo filtro; a escuta com os dispositivos reais segue pendente.
