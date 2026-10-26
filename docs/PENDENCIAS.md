@@ -36,6 +36,16 @@ com atualização automática desktop conferida. Contas e amigos não entraram n
 Sugestão de sequência original: acertar a identidade das contas, definir cargos/permissões e então
 aplicar a visibilidade dos canais. O PiP pode ser trabalhado separadamente no Android.
 
+## Retomada do volume após a 3.7.0
+
+- O dono confirmou voz baixa também com IA desligada.
+- Branch `correcao/volume-microfone`: reforço nativo em todos os filtros e mono explícito.
+- Referência sem IA: aproximadamente −38,9 dBFS na 3.7.0 e −26,1 dBFS com reforço,
+  preservados por Opus e pelo mixer em 100%. Controles e filtros passaram nos testes.
+- Portátil de teste Windows em `dist/microfone-teste/Teletela-Portatil.exe`, sem publicar.
+  Falta ouvir com os dispositivos reais e decidir a próxima publicação. A sala oficial
+  e a versão 3.7.0 não foram modificadas por esta retomada.
+
 ## Outras pendências da conversa
 
 Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas amanhã:

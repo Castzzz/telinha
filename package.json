@@ -10,6 +10,8 @@
     "dev": "node --watch server.js",
     "app": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) electron/main.cjs)'",
     "test": "node tests/runner.js",
+    "test:microphone": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-browser.cjs)'",
+    "test:microphone:ui": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-controls.cjs)'",
     "test:mobile": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/mobile-browser.cjs)'",
     "test:permissions": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/permissions-browser.cjs)'",
     "sfu": "go run ./sfu",

@@ -23,6 +23,7 @@ import {
 } from './audio-manager.js';
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
 import { activityElapsed } from './game-activity.js';
+import { createMicrophonePipeline } from './microphone.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
 
@@ -4558,6 +4559,14 @@ function setupHotkeys() {
 
 // Ganho do microfone (Configurações): muda na hora, sem reconectar ninguém
 function setupMicGain() {
+  const boost = $('#input-mic-voice-boost');
+  if (boost) {
+    boost.checked = prefs.micVoiceBoost !== false;
+    boost.addEventListener('change', () => {
+      savePrefs({ micVoiceBoost: boost.checked });
+      appState.micProcessor?.setBoost(boost.checked);
+    });
+  }
   const input = $('#input-mic-gain');
   const text = $('#mic-gain-text');
   if (!input) return;
@@ -4567,8 +4576,7 @@ function setupMicGain() {
   input.addEventListener('input', () => {
     const pct = Number(input.value);
     prefs.micGain = pct;
-    const gain = appState.micGainNode;
-    if (gain) gain.gain.setTargetAtTime(micGainValue(), gain.context.currentTime, 0.02);
+    appState.micProcessor?.setGain(micGainValue());
     show(pct);
   });
   input.addEventListener('change', () => savePrefs({ micGain: Number(input.value) }));
@@ -6112,15 +6120,10 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
 // 'ia': RNNoise (rede neural, tira teclado/ventilador/barulho de fundo)
 // 'basico': o filtro do próprio Chromium · 'off': microfone cru
 // -----------------------------------------------------------------------------
-const RNNOISE_DIR = '/vendor/noise-suppressor';
-let rnnoiseBinary = null;
-
 function noiseMode() {
   return ['ia', 'basico', 'off'].includes(prefs.noiseSuppression) ? prefs.noiseSuppression : 'ia';
 }
 
-// Passa o microfone pelo RNNoise e devolve um stream com o som limpo.
-// Parar a faixa limpa também solta o microfone de verdade e o AudioContext.
 // Ganho do microfone (Configurações): 0–300%, aplicado pelo próprio Telinha. Serve pra quem
 // tem o mic baixo no sistema (ou que o Windows fica abaixando) sem mexer no PC.
 function micGainValue() {
@@ -6128,52 +6131,14 @@ function micGainValue() {
   return Number.isFinite(pct) ? Math.max(0, Math.min(300, pct)) / 100 : 1;
 }
 
-// Passa o microfone por: [RNNoise, se ligado] → ganho → stream novo.
-// Parar a faixa nova também solta o microfone de verdade e o AudioContext.
+// A mesma faixa processada alimenta o VAD, o P2P e o SFU.
 async function processMicrophone(raw, useRnnoise) {
-  let rnnoise = null;
-  if (useRnnoise) {
-    rnnoise = await import(`${RNNOISE_DIR}/index.js`);
-    rnnoiseBinary ||= await rnnoise.loadRnnoise({
-      url: `${RNNOISE_DIR}/rnnoise.wasm`,
-      simdUrl: `${RNNOISE_DIR}/rnnoise_simd.wasm`
-    });
-  }
-  // O RNNoise só funciona em 48 kHz
-  const ctx = new AudioContext({ sampleRate: 48000, latencyHint: 'interactive' });
-  let node = null;
-  try {
-    const source = ctx.createMediaStreamSource(raw);
-    const gain = ctx.createGain();
-    gain.gain.value = micGainValue();
-    if (rnnoise) {
-      await ctx.audioWorklet.addModule(`${RNNOISE_DIR}/rnnoise/workletProcessor.js`);
-      node = new rnnoise.RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseBinary });
-      source.connect(node).connect(gain);
-    } else {
-      source.connect(gain);
-    }
-    const dest = ctx.createMediaStreamDestination();
-    gain.connect(dest);
-    await ctx.resume().catch(() => {});
-    appState.micGainNode = gain;
-
-    const track = dest.stream.getAudioTracks()[0];
-    track.contentHint = 'speech';
-    const stopTrack = track.stop.bind(track);
-    track.stop = () => {
-      stopTrack();
-      raw.getTracks().forEach((t) => t.stop());
-      node?.destroy();
-      if (appState.micGainNode === gain) appState.micGainNode = null;
-      ctx.close().catch(() => {});
-    };
-    return dest.stream;
-  } catch (err) {
-    node?.destroy();
-    ctx.close().catch(() => {});
-    throw err;
-  }
+  const pipeline = await createMicrophonePipeline(raw, {
+    useRnnoise, gain: micGainValue(), boost: prefs.micVoiceBoost !== false,
+    onStop: () => { if (appState.micProcessor === pipeline) appState.micProcessor = null; }
+  });
+  appState.micProcessor = pipeline;
+  return pipeline.stream;
 }
 
 async function openMicrophone(deviceId) {
@@ -6238,7 +6203,7 @@ async function onMicrophoneToggle(isMicOn) {
 
   if (isMicOn) {
     try {
-      if (!appState.localMicStream || appState.localMicStream.getAudioTracks().length === 0) {
+      if (!appState.localMicStream?.getAudioTracks().some(track => track.readyState === 'live')) {
         appState.localMicStream = await openMicrophone();
       }
 

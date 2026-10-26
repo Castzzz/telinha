@@ -93,9 +93,12 @@ Pontos importantes:
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
   no volume geral. Veja `VolumeMixerManager` em `public/audio-manager.js`.
-- **Microfone:** mantém o processamento da 3.6.2 (RNNoise opcional e ganho manual).
-  O experimento de reforço de voz ficou preservado na branch de testes. A preferência
-  `prefs.micOn` lembra o mute entre aberturas sem alterar esse processamento.
+- **Microfone:** a versão publicada 3.7.0 usa RNNoise opcional e ganho manual. Na branch
+  `correcao/volume-microfone`, `public/microphone.js` mantém todo o envio em mono e aplica
+  compressão nativa para reforçar vozes baixas em todos os filtros, seguida do ganho
+  manual e proteção de picos. Não usa o nivelador/worklet da 3.6.1 nem altera o AGC do SO.
+  `prefs.micVoiceBoost` controla o reforço; `prefs.micOn` continua lembrando o mute.
+  Medições e limites em [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
 - **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais e Você.
   A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
   disponíveis ao navegar. Os botões móveis disparam os controles originais, sem duplicar
@@ -126,6 +129,7 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   permissions.js           Administração de cargos e visibilidade por pessoa/cargo
   mobile-pip.js            Seleção de vídeo e apresentação compacta do PiP Android
   audio-manager.js         Mixer de volume, ensurdecer, captura de áudio, VAD
+  microphone.js            Envio mono, reforço nativo, ganho manual e proteção de picos (teste)
   mobile.css, mobile.js    Layout por toque e integração com o APK Android
   style.css                Estilos base + temas (escuro / preto / claro)
   redesign.css             O visual 3.0 (vale com <html data-look="novo">, fixo no index.html)
@@ -212,6 +216,8 @@ node tests/m4-channels-admin.test.js       # integração: sobe o server.js de v
 node --test tests/m4-permissions.test.js    # cargos, canais invisíveis, revogação e persistência
 npm run test:permissions                  # formulários reais de cargos/acesso, móvel e desktop
 npm run test:mobile                       # navegação, chat, mute e tamanhos móvel/desktop
+npm run test:microphone                   # áudio real: nível, Opus/mixer, mute e comparação com 3.7.0
+npm run test:microphone:ui                # controles reais, três temas e avatares durante a fala
 go test -race ./sfu                       # SFU: erro de espectador não interrompe os demais
 ```
 
@@ -610,7 +616,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
-| Volume do microfone | `app.js`: `setupMicGain`, `processMicrophone`, `openMicrophone`, `restartMicrophone` |
+| Volume do microfone | `microphone.js`: mono, reforço nativo e ganho; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
