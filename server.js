@@ -14,6 +14,7 @@ import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, random
 import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { AccountStore, AccountError, createAccountLimiter, accountClientAddress } from './account-store.js';
+import { PermissionStore, PERMISSIONS } from './permission-store.js';
 
 // Process-Level Defensive Error Boundaries
 process.on('uncaughtException', (err) => {
@@ -37,6 +38,7 @@ const CHANNELS_FILE = DATA_DIR ? path.join(DATA_DIR, 'channels.json') : '';
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const accounts = new AccountStore(DATA_DIR);
 const accountRateLimited = createAccountLimiter();
+const permissions = new PermissionStore(DATA_DIR);
 
 const app = express();
 const server = http.createServer(app);
@@ -184,8 +186,8 @@ const DEFAULT_CHANNELS = [
 // link antigo (?channel=x) ou de versão antiga do app é temporário: some quando esvazia.
 const channels = new Map();
 
-function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null }) {
-  return { id, name, isDefault, temporary, createdBy, createdAt, password, users: new Map(), messages: [] };
+function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null }) {
+  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, users: new Map(), messages: [] };
 }
 
 for (const def of DEFAULT_CHANNELS) {
@@ -210,7 +212,13 @@ function loadSavedChannels() {
       const password = c.password == null ? null : validChannelPasswordHash(c.password) ? c.password : { salt: '', hash: '' };
       const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim().slice(0, 30) : c.id;
       const createdBy = typeof c.createdBy === 'string' ? c.createdBy : null;
-      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password }));
+      // Regra inválida falha fechada: nunca publica um canal privado por erro no arquivo.
+      let access = null;
+      if (c.access != null) {
+        try { access = permissions.access(c.access, true); }
+        catch { access = { private: true, roles: [], members: [] }; }
+      }
+      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password, access }));
     }
     for (const c of Array.isArray(saved?.textChannels) ? saved.textChannels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || textChannels.has(c.id)) continue;
@@ -228,11 +236,11 @@ function loadSavedChannels() {
 }
 
 // Grava num arquivo temporário e renomeia: se o servidor cair no meio, o arquivo antigo fica inteiro
-function saveChannels() {
+function saveChannels(strict = false) {
   if (!CHANNELS_FILE) return;
   const list = [...channels.values()]
     .filter((c) => !c.isDefault && !c.temporary)
-    .map(({ id, name, createdBy, createdAt, password }) => ({ id, name, createdBy, createdAt, ...(password ? { password } : {}) }));
+    .map(({ id, name, createdBy, createdAt, password, access }) => ({ id, name, createdBy, createdAt, ...(password ? { password } : {}), ...(access ? { access } : {}) }));
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
@@ -241,6 +249,7 @@ function saveChannels() {
     fs.renameSync(tmp, CHANNELS_FILE);
   } catch (err) {
     console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
+    if (strict) throw new Error('O servidor não conseguiu salvar as permissões do canal.');
   }
 }
 
@@ -592,7 +601,10 @@ function applyServerModeration(user) {
 // Apaga: admin apaga qualquer um; quem criou apaga o seu. O Geral nunca.
 function canDeleteChannel(user, channel) {
   if (!channel || channel.isDefault) return false;
-  if (user.isAdmin) return true;
+  if (!permissions.visible(user, channel)) return false;
+  if (permissions.has(user, 'manageChannels')) return true;
+  // O profileId dos visitantes é público; não autoriza apagar um canal privado.
+  if (channel.access?.private) return false;
   return Boolean(channel.createdBy && user.profileId && channel.createdBy === user.profileId);
 }
 
@@ -615,6 +627,7 @@ function publicUser(u) {
     profileId: u.profileId,
     account: u.accountId ? { username: u.accountUsername } : null,
     isAdmin: Boolean(u.isAdmin),
+    roles: permissions.roles(u).map(({ id, name }) => ({ id, name })),
     serverMuted: Boolean(u.serverMuted),
     serverDeafened: Boolean(u.serverDeafened),
     avatarV: u.avatar ? u.avatarV : 0,
@@ -772,9 +785,10 @@ function notifyAccountFriends(accountId, extra = []) {
   }
 }
 
-function getChannelsSummary() {
+function getChannelsSummary(viewer = null) {
   const list = [];
   for (const channel of channels.values()) {
+    if (!permissions.visible(viewer, channel)) continue;
     const userList = Array.from(channel.users.values()).map(publicUser);
     const sharers = userList.filter(u => u.isSharing).map(u => u.name);
 
@@ -784,6 +798,8 @@ function getChannelsSummary() {
       isDefault: channel.isDefault,
       createdBy: channel.createdBy,
       hasPassword: Boolean(channel.password),
+      isPrivate: Boolean(channel.access?.private),
+      canManageAccess: permissions.has(viewer, 'manageChannels') && !channel.isDefault,
       userCount: channel.users.size,
       activeStreams: sharers.length,
       sharers,
@@ -797,6 +813,40 @@ function getChannelUsersList(channelId) {
   const ch = channels.get(channelId);
   if (!ch) return [];
   return Array.from(ch.users.values()).map(publicUser);
+}
+
+function broadcastChannels() {
+  for (const socket of io.sockets.sockets.values()) {
+    const list = getChannelsSummary(socket.data.user);
+    socket.emit('channels-list', list);
+    socket.emit('channels-summary', list);
+  }
+}
+
+function emitVisibleUserEvent(event, payload, subject) {
+  const channel = channels.get(subject.channelId);
+  for (const socket of io.sockets.sockets.values()) {
+    if (permissions.visible(socket.data.user, channel)) socket.emit(event, payload);
+  }
+}
+
+function sendPermissions(socket) {
+  const user = socket.data.user;
+  const directory = permissions.has(user, 'manageChannels') ? permissions.snapshot() : null;
+  socket.emit('permissions-state', { supported: true, owner: user.isAdmin, memberId: user.accessId,
+    permissions: PERMISSIONS.filter(p => permissions.has(user, p)), roles: permissions.roles(user), directory });
+}
+
+function refreshPermissions() {
+  for (const socket of io.sockets.sockets.values()) {
+    const user = socket.data.user;
+    if (user.channelId && !permissions.visible(user, channels.get(user.channelId))) {
+      socket.emit('kicked', { by: 'A permissão desse canal mudou' });
+      leaveCurrentChannel(socket);
+    }
+    sendPermissions(socket);
+  }
+  broadcastChannels();
 }
 
 function isSameChannel(socket, targetId) {
@@ -899,7 +949,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
-    channelsCount: channels.size,
+    channelsCount: [...channels.values()].filter(channel => permissions.visible(null, channel)).length,
     totalUsers: io.engine.clientsCount
   });
 });
@@ -1060,7 +1110,10 @@ io.on('connection', (socket) => {
     console.error(`⚠️ [Socket Error] Socket ID ${socket.id}:`, err?.message || err);
   });
   const colorIndex = (channels.size + io.engine.clientsCount) % USER_COLORS.length;
+  const accessIdentity = permissions.identity(socket.handshake.auth?.permissionToken);
   const user = {
+    accessId: accessIdentity.id,
+    mediaId: randomBytes(16).toString('hex'),
     id: socket.id,
     name: `Amigo-${socket.id.slice(0, 4)}`,
     color: USER_COLORS[colorIndex],
@@ -1094,6 +1147,8 @@ io.on('connection', (socket) => {
   };
 
   socket.data.user = user;
+  socket.emit('permission-identity', { token: accessIdentity.token });
+  sendPermissions(socket);
   if (socket.data.accountSession) {
     const session = socket.data.accountSession;
     setAccountIdentity(user, session.account, session.profile);
@@ -1111,16 +1166,11 @@ io.on('connection', (socket) => {
   };
 
   // Send initial channel list and identity to client
-  const summary = getChannelsSummary();
+  const summary = getChannelsSummary(user);
   socket.emit('channels-list', summary);
   socket.emit('channels-summary', summary);
   socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(ADMIN_KEY) });
 
-  const broadcastChannels = () => {
-    const list = getChannelsSummary();
-    io.emit('channels-list', list);
-    io.emit('channels-summary', list);
-  };
 
   socket.emit('account-state', {
     supported: accounts.available,
@@ -1154,7 +1204,7 @@ io.on('connection', (socket) => {
     }
   };
   const publishIdentity = () => {
-    io.emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
+    emitVisibleUserEvent('user-profile-updated', { userId: socket.id, user: publicUser(user) }, user);
     broadcastChannels();
   };
   const attachAccount = async (result) => {
@@ -1218,7 +1268,32 @@ io.on('connection', (socket) => {
       if (user.channelId) io.to(user.channelId).emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
       broadcastChannels();
     }
+    refreshPermissions();
     cb({ success: ok, error: ok ? undefined : (ADMIN_KEY ? 'Senha errada.' : 'Essa sala não tem admin.') });
+  }));
+
+  const permissionAction = (ownerOnly, action) => safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (ownerOnly ? !user.isAdmin : !permissions.has(user, 'manageChannels')) return cb({ success: false, error: 'Você não tem permissão para fazer isso.' });
+    try { const result = action(safeObject(raw)); refreshPermissions(); cb({ success: true, ...result }); }
+    catch (err) { cb({ success: false, error: err.message || 'Não deu para salvar as permissões.' }); }
+  });
+  socket.on('role-save', permissionAction(true, payload => ({ role: permissions.saveRole(payload) })));
+  socket.on('role-delete', permissionAction(true, payload => { permissions.deleteRole(payload.id); }));
+  socket.on('member-roles', permissionAction(true, payload => { permissions.assign(payload.memberId, payload.roles); }));
+  socket.on('channel-access', permissionAction(false, payload => {
+    const channel = channels.get(payload.channelId);
+    if (!channel || !permissions.visible(user, channel)) throw new Error('Esse canal não está disponível.');
+    if (channel.isDefault) throw new Error('O Geral fica visível para todos.');
+    const previous = channel.access;
+    channel.access = permissions.access(payload.access);
+    try { saveChannels(true); } catch (err) { channel.access = previous; throw err; }
+  }));
+  socket.on('get-channel-access', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    const channel = channels.get(safeObject(raw).channelId);
+    if (!permissions.has(user, 'manageChannels') || !channel || !permissions.visible(user, channel)) return cb({ success: false, error: 'Canal indisponível.' });
+    cb({ success: true, access: channel.access || { private: false, roles: [], members: [] } });
   }));
 
   // Entrou (com senha, chave de membro ou sala aberta): ganha a chave pra próxima vez
@@ -1258,10 +1333,11 @@ io.on('connection', (socket) => {
   // Admin: tira alguém da call (a pessoa continua no app e pode entrar de novo)
   socket.on('kick-user', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode tirar alguém da call.' });
+    if (!permissions.has(user, 'kickMembers')) return cb({ success: false, error: 'Você não pode tirar pessoas da call.' });
     const targetId = safeObject(rawPayload).userId;
     const target = typeof targetId === 'string' && targetId !== socket.id ? io.sockets.sockets.get(targetId) : null;
     if (!target?.data?.user?.channelId) return cb({ success: false, error: 'Essa pessoa não está em nenhuma call.' });
+    if (!permissions.canModerate(user, target.data.user, 'kickMembers') || !permissions.visible(user, channels.get(target.data.user.channelId))) return cb({ success: false, error: 'Seu cargo não permite moderar essa pessoa.' });
     target.emit('kicked', { by: user.name });
     leaveCurrentChannel(target);
     cb({ success: true });
@@ -1270,13 +1346,15 @@ io.on('connection', (socket) => {
   // Admin: arrasta alguém pra outra call (o app da pessoa troca de canal sozinho)
   socket.on('admin-move-user', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode mudar alguém de call.' });
+    if (!permissions.has(user, 'moveMembers')) return cb({ success: false, error: 'Você não pode mudar pessoas de call.' });
     const payload = safeObject(rawPayload);
     const target = typeof payload.userId === 'string' ? io.sockets.sockets.get(payload.userId) : null;
     const targetUser = target?.data?.user;
     const channel = typeof payload.channelId === 'string' ? channels.get(payload.channelId) : null;
     if (!targetUser?.channelId) return cb({ success: false, error: 'Essa pessoa não está em nenhuma call.' });
     if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (!permissions.canModerate(user, targetUser, 'moveMembers') || !permissions.visible(user, channels.get(targetUser.channelId))
+      || !permissions.visible(user, channel) || !permissions.visible(targetUser, channel)) return cb({ success: false, error: 'Sem permissão para mover essa pessoa para esse canal.' });
     if (targetUser.channelId === channel.id) return cb({ success: true });
     if (channel.password) return cb({ success: false, error: 'Esse canal tem senha. A pessoa precisa entrar por conta própria.' });
     target.emit('moved-by-admin', { channelId: channel.id, channelName: channel.name, by: user.name });
@@ -1286,11 +1364,12 @@ io.on('connection', (socket) => {
   // Admin: muta / ensurdece pra todo mundo (vale até o admin desfazer, mesmo reconectando)
   const moderate = (kind) => safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
+    if (!permissions.has(user, kind === 'mute' ? 'muteMembers' : 'deafenMembers')) return cb({ success: false, error: 'Você não pode moderar o áudio.' });
     const payload = safeObject(rawPayload);
     const target = typeof payload.userId === 'string' ? io.sockets.sockets.get(payload.userId) : null;
     const targetUser = target?.data?.user;
     if (!targetUser) return cb({ success: false, error: 'Essa pessoa saiu.' });
+    if (!permissions.canModerate(user, targetUser, kind === 'mute' ? 'muteMembers' : 'deafenMembers') || !permissions.visible(user, channels.get(targetUser.channelId))) return cb({ success: false, error: 'Seu cargo não permite moderar essa pessoa.' });
     if (!targetUser.profileId) return cb({ success: false, error: 'Essa pessoa está com uma versão antiga do app.' });
     const on = payload.on === true;
     const set = kind === 'mute' ? serverMutedProfiles : serverDeafenedProfiles;
@@ -1334,7 +1413,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só admin ou quem criou o canal pode apagar.' });
     }
     // Avisa antes: quem está no canal sai da call sozinho no app
-    io.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
+    for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
     for (const memberId of [...channel.users.keys()]) {
       const member = io.sockets.sockets.get(memberId);
       if (member) leaveCurrentChannel(member);
@@ -1347,7 +1426,7 @@ io.on('connection', (socket) => {
 
   // Client requests channels update
   socket.on('get-channels', safeHandler(() => {
-    const list = getChannelsSummary();
+    const list = getChannelsSummary(user);
     socket.emit('channels-list', list);
     socket.emit('channels-summary', list);
   }));
@@ -1365,6 +1444,12 @@ io.on('connection', (socket) => {
 
     const data = safeObject(payload);
     const cb = safeCallback(callback);
+    let access = null;
+    if (data.access != null) {
+      if (!permissions.has(user, 'manageChannels')) return cb({ success: false, error: 'Seu cargo não permite configurar canais invisíveis.' });
+      try { access = permissions.access(data.access); }
+      catch (err) { return cb({ success: false, error: err.message }); }
+    }
     const password = data.password ?? '';
     if (typeof password !== 'string' || (password && (password.length < 4 || password.length > 100))) {
       return cb({ success: false, error: 'A senha precisa ter de 4 a 100 caracteres.' });
@@ -1395,12 +1480,11 @@ io.on('connection', (socket) => {
     if (!channels.has(finalId)) {
       const salt = password ? randomBytes(16).toString('hex') : null;
       const protectedPassword = password ? { salt, hash: hashRoomPassword(password, salt) } : null;
-      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId, password: protectedPassword }));
-      saveChannels();
-      const summaryList = getChannelsSummary();
-      io.emit('channels-list', summaryList);
-      io.emit('channels-summary', summaryList);
-      io.emit('channel-created', {
+      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId, password: protectedPassword, access }));
+      try { saveChannels(true); }
+      catch (err) { channels.delete(finalId); return cb({ success: false, error: err.message }); }
+      broadcastChannels();
+      for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channels.get(finalId))) client.emit('channel-created', {
         channel: {
           id: finalId,
           name: cleanName,
@@ -1423,6 +1507,11 @@ io.on('connection', (socket) => {
 
     // Confere antes de mexer no perfil ou sair da call atual. Admin e criador também precisam.
     const destination = channels.get(cleanChannelId);
+    if (destination && !permissions.visible(user, destination)) {
+      const result = { success: false, code: 'channel-unavailable', error: 'Esse canal não está disponível.' };
+      if (typeof maybeCallback !== 'function') socket.emit('channel-join-error', result);
+      return cb(result);
+    }
     if (destination?.password && user.channelId !== cleanChannelId) {
       let reason = payload.password ? 'wrong' : 'required';
       let allowed = false;
@@ -1465,9 +1554,7 @@ io.on('connection', (socket) => {
       };
       io.to(cleanChannelId).emit('user-state-changed', stateEvt);
       io.to(cleanChannelId).emit('user-state-updated', stateEvt);
-      const summaryList = getChannelsSummary();
-      io.emit('channels-list', summaryList);
-      io.emit('channels-summary', summaryList);
+      broadcastChannels();
       return cb({ success: true });
     }
 
@@ -1486,6 +1573,7 @@ io.on('connection', (socket) => {
     }
 
     const channel = channels.get(cleanChannelId);
+    user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
     user.watching = [];
     channel.users.set(socket.id, user);
@@ -1519,9 +1607,7 @@ io.on('connection', (socket) => {
     socket.to(cleanChannelId).emit('user-channel-joined', joinedPayload);
 
     // 3. Broadcast channels list globally so all users see updated presence
-    const summaryList = getChannelsSummary();
-    io.emit('channels-list', summaryList);
-    io.emit('channels-summary', summaryList);
+    broadcastChannels();
     cb({ success: true });
   }));
 
@@ -1593,9 +1679,7 @@ io.on('connection', (socket) => {
 
     // If presence-affecting attributes changed, broadcast global channels-list
     if (presenceChanged) {
-      const summaryList = getChannelsSummary();
-      io.emit('channels-list', summaryList);
-      io.emit('channels-summary', summaryList);
+      broadcastChannels();
     }
   });
 
@@ -1604,7 +1688,7 @@ io.on('connection', (socket) => {
   socket.on('sfu-token', safeHandler((rawPayload, maybeCallback) => {
     const callback = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
-    if (!SFU_SECRET || !user.channelId) return callback({ ok: false });
+    if (!SFU_SECRET || !user.channelId || !permissions.visible(user, channels.get(user.channelId))) return callback({ ok: false });
     const ownerId = typeof payload.ownerId === 'string' ? payload.ownerId : '';
     const role = payload.role === 'host' ? 'host' : 'viewer';
     const owner = io.sockets.sockets.get(ownerId)?.data?.user;
@@ -1617,7 +1701,8 @@ io.on('connection', (socket) => {
     const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : extra ? `__s${extra[1]}` : '';
     const sala = `${user.channelId}__${ownerId}${suffix}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
-    const token = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}`).digest('hex');
+    const signature = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}|${user.mediaId}`).digest('hex');
+    const token = `${user.mediaId}.${signature}`;
     callback({ ok: true, path: SFU_PATH, sala, role, exp, token });
   }));
 
@@ -1646,15 +1731,15 @@ io.on('connection', (socket) => {
         if (other && other !== socket) {
           applyProfile(other.data.user, { ...profile, profileId: user.accountId });
           other.emit('account-profile', profile);
-          io.emit('user-profile-updated', { userId: id, user: publicUser(other.data.user) });
+          emitVisibleUserEvent('user-profile-updated', { userId: id, user: publicUser(other.data.user) }, other.data.user);
         }
       }
       notifyAccountFriends(user.accountId);
     }
-    io.emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
-    const summaryList = getChannelsSummary();
-    io.emit('channels-list', summaryList);
-    io.emit('channels-summary', summaryList);
+    permissions.remember(user.accessId, user.name);
+    emitVisibleUserEvent('user-profile-updated', { userId: socket.id, user: publicUser(user) }, user);
+    for (const client of io.sockets.sockets.values()) if (permissions.has(client.data.user, 'manageChannels')) sendPermissions(client);
+    broadcastChannels();
     cb({ success: true });
   }));
 
@@ -1674,7 +1759,7 @@ io.on('connection', (socket) => {
     if (activity && activityChanges.length >= 10) return cb({ success: false });
     activityChanges.push(Date.now());
     user.activity = activity;
-    io.emit('user-activity-updated', { userId: socket.id, activity });
+    emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity }, user);
     if (user.channelId) broadcastChannels();
     cb({ success: true });
   }));
@@ -2270,7 +2355,7 @@ io.on('connection', (socket) => {
     try {
       if (user.activity) {
         user.activity = null;
-        io.emit('user-activity-updated', { userId: socket.id, activity: null });
+        emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity: null }, user);
       }
       leaveCurrentChannel(socket);
     } catch (err) {
@@ -2287,6 +2372,7 @@ function callSoundSeed() {
 function leaveCurrentChannel(socket) {
   const user = socket.data?.user;
   if (!user || !user.channelId) return;
+  if (SFU_SECRET) revokeSfuMedia(user.mediaId);
 
   const channelId = user.channelId;
   const soundSeed = callSoundSeed();
@@ -2322,10 +2408,19 @@ function leaveCurrentChannel(socket) {
   user.watching = [];
   user.isSpeaking = false;
 
-  const summaryList = getChannelsSummary();
-  io.emit('channels-list', summaryList);
-  io.emit('channels-summary', summaryList);
+  broadcastChannels();
   return soundSeed;
+}
+
+function revokeSfuMedia(id, attempt = 0) {
+  // O SFU encerra também uma conexão que ignore o aviso de saída enviado ao app.
+  fetch(`${process.env.SFU_INTERNAL_URL || 'http://127.0.0.1:8081'}/revoke`, {
+    method: 'POST', headers: { Authorization: `Bearer ${SFU_SECRET}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id }), signal: AbortSignal.timeout(2000)
+  }).then(response => { if (!response.ok) throw new Error('SFU indisponível'); }).catch(() => {
+    if (attempt < 2) setTimeout(() => revokeSfuMedia(id, attempt + 1), 1000).unref();
+    else console.error('⚠️ [Permissões] Não consegui encerrar a mídia revogada no SFU.');
+  });
 }
 
 // ----------------------------------------------------

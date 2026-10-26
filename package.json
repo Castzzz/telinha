@@ -10,11 +10,15 @@
     "dev": "node --watch server.js",
     "app": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) electron/main.cjs)'",
     "test": "node tests/runner.js",
+    "test:microphone": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-browser.cjs)'",
+    "test:mobile": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/mobile-browser.cjs)'",
+    "test:permissions": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/permissions-browser.cjs)'",
     "sfu": "go run ./sfu",
     "dist:linux": "electron-builder --linux",
     "dist:win": "npm run build:win-audio && electron-builder --win nsis portable",
     "dist": "npm run build:win-audio && electron-builder --linux --win",
     "build:win-audio": "sh native/win-audio/build.sh",
+    "build:android": "bash scripts/build-android.sh",
     "release": "npm run build:win-audio && GH_TOKEN=$(gh auth token) electron-builder --linux --win --publish always",
     "deploy:oracle": "bash deploy/oracle/deploy.sh",
     "backup": "bash deploy/oracle/backup.sh",
@@ -49,6 +53,7 @@
       "public/**",
       "server.js",
       "account-store.js",
+      "permission-store.js",
       "package.json"
     ],
     "linux": {

@@ -2,13 +2,63 @@
 <html lang="pt-BR" data-look="novo">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Teletela</title>
   <link rel="icon" href="icon.png" />
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="redesign.css" />
+  <link rel="stylesheet" href="mobile.css" />
 </head>
 <body class="theme-discord">
+
+  <nav class="mobile-nav" aria-label="Navegação no celular">
+    <button type="button" data-mobile-view="canais" aria-current="page">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 6 21M18 3l-2 18M3 8h18M2 16h18"/></svg><span>Canais</span>
+    </button>
+    <button type="button" data-mobile-view="amigos">
+      <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 5a3 3 0 0 1 0 6M21 21v-2a6 6 0 0 0-3-5.2"/></svg><span>Amigos</span><span id="mobile-friends-count" class="mobile-notification-dot hidden" aria-label="Pedido de amizade"></span>
+    </button>
+    <button type="button" data-mobile-view="voce">
+      <span class="mobile-nav-avatar mobile-self-avatar" aria-hidden="true">EU</span><span>Você</span>
+    </button>
+  </nav>
+
+  <header id="mobile-header" class="mobile-only mobile-header">
+    <button type="button" id="mobile-back" class="mobile-icon-button" aria-label="Voltar aos canais"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m14 6-6 6 6 6"/></svg></button>
+    <img class="mobile-brand" src="icon.png" alt="" />
+    <div class="mobile-header-copy"><strong id="mobile-page-title">Teletela</strong><span id="mobile-page-subtitle">Seu ponto de encontro</span></div>
+    <button type="button" id="mobile-create-channel" class="mobile-icon-button" aria-label="Criar canal"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" id="mobile-open-chat" class="mobile-icon-button" aria-label="Abrir chat da call"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5z"/></svg></button>
+    <button type="button" id="mobile-open-pins" class="mobile-icon-button hidden" data-mobile-proxy="btn-chat-pins" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
+    <button type="button" id="mobile-call-more" class="mobile-icon-button" aria-label="Opções da chamada" aria-haspopup="dialog"><svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+  </header>
+
+  <section id="mobile-callbar" class="mobile-only mobile-callbar" aria-label="Chamada em andamento">
+    <button type="button" id="mobile-return-call" class="mobile-callbar-open"><span class="mobile-call-signal" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19v-4M9 19v-8M14 19V7M19 19V3"/></svg></span><span><strong id="mobile-callbar-name">Sua call</strong><small id="mobile-callbar-status">Toque para voltar à call</small></span></button>
+    <button type="button" class="mobile-icon-button mobile-mic-button" data-mobile-proxy="btn-toggle-mic" aria-label="Ligar microfone"></button>
+    <button type="button" class="mobile-icon-button mobile-call-leave" data-mobile-proxy="btn-dock-leave" aria-label="Sair da call"></button>
+  </section>
+
+  <footer id="mobile-call-controls" class="mobile-only mobile-call-controls" aria-label="Controles da chamada">
+    <button type="button" class="mobile-call-action mobile-mic-button" data-mobile-proxy="btn-toggle-mic"><span class="mobile-action-icon"></span><span>Microfone</span></button>
+    <button type="button" class="mobile-call-action" data-mobile-proxy="btn-toggle-deafen"><span class="mobile-action-icon"></span><span>Áudio</span></button>
+    <button type="button" class="mobile-call-action" data-mobile-proxy="btn-share-camera"><span class="mobile-action-icon"></span><span>Câmera</span></button>
+    <button type="button" class="mobile-call-action mobile-call-leave" data-mobile-proxy="btn-dock-leave"><span class="mobile-action-icon"></span><span>Sair</span></button>
+  </footer>
+
+  <dialog id="mobile-call-options" class="mobile-sheet" aria-labelledby="mobile-call-options-title">
+    <div class="mobile-sheet-handle" aria-hidden="true"></div>
+    <div class="mobile-sheet-header"><h2 id="mobile-call-options-title">Opções da chamada</h2><button type="button" id="mobile-close-options" class="mobile-icon-button" aria-label="Fechar opções">✕</button></div>
+    <button type="button" id="btn-mobile-audio-output" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></span><span>Saída de áudio<small>Escolher alto-falante ou fone</small></span><span aria-hidden="true">›</span></button>
+    <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Volume e redução de ruído</small></span><span aria-hidden="true">›</span></button>
+    <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Volume e sons<small>Áudio da call e das transmissões</small></span><span aria-hidden="true">›</span></button>
+  </dialog>
+  <dialog id="mobile-message-options" class="mobile-sheet" aria-labelledby="mobile-message-options-title">
+    <div class="mobile-sheet-handle" aria-hidden="true"></div>
+    <div class="mobile-sheet-header"><h2 id="mobile-message-options-title">Mensagem</h2><button type="button" id="mobile-close-message-options" class="mobile-icon-button" aria-label="Fechar opções da mensagem">✕</button></div>
+    <div id="mobile-message-actions"></div>
+  </dialog>
+  <div id="mobile-popover-backdrop" class="mobile-popover-backdrop hidden" aria-hidden="true"></div>
 
   <!-- TOPBAR / TITLEBAR -->
   <header id="app-topbar" class="app-topbar">
@@ -54,6 +104,7 @@
 
       <!-- CHANNELS LIST WRAPPER -->
       <nav class="channels-scroller" aria-label="Canais de voz">
+        <div class="mobile-only mobile-room-status"><span class="mobile-status-dot" aria-hidden="true"></span><span id="mobile-room-summary">A sala está aberta. Chega mais!</span></div>
         <div class="category-header" id="category-voice" role="button" tabindex="0" aria-expanded="true" title="Recolher/mostrar os canais de voz">
           <span class="category-caret">▼</span>
           <span class="category-title">Canais de Voz</span>
@@ -336,6 +387,27 @@
         </button>
       </form>
     </aside>
+    <section id="mobile-profile-page" class="mobile-only mobile-profile-page" aria-label="Seu perfil e preferências">
+      <div class="mobile-profile-hero">
+        <button type="button" class="mobile-profile-edit" data-mobile-settings="perfil" aria-label="Editar seu perfil"><span class="mobile-self-avatar mobile-profile-avatar" aria-hidden="true">EU</span><span class="mobile-edit-badge" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg></span></button>
+        <h1 id="mobile-profile-name">Seu perfil</h1><p id="mobile-profile-account">Perfil de visitante</p>
+        <button type="button" class="mobile-edit-profile-button" data-mobile-settings="perfil">Editar perfil</button>
+      </div>
+      <h2 class="mobile-section-label">Do seu jeito</h2>
+      <div class="mobile-settings-group">
+        <button type="button" class="mobile-settings-row" data-mobile-settings="aparencia"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13z"/></svg></span><span>Aparência<small>Tema e modo leve</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Sua voz, volume e filtro de ruído</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Som<small>Volume, fones e avisos</small></span><span aria-hidden="true">›</span></button>
+      </div>
+      <h2 class="mobile-section-label">Por aqui</h2>
+      <div class="mobile-settings-group">
+        <button type="button" id="mobile-open-account" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span><span>Sua conta<small id="mobile-account-description">Entrar ou criar uma conta</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" class="mobile-settings-row" data-mobile-settings="transmissao"><span class="mobile-row-icon" data-mobile-icon="camera"></span><span>Transmissões<small>Qualidade de vídeo</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" id="mobile-open-news" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3z"/></svg></span><span>Novidades<small>O que mudou no Teletela</small></span><span aria-hidden="true">›</span></button>
+        <button type="button" id="mobile-open-admin" class="mobile-settings-row hidden" data-mobile-settings="admin"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18 3 8l5 4 4-7 4 7 5-4-1 10"/></svg></span><span>Administração da sala</span><span aria-hidden="true">›</span></button>
+      </div>
+      <p class="mobile-profile-footnote">Teletela · feito pra conversar junto</p>
+    </section>
   </div>
 
   <!-- ==================== MODALS & OVERLAYS ==================== -->
@@ -485,6 +557,14 @@
           <p class="form-help" id="channel-password-new-help">De 4 a 100 caracteres. Todo mundo precisa da senha, inclusive admin.</p>
         </div>
 
+        <div id="new-channel-access" class="form-group hidden">
+          <label class="permission-choice"><input type="checkbox" id="new-channel-access-private"> Canal de voz invisível</label>
+          <div id="new-channel-access-choices" class="hidden">
+            <p class="form-help">Só as pessoas ou cargos marcados podem ver e entrar. Quem usa a senha de admin também vê. A senha do canal continua valendo.</p>
+            <fieldset class="permission-list"><legend>Cargos permitidos</legend><div id="new-channel-access-roles"></div></fieldset>
+            <fieldset class="permission-list"><legend>Pessoas permitidas</legend><div id="new-channel-access-members"></div></fieldset>
+          </div>
+        </div>
         <div class="modal-actions">
           <button type="button" class="btn-secondary" data-close-modal="modal-create-channel">Cancelar</button>
           <button type="submit" class="btn-primary" id="btn-submit-channel">Criar Canal</button>
@@ -849,6 +929,14 @@
               <select id="select-audio-input" class="form-select"></select>
             </div>
 
+            <div class="form-group">
+              <label class="hotkey-global">
+                <input type="checkbox" id="input-mic-voice-boost" checked />
+                Reforçar vozes baixas
+              </label>
+              <p class="form-help">Aumenta a voz baixa e suaviza as partes fortes, sem mexer no volume do seu microfone no sistema. Comece com os volumes em 100%; desligue se preferir ajustar tudo manualmente.</p>
+            </div>
+
             <!-- Ganho do microfone -->
             <div class="form-group">
               <label for="input-mic-gain">Volume do seu microfone</label>
@@ -856,7 +944,7 @@
                 <input type="range" id="input-mic-gain" min="0" max="300" step="5" value="100" />
                 <span id="mic-gain-text" class="master-volume-text">100%</span>
               </div>
-              <p class="form-help">Se os amigos te ouvem baixo (ou o Windows fica abaixando o seu mic), aumente aqui. Veja o efeito no teste de voz lá embaixo.</p>
+              <p class="form-help">Ajuste fino da voz enviada, depois do reforço. A mudança vale na hora, inclusive em 0% para silenciar.</p>
             </div>
 
             <!-- Cancelamento de ruído do microfone -->
@@ -865,7 +953,7 @@
               <select id="select-noise-suppression" class="form-select">
                 <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
                 <option value="basico">Básico (filtro do navegador)</option>
-                <option value="off">Desligado (som cru do microfone)</option>
+                <option value="off">Desligado (sem filtro de ruído)</option>
               </select>
               <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
             </div>
@@ -876,7 +964,7 @@
               <div class="vad-meter-container">
                 <div id="vad-meter-bar" class="vad-meter-bar"></div>
               </div>
-              <p class="form-help">O anel verde no seu avatar acende automaticamente quando você fala.</p>
+              <p class="form-help">Entre numa call e ligue o microfone para testar. A barra acompanha a voz enviada; o anel verde no seu avatar acende quando você fala.</p>
             </div>
       
           </section>
@@ -1014,6 +1102,8 @@
           </section>
           <section class="settings-section hidden" data-settings-section="admin">
             <h4 class="settings-section-title">Admin</h4>
+            <p id="permission-status" class="form-help"></p>
+            <p id="permission-device" class="form-help"></p>
             <!-- Admin (só em sala com senha de admin) -->
             <div class="form-group hidden" id="admin-settings">
               <label for="input-admin-key">Admin 👑</label>
@@ -1026,6 +1116,36 @@
                 <button type="button" class="btn-secondary" id="btn-admin-logout">Deixar de ser admin</button>
               </div>
               <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
+            </div>
+
+            <div id="permission-management" class="hidden">
+              <p class="form-help">Cargos e acesso funcionam sem conta. Cada instalação tem sua identificação; o código curto diferencia pessoas com o mesmo nome. Ao trocar de aparelho ou apagar os dados, o admin precisa liberar a nova instalação.</p>
+              <div id="permission-role-management" class="hidden">
+                <form id="permission-role-form" class="form-group permission-block">
+                  <h4>Cargos</h4>
+                  <label for="permission-role-id">Criar ou editar</label><select id="permission-role-id" class="form-input"><option value="">Criar cargo</option></select>
+                  <label for="permission-role-name">Nome do cargo</label><input id="permission-role-name" class="form-input" maxlength="30" required>
+                  <label for="permission-role-position">Hierarquia (1 a 99)</label><input id="permission-role-position" class="form-input" type="number" min="1" max="99" value="10" required>
+                  <p class="form-help">Um cargo só modera pessoas abaixo dele. Só quem tem a senha de admin cria, edita e atribui cargos.</p>
+                  <div id="permission-role-flags" class="permission-list"></div>
+                  <div class="admin-row"><button type="submit" class="btn-primary">Salvar cargo</button><button type="button" id="permission-role-delete" class="btn-secondary" disabled>Remover cargo</button></div>
+                </form>
+                <div class="form-group permission-block">
+                  <h4>Cargos de uma pessoa</h4>
+                  <label for="permission-member-id">Pessoa / instalação</label><select id="permission-member-id" class="form-input"></select>
+                  <div id="permission-member-roles" class="permission-list"></div>
+                  <button type="button" id="permission-member-save" class="btn-primary" disabled>Salvar cargos da pessoa</button>
+                </div>
+              </div>
+              <div class="form-group permission-block">
+                <h4>Canais invisíveis</h4>
+                <label for="permission-channel-id">Canal de voz</label><select id="permission-channel-id" class="form-input"><option value="">Escolha um canal</option></select>
+                <label class="permission-choice"><input type="checkbox" id="channel-access-private"> Invisível para quem não tem acesso</label>
+                <p class="form-help">Marque os cargos ou as pessoas permitidas. Sem marcações, só quem usa a senha de admin vê. Desmarcar torna o canal visível para todos. O Geral fica público.</p>
+                <fieldset class="permission-list"><legend>Cargos permitidos</legend><div id="channel-access-roles"></div></fieldset>
+                <fieldset class="permission-list"><legend>Pessoas permitidas</legend><div id="channel-access-members"></div></fieldset>
+                <button type="button" id="permission-channel-save" class="btn-primary" disabled>Salvar visibilidade</button>
+              </div>
             </div>
 
             <!-- Senha da sala (só admin vê) -->

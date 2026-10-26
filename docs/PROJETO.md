@@ -3,6 +3,9 @@
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
+**Pedidos e andamento:** [pendências anotadas com o dono](PENDENCIAS.md). PiP Android,
+cargos sem conta e canais invisíveis implementados localmente; revisão de contas/amigos pendente.
+
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
 > chaves de preferências). Veja [Nomes que não podem mudar](#nomes-que-não-podem-mudar).
@@ -35,6 +38,8 @@ separado do microfone, chat, canais de texto que ficam salvos, soundboard, perfi
 e um admin pra moderar.
 
 - **App desktop** (Electron) pra Windows e Linux, com atualização automática pelo GitHub Releases.
+- **Android em teste** (`android/`): APK com a mesma interface empacotada em WebView e serviço
+  nativo para a chamada. Veja [ANDROID.md](ANDROID.md) para compilar, instalar e testar.
 - **Servidor** (Node + Socket.IO) que cuida de canais, chat, presença e moderação.
 - **SFU** (Go + Pion WebRTC) que repassa voz, tela e câmera: cada um manda uma vez só pro
   servidor e ele distribui pra quem está assistindo.
@@ -70,9 +75,13 @@ Pontos importantes:
 - Pelo navegador também funciona: aí a página vem do próprio `server.js` (que serve `public/`).
 - Abrir o site ou a sala pelo app começa **fora da call**, inclusive ao recarregar e com
   `?channel=` ou um canal salvo por versões antigas. O perfil é enviado ao conectar para
-  usar texto sem voz. O microfone começa mutado; clicar num canal preserva o estado escolhido
-  no dock, inclusive ao sair e entrar de novo. Reconectar após uma queda de rede retoma apenas
-  a call já escolhida nessa janela, mantendo o estado do microfone.
+  usar texto sem voz. `prefs.micOn` guarda a escolha de mutado/desmutado entre aberturas;
+  sem preferência salva, começa mutado. Restaurar o botão não abre a captura: ao entrar na
+  call, ela é aberta se o mic estiver ligado. Clicar num canal preserva o estado escolhido
+  no dock, inclusive ao sair e entrar de novo. Moderação não sobrescreve a escolha salva;
+  ensurdecer pelo botão salva o mic desligado e restaurar o áudio salva o estado recuperado.
+  Falha ao abrir o microfone volta ao mute e salva esse estado. Reconectar após uma queda
+  de rede retoma apenas a call já escolhida nessa janela, mantendo o estado do microfone.
 - **Sala na nuvem:** voz, tela e câmera passam pelo SFU. O `server.js` dá uma senha temporária
   (HMAC com `SFU_SECRET`) pra cada conexão no SFU (evento `sfu-token`). Salas do SFU:
   `<canal>__<id>` (tela 1), `<canal>__<id>__cam`, `<canal>__<id>__voz`, `<canal>__<id>__s2`,
@@ -83,12 +92,35 @@ Pontos importantes:
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
   no volume geral. Veja `VolumeMixerManager` em `public/audio-manager.js`.
+- **Microfone enviado:** `public/microphone.js` mantém o grafo em mono explícito: captura →
+  RNNoise opcional → compressor de voz → ganho manual → proteção de picos → faixa mono.
+  `prefs.micVoiceBoost` liga o reforço por padrão (desligável em Configurações → Microfone).
+  O compressor nativo reforça entradas baixas e contém as fortes; não procura um alvo de
+  volume por sílaba. O AGC do Chromium continua desligado para não alterar o volume do SO.
+  O mesmo áudio alimenta o VAD e o envio por P2P/SFU; o som das telas não passa por esse grafo.
+  Medições, limites e teste reproduzível: [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
+- **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais, Amigos e Você.
+  A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
+  disponíveis ao navegar. Os botões móveis disparam os controles originais, sem duplicar
+  a lógica de WebRTC. Configurações abrem por assunto e ações de mensagem usam uma folha
+  embaixo. O layout desktop continua em `style.css`/`redesign.css`.
+  O APK usa `WebViewAssetLoader` em `https://appassets.androidplatform.net/` para
+  servir os arquivos instalados, conectando ao mesmo Node/SFU do desktop. A ponte
+  `TeletelaAndroid` recebe o estado da call e abre a escolha de saída de áudio.
+  `CallService` mantém uma notificação e o serviço de microfone/reprodução enquanto há call.
+  A saída nativa carrega um ID da chamada: o encerramento assíncrono de um serviço antigo
+  não pode tirar a pessoa da call seguinte. Ao sair, a captura é fechada, preservando a
+  escolha do botão para a próxima entrada.
+  PiP nativo usa `mobile-pip.js` e `MainActivity`: vídeo remoto em uma janela do sistema
+  ao minimizar, sem duplicar a captura ou mudar o mixer. Detalhes em [ANDROID.md](ANDROID.md).
+  Compartilhar a tela do celular exige integração MediaProjection e ainda não existe.
 
 ## 3. Organização das pastas
 
 ```
 server.js                  Servidor da sala (Express + Socket.IO).
 account-store.js           Contas, sessões, perfis salvos e relações de amizade.
+permission-store.js        Identificação de instalações, cargos e regras de visibilidade sem conta.
 sfu/main.go                SFU em Go (Pion). Compilado no deploy.
 go.mod, go.sum             Dependências do SFU.
 
@@ -96,7 +128,11 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   index.html               Toda a estrutura da tela, modais e o popup de novidades
   app.js                   Toda a lógica do cliente (~6400 linhas, dividido em seções numeradas)
   accounts.js              Modal de conta opcional, login e lista de amigos/pedidos
+  permissions.js           Administração de cargos e visibilidade por pessoa/cargo
+  mobile-pip.js            Seleção de vídeo e apresentação compacta do PiP Android
   audio-manager.js         Mixer de volume, ensurdecer, captura de áudio, VAD
+  microphone.js            Filtro do microfone, reforço nativo, ganho manual e saída mono
+  mobile.css, mobile.js    Layout por toque e integração com o APK Android
   style.css                Estilos base + temas (escuro / preto / claro)
   redesign.css             O visual 3.0 (vale com <html data-look="novo">, fixo no index.html)
   icon.png                 Ícone (favicon, logo da barra de cima, janela)
@@ -118,6 +154,8 @@ electron/
   bin/                     telinha-audio.exe compilado (FORA DO GIT, gerado no build)
 
 native/win-audio/          Auxiliar do Windows que captura o som de UM programa só (C++)
+android/                  APK Android (WebView local, permissões e serviço da call)
+scripts/build-android.sh  Gera somente o APK de teste, sem publicar nem alterar a VM
 build/                     Ícone do app pro electron-builder (icon.svg é a fonte; png/ico gerados)
 deploy/oracle/
   deploy.sh                Roda no SEU PC: backup, compila, empacota, manda pra VM e chama o install
@@ -179,6 +217,10 @@ npm test                                   # runner próprio: 62 testes, devem p
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js
 node tests/m4-channels-admin.test.js       # integração: sobe o server.js de verdade
 node --test tests/m4-accounts.test.js       # integração de contas e amigos, sem cadastro obrigatório
+node --test tests/m4-permissions.test.js    # cargos, canais invisíveis, revogação e persistência
+npm run test:permissions                  # formulários reais de cargos/acesso, móvel e desktop
+npm run test:microphone                   # Electron do sistema: áudio real e chamada Opus local
+npm run test:mobile                       # navegação, chat, mute e tamanhos móvel/desktop
 go test -race ./sfu                       # SFU: erro de espectador não interrompe os demais
 ```
 
@@ -235,13 +277,18 @@ atrás se esquecer).
 |---|---|---|
 | `public/` (interface) | **sim** | sim (pra quem usa pelo navegador) |
 | `server.js` | não | **sim** |
-| `account-store.js` | **sim** (também vai no servidor hospedado pelo app) | **sim** |
+| `account-store.js`, `permission-store.js` | **sim** (também vão no servidor hospedado pelo app) | **sim** |
 | `sfu/` | não | **sim** |
 | `electron/`, `build/`, `package.json` (build) | **sim** | não |
+| `android/` | APK Android separado (`npm run build:android`) | não |
 | `deploy/oracle/install.sh` | não | **sim** |
 
 Se mudou o protocolo entre os dois (evento novo), normalmente são os dois. O servidor novo
 tem que continuar funcionando com o app antigo até todo mundo atualizar.
+
+O APK também embute `public/`: gere outro APK para levar mudanças da interface ao Android.
+O build de Android não executa o release desktop nem publica o APK. Os identificadores,
+artefatos e atualização automática do desktop continuam independentes.
 
 ## 7. Atualizar o servidor (deploy)
 
@@ -252,7 +299,7 @@ npm run deploy:oracle
 O que o `deploy/oracle/deploy.sh` faz, no seu PC:
 
 1. Detecta a arquitetura da VM pelo SSH e compila o SFU pra `linux/amd64` ou `linux/arm64`.
-2. Empacota `server.js`, `account-store.js`, `package.json`, `package-lock.json` e `public/` com
+2. Empacota `server.js`, `account-store.js`, `permission-store.js`, `package.json`, `package-lock.json` e `public/` com
    `npm ci --omit=dev` (sem as dependências do app desktop).
 3. Descobre a versão LTS mais nova do Node e a mais nova do Caddy (ou usa `NODE_VERSION` e
    `CADDY_VERSION`, se definidos).
@@ -336,6 +383,7 @@ trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
+| `permissions.json` | segredo das identificações de instalação, cargos, nomes e vínculos; acesso 0600 |
 | `accounts/accounts.json` | contas, hashes/sais de senha, verificadores das sessões e amizades/pedidos; acesso 0600 |
 | `accounts/profiles/<conta-id>.json` | perfil completo da conta, incluindo fotos, banner, som e recortes; acesso 0600 |
 | `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
@@ -532,6 +580,41 @@ identidade local. As contas opcionais têm identidade autenticada, descrita abai
 - App antigo (antes da 3.2) não sabe pedir senha: **só coloque senha depois que todo mundo
   atualizar**, senão quem estiver desatualizado fica preso.
 
+### Cargos e canais invisíveis sem conta
+
+`PermissionStore` emite uma identificação aleatória com prova HMAC para cada instalação.
+O token fica em `prefs.roomAccess[SERVER_URL].permissionToken` e chega no handshake;
+só o respectivo cliente recebe `permission-identity`. Nomes, `profileId`, conta e perfil
+importado não concedem cargos. Outra instalação precisa de nova liberação. Os cargos
+ficam por instalação mesmo que a pessoa entre/saia de uma conta opcional.
+
+Só quem entrou com a senha de admin gerencia cargos e atribuições. Cargos têm nome,
+posição de 1 a 99 e permissões `kickMembers`, `moveMembers`, `muteMembers`, `deafenMembers`
+e `manageChannels`. Moderação exige posição maior que a do alvo. A senha de admin
+continua dando controle total; os demais poderes antigos de admin não são herdados.
+
+Canais de voz podem guardar `access: { private, roles: [], members: [] }` em `channels.json`.
+Acesso privado é permitido por pessoa OU cargo, com exceção para a senha de admin.
+O Geral fica público. A senha do canal continua obrigatória para todos. `manageChannels`
+permite editar apenas os canais que o moderador consegue ver. Listas Socket.IO são
+individuais; REST público só mostra canais públicos, e eventos de perfil/atividade de
+participantes privados só chegam a quem pode ver o canal. Regras inválidas em disco
+mantêm o canal fechado. `permissions.json` corrompido impede iniciar; restaurar backup.
+
+Mudar acesso, remover cargo ou sair do admin reavalia a call atual; quem perdeu acesso
+sai, recebe `kicked` e deixa de obter sinalização ou tokens de mídia. Na nuvem, cada entrada
+na call tem um `mediaId` aleatório. O token SFU novo é `mediaId.assinatura`, com HMAC de
+`sala|role|exp|mediaId`, sem mudar os campos que apps antigos já enviam. O Node chama
+`POST /revoke` no SFU (Bearer `SFU_SECRET`) para fechar WebSockets/WebRTC daquele ID e
+impedir reutilização dos tokens ainda válidos. A próxima entrada usa outro ID.
+`SFU_INTERNAL_URL` permite configurar o endereço interno; padrão `http://127.0.0.1:8081`.
+Node e SFU devem ser atualizados no mesmo deploy. O SFU continua aceitando tokens antigos;
+canais privados novos só recebem tokens com identificação revogável.
+
+Sem `TELINHA_DATA_DIR`, cargos e identificação vivem só no processo. O backup existente
+inclui os novos arquivos por copiar toda a pasta de dados. Os formulários estão em
+Configurações → Admin e também permitem criar o canal já invisível, sem anúncio público.
+
 ## 10. Protocolo: eventos do Socket.IO
 
 Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
@@ -608,6 +691,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Fixar mensagem | `pinMessage`, `renderPins`, `setupPins`; servidor: `message-pin`, `text-pins` |
 | "Está digitando" | `setupTyping`, `renderTyping`; servidor: `typing` |
 | Senha da sala | cliente: `roomAccess`, `openRoomPasswordModal`, `setupRoomPasswordAdmin`; servidor: `io.use`, `isMemberKey`, `setRoomPassword` |
+| Cargos e canais invisíveis | `permission-store.js`, `public/permissions.js`; `permissions-state`, `channel-access`, listas individualizadas e revogação no SFU |
 | Conta opcional e amigos | cliente: `public/accounts.js`, `finishConnectionProfile`; servidor: `account-store.js`, eventos `account-*`/`friend-*`; cofre: `electron/account-sessions.cjs` |
 | Exportar/importar perfil | `setupProfileTransfer` |
 | Soundboard | `setupSoundboard`, `renderSoundboard`, `playSoundboard`; servidor: bloco `SOUNDBOARD` |
@@ -624,6 +708,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
+| Volume do microfone | `microphone.js`: grafo mono e compressão nativa; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
