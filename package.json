@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "3.6.2",
+  "version": "3.7.0",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -10,11 +10,14 @@
     "dev": "node --watch server.js",
     "app": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) electron/main.cjs)'",
     "test": "node tests/runner.js",
+    "test:mobile": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/mobile-browser.cjs)'",
+    "test:permissions": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/permissions-browser.cjs)'",
     "sfu": "go run ./sfu",
     "dist:linux": "electron-builder --linux",
     "dist:win": "npm run build:win-audio && electron-builder --win nsis portable",
     "dist": "npm run build:win-audio && electron-builder --linux --win",
     "build:win-audio": "sh native/win-audio/build.sh",
+    "build:android": "bash scripts/build-android.sh",
     "release": "npm run build:win-audio && GH_TOKEN=$(gh auth token) electron-builder --linux --win --publish always",
     "deploy:oracle": "bash deploy/oracle/deploy.sh",
     "backup": "bash deploy/oracle/backup.sh",
@@ -48,6 +51,7 @@
       "electron/**",
       "public/**",
       "server.js",
+      "permission-store.js",
       "package.json"
     ],
     "linux": {

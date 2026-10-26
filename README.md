@@ -7,7 +7,7 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎧 No Windows e no Linux dá pra mandar **só o som de um app** (sem as vozes da chamada)
 - 🧠 Cancelamento de ruído com IA no microfone (tira teclado, ventilador, barulho da rua)
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
-- 🔄 O app se atualiza sozinho
+- 🔄 O app de PC se atualiza sozinho
 
 ---
 
@@ -78,6 +78,51 @@ Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
 
 ---
 
+## 📱 Android (versão de teste)
+
+Já dá para gerar um APK para Android 8 ou mais novo. Ele abre a sala oficial, com canais,
+chat, voz, câmera e reprodução das transmissões do PC. No celular, a navegação é própria:
+**Canais** e **Você**. A call abre uma tela com participantes e controles grandes;
+ao voltar, fica numa faixa compacta. O chat ocupa a tela inteira, e as opções de cada
+mensagem abrem pelo **⋯** ou segurando a mensagem. Em **Você**, cada configuração abre
+uma página dedicada.
+
+No PC, com Android SDK 35 e JDK 17 ou mais novo instalados:
+
+```bash
+npm run build:android
+```
+
+Transfira `dist/Teletela-Android-teste.apk` para o celular e abra o arquivo para instalar.
+Se o Android pedir, permita que o aplicativo usado para abrir o APK instale esse arquivo.
+Ao entrar, use seu perfil e a senha habitual da sala. As permissões de microfone e câmera
+só são pedidas ao usar essas funções. A notificação permite voltar ou sair da call;
+em **⋯ → Saída de áudio** na tela da call, escolha o alto-falante ou fone.
+Ao assistir a uma transmissão, aperte Início ou troque de aplicativo: o vídeo continua
+numa janela PiP acima dos outros apps. Toque na janela para voltar. O volume e o mute
+continuam como você escolheu; precisa de um aparelho com PiP permitido para o Teletela.
+
+Esta primeira versão não transmite a tela/som de outros apps do celular, não hospeda salas
+e não tem atualização automática nem publicação na Play Store. A versão para iPhone ainda
+não foi implementada. Bluetooth, bateria e qualidade de voz precisam de validação em
+aparelhos reais. [Detalhes de desenvolvimento e testes](docs/ANDROID.md).
+
+## Cargos e canais invisíveis (sem conta)
+
+Em **Configurações → Admin**, entre com a senha de admin. Crie os cargos, marque as ações
+permitidas e atribua à pessoa na lista. A hierarquia vai de 1 a 99: um cargo só pode moderar
+pessoas abaixo dele. Só quem usa a senha de admin cria, edita e atribui cargos.
+
+Na mesma página, escolha um canal de voz e marque **Invisível para quem não tem acesso**.
+Libere por cargo ou por pessoa. Quem não está autorizado não vê o canal nem entra pelo link;
+se perder o acesso durante a call, sai dela. Senha do canal continua sendo necessária,
+inclusive para o admin. O Geral fica visível para todos.
+
+Isso funciona com o perfil de visitante. A identificação fica salva nesta instalação;
+outro aparelho ou dados apagados precisam de nova liberação pelo admin. O código para
+identificar cada aparelho aparece em **Configurações → Admin**. Exportar o perfil
+não transfere cargos. Os recursos exigem o servidor atualizado.
+
 ## 🚪 Entrar na sala
 
 1. Peça o **link da sala** pra quem está hospedando. Ele é parecido com `https://palavra-palavra-palavra.trycloudflare.com`.
@@ -104,7 +149,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 |---|---|
 | **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, com as fotos de perfil e o recorte escolhido (iniciais para quem não tem foto). Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
 | **Mostrar o jogo que estou jogando** | No app para Windows e Linux, jogos reconhecidos aparecem abaixo do nome e no perfil, como **Jogando Counter-Strike 2 · há 23 min**. A atividade some ao fechar o jogo; a detecção é feita a cada 15 segundos. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável. No navegador dá para ver a atividade dos amigos |
-| **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app começa mutado; entrar, trocar de canal ou reconectar preserva o estado escolhido no botão. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
+| **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
 | **Transmitir minha tela** | Entre num canal de voz e use o botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |

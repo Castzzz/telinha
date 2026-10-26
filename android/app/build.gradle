@@ -1,0 +1,37 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.castzin.teletela.mobile'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.castzin.teletela.mobile'
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName '3.7.0'
+        buildConfigField 'String', 'ROOM_URL', '"https://colheitafartus.duckdns.org"'
+    }
+    buildFeatures { buildConfig true }
+    sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/web-assets')
+    sourceSets.main.res.srcDir layout.buildDirectory.dir('generated/icon-res')
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// Empacota a mesma interface do desktop, inclusive os sons locais fora do Git.
+tasks.register('copyWebAssets', Sync) {
+    from '../../public'
+    into layout.buildDirectory.dir('generated/web-assets')
+}
+tasks.register('copyAndroidIcon', Sync) {
+    from('../../public/icon.png') { into 'drawable-nodpi' }
+    into layout.buildDirectory.dir('generated/icon-res')
+}
+tasks.named('preBuild').configure { dependsOn 'copyWebAssets', 'copyAndroidIcon' }
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+    implementation 'androidx.core:core:1.15.0'
+}

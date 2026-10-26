@@ -26,7 +26,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH="$SFU_GOARCH" "$GO" build -trimpath -ldflags="-s
 
 echo "== Empacotando o servidor (sem as dependências do app desktop)"
 mkdir -p "$stage/app"
-cp -r server.js package.json package-lock.json public "$stage/app/"
+cp -r server.js permission-store.js package.json package-lock.json public "$stage/app/"
 (cd "$stage/app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
 tar -czf "$stage/app.tar.gz" -C "$stage/app" .
 

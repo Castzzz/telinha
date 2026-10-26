@@ -23,6 +23,8 @@ import {
 } from './audio-manager.js';
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
 import { activityElapsed } from './game-activity.js';
+import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
+import { setupPermissions, hasPermission } from './permissions.js';
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -150,6 +152,7 @@ const MIC_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" strok
 const HEADPHONES_PATHS = '<path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/>';
 const HEADPHONES_ON_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}</svg>`;
 const HEADPHONES_OFF_SVG = `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${HEADPHONES_PATHS}<path d="M3 3l18 18"/></svg>`;
+const CHANNEL_LOCK_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V6a4 4 0 0 1 8 0v4"/><path d="M12 14v3"/></svg>';
 const CAMERA_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
 // Balão do chat da call (no canal de voz em que você está)
 const CHAT_BUBBLE_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>';
@@ -163,6 +166,7 @@ function updateMicButton() {
   const micIcon = $('#dock-mic-icon');
   if (micIcon) micIcon.innerHTML = on ? MIC_ON_SVG : MIC_OFF_SVG;
   updateDeafenButton();
+  syncMobileState(appState);
 }
 
 function updateDeafenButton() {
@@ -223,7 +227,7 @@ const appState = {
     color: initialColor,
     isSharing: false,
     isCameraOn: false,
-    isMicOn: false,
+    isMicOn: prefs.micOn === true,
     isDeafened: false,
     isSpeaking: false,
     streamQuality: QUALITY_PRESETS[prefs.streamQuality] ? prefs.streamQuality : '1080p60'
@@ -342,7 +346,8 @@ const socket = io(SERVER_URL, {
     profileId: myProfile.id,
     memberKey: roomAccess().memberKey || '',
     roomPassword: roomAccess().password || '',
-    adminKey: prefs.adminKeys?.[SERVER_URL] || ''
+    adminKey: prefs.adminKeys?.[SERVER_URL] || '',
+    permissionToken: roomAccess().permissionToken || ''
   }),
   transports: ['websocket', 'polling'],
   reconnection: true,
@@ -412,6 +417,11 @@ function syncConnectionMonitor() {
 // Admin: a senha fica salva por sala (cada servidor tem a sua) e vai sozinha ao conectar
 appState.isAdmin = false;
 appState.serverHasAdmin = false;
+const permissionUI = setupPermissions({
+  socket, state: appState, showToast, escapeHtml,
+  saveIdentity: token => saveRoomAccess({ permissionToken: token }),
+  onChange: () => { renderAdminSettings(); renderChannelsTree(); renderTextChannels(); updateVoiceLounge(); }
+});
 
 function savedAdminKey() {
   return prefs.adminKeys?.[SERVER_URL] || '';
@@ -499,35 +509,16 @@ socket.on('connect', () => {
     });
   }
 
-  // Uma queda de conexão retoma a call escolhida nesta janela; abrir a sala não escolhe uma.
-  if (!appState.currentChannelId) return;
-  socket.emit('join-channel', {
-    channelId: appState.currentChannelId,
-    userName: appState.myUser.name,
-    profile: profilePayload(),
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
+  // Reconectar retoma apenas a call já escolhida e a senha guardada nesta janela.
+  if (appState.currentChannelId) requestChannelJoin(appState.currentChannelId, activeChannelPassword);
 });
 
 socket.on('disconnect', (reason) => {
+  pendingChannelJoin = null;
   syncConnectionMonitor();
   renderServerHome();
   console.warn(`[Socket.IO] Desconectado: ${reason}`);
   showToast('Desconectado do servidor. Reconectando...', 'error');
-});
-
-socket.on('reconnect', () => {
-  showToast('Reconectado com sucesso!', 'success');
-  if (!appState.currentChannelId) return;
-  socket.emit('join-channel', {
-    channelId: appState.currentChannelId,
-    userName: appState.myUser.name,
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
 });
 
 // Nome e cor vêm do nosso perfil; o servidor só sugere um aleatório antes do join
@@ -581,12 +572,16 @@ const handleChannelsSummary = (channelsList) => {
       name: ch.name,
       isDefault: ch.isDefault,
       createdBy: ch.createdBy || null,
+      hasPassword: Boolean(ch.hasPassword),
+      isPrivate: Boolean(ch.isPrivate),
+      canManageAccess: Boolean(ch.canManageAccess),
       userCount: ch.userCount ?? userMap.size,
       activeStreams: ch.activeStreams ?? 0,
       users: userMap
     });
   });
 
+  permissionUI.refreshChannels();
   renderChannelsTree();
   updateTopBar();
   updateVoiceLounge();
@@ -598,6 +593,13 @@ const handleChannelsSummary = (channelsList) => {
 socket.on('channels-list', handleChannelsSummary);
 
 socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages, soundSeed }) => {
+  const attempt = pendingChannelJoin?.channelId === channelId ? pendingChannelJoin : null;
+  if (attempt) {
+    activeChannelPassword = attempt.password;
+    pendingChannelJoin = null;
+    closeChannelPasswordModal();
+  }
+  if (channelId !== appState.currentChannelId) activateVoiceChannel(channelId);
   // Eu entrei: ouço o mesmo áudio que tocou pra quem já estava no canal
   playCallSound(soundSeed, joinSoundUrl(myProfile));
   if (me) {
@@ -649,6 +651,10 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
   updateTopBar();
   renderChannelChat(channelId);
   updateVoiceLounge();
+  if (attempt) setMobileView('sala');
+  // A escolha salva restaura o botão; a captura só é aberta quando a call começa.
+  if (appState.myUser.isMicOn && !appState.localMicStream) onMicrophoneToggle(true);
+  if (attempt?.streamKey) openStream(attempt.streamKey);
 });
 
 const handleUserJoined = (data) => {
@@ -1004,11 +1010,67 @@ setupWebRTCSignaling(socket);
 // -----------------------------------------------------------------------------
 // 5. CHANNEL NAVIGATION & LIFECYCLE
 // -----------------------------------------------------------------------------
-function switchChannel(targetChannelId) {
+// A senha fica só na memória da call atual para retomar após uma queda de rede.
+let activeChannelPassword = '';
+let pendingChannelJoin = null;
+let channelPasswordTarget = null;
+
+function closeChannelPasswordModal() {
+  $('#modal-channel-password').classList.add('hidden');
+  $('#input-channel-password').value = '';
+  channelPasswordTarget = null;
+}
+
+function openChannelPasswordModal(channelId, error = '', streamKey = null) {
+  channelPasswordTarget = { channelId, streamKey };
+  $('#channel-password-name').textContent = appState.channels.get(channelId)?.name || channelId;
+  $('#channel-password-error').textContent = error;
+  $('#channel-password-error').classList.toggle('hidden', !error);
+  $('#modal-channel-password').classList.remove('hidden');
+  const input = $('#input-channel-password');
+  input.value = '';
+  input.focus();
+}
+
+function requestChannelJoin(channelId, password = '', streamKey = null) {
+  if (pendingChannelJoin) return;
+  if (!socket.connected) return showToast('Espere a conexão voltar para entrar no canal.', 'error');
+  const attempt = { channelId, password, streamKey };
+  pendingChannelJoin = attempt;
+  socket.emit('join-channel', {
+    channelId,
+    password,
+    userName: appState.myUser.name,
+    profile: profilePayload(),
+    isMicOn: appState.myUser.isMicOn,
+    isDeafened: appState.myUser.isDeafened,
+    isSharing: appState.myUser.isSharing
+  }, (res) => {
+    if (pendingChannelJoin !== attempt) return;
+    pendingChannelJoin = null;
+    if (res?.success) return;
+    if (channelId === appState.currentChannelId) leaveCallLocally();
+    if (res?.code === 'channel-password') {
+      const error = res.reason === 'required' ? '' : res.reason === 'wrong' ? 'Senha errada, tenta de novo.' : res.error;
+      openChannelPasswordModal(channelId, error, streamKey);
+    } else showToast(res?.error || 'Não deu pra entrar no canal.', 'error');
+  });
+}
+
+function switchChannel(targetChannelId, password, streamKey = null) {
   if (!targetChannelId) return;
   const cleanId = targetChannelId.toLowerCase();
   if (cleanId === appState.currentChannelId) return;
+  if (pendingChannelJoin) return;
+  if (appState.channels.get(cleanId)?.hasPassword && password === undefined) {
+    openChannelPasswordModal(cleanId, '', streamKey);
+    return;
+  }
+  requestChannelJoin(cleanId, password || '', streamKey);
+}
 
+// Só troca a interface e as conexões de mídia depois que o servidor aceita a entrada.
+function activateVoiceChannel(cleanId) {
   const oldChannelId = appState.currentChannelId;
   // Entrar e trocar de canal preservam o mute escolhido no dock.
   appState.currentChannelId = cleanId;
@@ -1031,16 +1093,6 @@ function switchChannel(targetChannelId) {
   renderChannelChat(cleanId);
   updateVoiceLounge();
 
-  // Notify server
-  socket.emit('join-channel', {
-    channelId: cleanId,
-    userName: appState.myUser.name,
-    profile: profilePayload(),
-    isMicOn: appState.myUser.isMicOn,
-    isDeafened: appState.myUser.isDeafened,
-    isSharing: appState.myUser.isSharing
-  });
-
   const targetCh = appState.channels.get(cleanId);
   const targetName = targetCh ? targetCh.name : cleanId;
   addSystemChatMessage(`Você entrou no canal #${targetName}.`, cleanId);
@@ -1057,6 +1109,7 @@ function leaveCall() {
 
 // Desliga voz e transmissões e fica fora dos canais (o servidor já sabe ou vai saber à parte)
 function leaveCallLocally() {
+  activeChannelPassword = '';
   const oldChannelId = appState.currentChannelId;
   if (!oldChannelId) return;
   onWebRTCChannelChange(oldChannelId, null);
@@ -1166,7 +1219,8 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
 
 function canDeleteChannel(ch) {
   if (!ch || ch.isDefault) return false;
-  return appState.isAdmin || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
+  if (ch.isPrivate) return hasPermission(appState, 'manageChannels');
+  return hasPermission(appState, 'manageChannels') || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
 }
 
 function deleteChannel(chId) {
@@ -1249,8 +1303,8 @@ function renderChannelsTree() {
     const userCount = ch.users.size;
 
     row.innerHTML = `
-      <span class="channel-speaker-icon">${icon}</span>
-      <span class="channel-name">${escapeHtml(ch.name)}</span>
+      <span class="channel-speaker-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : icon}</span>
+      <span class="channel-name">${escapeHtml(ch.name)}${ch.isPrivate ? ' <span class="badge-role">Restrito</span>' : ''}</span>
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
         : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
@@ -1267,7 +1321,7 @@ function renderChannelsTree() {
     });
     // Solta aqui a pessoa arrastada (admin)
     li.addEventListener('dragover', (e) => {
-      if (!appState.isAdmin || !e.dataTransfer.types.includes(DRAG_USER_TYPE)) return;
+      if (!hasPermission(appState, 'moveMembers') || !e.dataTransfer.types.includes(DRAG_USER_TYPE)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
       li.classList.add('drop-target');
@@ -1278,15 +1332,17 @@ function renderChannelsTree() {
     li.addEventListener('drop', (e) => {
       li.classList.remove('drop-target');
       const userId = e.dataTransfer.getData(DRAG_USER_TYPE);
-      if (!userId || !appState.isAdmin) return;
+      if (!userId || !hasPermission(appState, 'moveMembers')) return;
       e.preventDefault();
       if (ch.users.has(userId)) return;
       moveUserToChannel(userId, chId);
     });
     // Clicar no canal em que você já está, vendo um canal de texto: volta pra tela da call
     const openVoice = () => {
-      if (chId === appState.currentChannelId && appState.textView) closeTextView();
-      else switchChannel(chId);
+      if (chId === appState.currentChannelId) {
+        if (appState.textView) closeTextView();
+        setMobileView('sala');
+      } else switchChannel(chId);
     };
     row.addEventListener('click', openVoice);
     row.addEventListener('keydown', (e) => {
@@ -1321,6 +1377,7 @@ function renderChannelsTree() {
         <span class="channel-user-info"><span class="channel-user-name">
           <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
           ${u.isAdmin ? '<span class="badge-admin" title="Admin">👑</span>' : ''}
+          ${(u.roles || []).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('')}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>${userActivityHtml(u)}</span>
         <div class="user-indicators">
@@ -1332,7 +1389,7 @@ function renderChannelsTree() {
       userLi.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
       if (collapsed) userLi.title = `${u.name}${isMe ? ' (você)' : ''} · ${userLi.title}`;
       // Admin arrasta a pessoa pra outra call, igual no Discord
-      if (appState.isAdmin) {
+      if (hasPermission(appState, 'moveMembers')) {
         userLi.draggable = true;
         userLi.title += ' · arraste pra outra call';
         userLi.addEventListener('dragstart', (e) => {
@@ -1387,6 +1444,7 @@ function updateTopBar() {
   $('#btn-chat-pins')?.classList.toggle('hidden', !textCh);
   if (!textCh) $('#pins-popover')?.classList.add('hidden');
   renderTyping();
+  syncMobileState(appState);
 
   const chatInput = $('#chat-input');
   if (chatInput) {
@@ -1543,6 +1601,7 @@ function updateUserDockProfile() {
     applyFrame(avatar, myProfile);
     avatar.innerHTML = avatarInnerHtml({ id: appState.myId, name: appState.myUser.name });
   }
+  syncMobileState(appState);
 }
 
 // Avatar: a foto quando tem (a nossa vem do perfil local; a dos outros, do servidor),
@@ -2358,7 +2417,7 @@ function setupPins() {
     if (item && !e.target.closest('a') && jumpToMessage(item.dataset.pinId)) pop.classList.add('hidden');
   });
   document.addEventListener('mousedown', (e) => {
-    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !btn.contains(e.target)) pop.classList.add('hidden');
+    if (!pop.classList.contains('hidden') && !pop.contains(e.target) && !btn.contains(e.target) && !e.target.closest('#mobile-open-pins')) pop.classList.add('hidden');
   });
 }
 
@@ -2830,6 +2889,7 @@ function markCallChatSeen() {
 
 function openCallChat() {
   if (!appState.currentChannelId) return;
+  setMobileView('chat');
   closeTextView();
   markCallChatSeen();
   $('#chat-drawer')?.classList.remove('collapsed');
@@ -2840,6 +2900,7 @@ function openCallChat() {
 
 function openTextChannel(id) {
   if (!appState.textChannels.has(id)) return;
+  setMobileView('chat');
   if (appState.textView !== id) setReplyTo(null);
   appState.textView = id;
   appState.textMentions.delete(id);
@@ -3036,6 +3097,7 @@ function setupDockControls() {
     const nextMicOn = !appState.myUser.isMicOn;
     if (nextMicOn && appState.myUser.isDeafened) onDeafenToggle(false);
     appState.myUser.isMicOn = nextMicOn;
+    savePrefs({ micOn: nextMicOn });
 
     updateMicButton();
 
@@ -3059,6 +3121,7 @@ function setupDockControls() {
     }
     const nextDeafened = !appState.myUser.isDeafened;
     onDeafenToggle(nextDeafened);
+    savePrefs({ micOn: appState.myUser.isMicOn });
     playControlSound(nextDeafened ? 'deafen' : 'undeafen');
 
     updateMicButton();
@@ -3140,6 +3203,7 @@ function setupChatAndReactions() {
   });
 
   $('#btn-close-chat')?.addEventListener('click', () => {
+    setMobileView('sala');
     $('#chat-drawer')?.classList.add('collapsed');
     $('#btn-toggle-chat')?.classList.remove('active');
     updateTextLayout();
@@ -3389,10 +3453,30 @@ function openSettings(name = $('.settings-tab.active')?.dataset.settingsTab || '
 }
 
 function setupModals() {
+  const syncChannelPasswordField = () => {
+    const isVoice = document.querySelector('input[name="channel-type"]:checked')?.value === 'voice';
+    $('#channel-password-field').classList.toggle('hidden', !isVoice);
+    $('#input-channel-password-new').disabled = !isVoice;
+    $('#new-channel-access').classList.toggle('hidden', !isVoice || !hasPermission(appState, 'manageChannels'));
+  };
+  $$('input[name="channel-type"]').forEach((radio) => radio.addEventListener('change', syncChannelPasswordField));
+  $('#form-channel-password').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!channelPasswordTarget) return;
+    const { channelId, streamKey } = channelPasswordTarget;
+    requestChannelJoin(channelId, $('#input-channel-password').value, streamKey);
+  });
+  $('#modal-channel-password').addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeChannelPasswordModal();
+  });
   // Open create channel modal
   const openCreateModal = (type = 'voice') => {
     const radio = document.querySelector(`input[name="channel-type"][value="${type}"]`);
     if (radio) radio.checked = true;
+    $('#input-channel-password-new').value = '';
+    $('#new-channel-access-private').checked = false;
+    $('#new-channel-access-choices').classList.add('hidden');
+    syncChannelPasswordField();
     $('#modal-create-channel')?.classList.remove('hidden');
     $('#input-channel-name')?.focus();
   };
@@ -3431,21 +3515,27 @@ function setupModals() {
     if (!name) return;
 
     const type = document.querySelector('input[name="channel-type"]:checked')?.value;
+    const password = type === 'voice' ? $('#input-channel-password-new').value : '';
+    const finish = () => {
+      input.value = '';
+      $('#input-channel-password-new').value = '';
+      $('#modal-create-channel').classList.add('hidden');
+    };
+    if (!socket.connected) return showToast('Espere a conexão voltar para criar o canal.', 'error');
     if (type === 'text') {
       socket.emit('create-text-channel', { name, profileId: myProfile.id }, (response) => {
-        if (response?.success) openTextChannel(response.channelId);
+        if (response?.success) { finish(); openTextChannel(response.channelId); }
         else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
       });
     } else {
-      socket.emit('create-channel', { name, profileId: myProfile.id }, (response) => {
-        if (response && response.channelId) {
-          switchChannel(response.channelId);
+      socket.emit('create-channel', { name, profileId: myProfile.id, password, access: permissionUI.newAccess() }, (response) => {
+        if (response?.success && response.channelId) {
+          finish();
+          switchChannel(response.channelId, password);
         }
+        else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
       });
     }
-
-    input.value = '';
-    $('#modal-create-channel')?.classList.add('hidden');
   });
 
   // Stream volume slider (0-300% GainNode boost)
@@ -3478,7 +3568,7 @@ function setupModals() {
   $('#select-audio-input')?.addEventListener('change', async (e) => {
     const micId = e.target.value;
     appState.audioManager?.savePreferences(null, micId, null);
-    if (appState.myUser.isMicOn && (await restartMicrophone(micId))) showToast('Microfone alterado');
+    if (appState.localMicStream && (await restartMicrophone(micId))) showToast('Microfone alterado');
   });
 
   const noiseSelect = $('#select-noise-suppression');
@@ -3486,7 +3576,7 @@ function setupModals() {
     noiseSelect.value = noiseMode();
     noiseSelect.addEventListener('change', async () => {
       savePrefs({ noiseSuppression: noiseSelect.value });
-      if (appState.myUser.isMicOn) await restartMicrophone();
+      if (appState.localMicStream) await restartMicrophone();
       showToast(`Cancelamento de ruído: ${noiseSelect.selectedOptions[0]?.textContent || noiseSelect.value}`);
     });
   }
@@ -3772,9 +3862,11 @@ function openUserPopover(userId, anchorEvent) {
   $('#user-popover-bio').textContent = u.bio || '';
   $('#user-popover-activity').innerHTML = userActivityHtml(u);
   renderUserPopoverVolume();
-  $('#user-popover-kick')?.classList.toggle('hidden', !appState.isAdmin || !u.channelId);
+  $('#user-popover-kick')?.classList.toggle('hidden', !hasPermission(appState, 'kickMembers') || !u.channelId);
   const adminRow = $('#user-popover-admin');
-  adminRow?.classList.toggle('hidden', !appState.isAdmin);
+  adminRow?.classList.toggle('hidden', !['kickMembers', 'muteMembers', 'deafenMembers'].some(p => hasPermission(appState, p)));
+  $('#user-popover-server-mute')?.classList.toggle('hidden', !hasPermission(appState, 'muteMembers'));
+  $('#user-popover-server-deafen')?.classList.toggle('hidden', !hasPermission(appState, 'deafenMembers'));
   const muteAll = $('#user-popover-server-mute');
   if (muteAll) muteAll.innerHTML = u.serverMuted ? `${MIC_ON_SVG} Desmutar pra todos` : `${MIC_OFF_SVG} Mutar pra todos`;
   const deafAll = $('#user-popover-server-deafen');
@@ -4599,14 +4691,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.6.2';
+const WHATS_NEW_VERSION = '3.7.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -4794,6 +4886,7 @@ function unwatchScreen(userId) {
 
 // Abas do topo: abre essa transmissão (com várias, sai do mosaico)
 function focusStream(userId) {
+  setMobileView('sala');
   appState.focusedStreamUserId = userId;
   if (appState.activeStreams.size > 1) appState.expandedStreamUserId = userId;
   updateStageLayout();
@@ -5342,6 +5435,7 @@ function updateStageControls() {
     $('#btn-soundboard')?.setAttribute('aria-expanded', 'false');
     $('#reactions-layer')?.replaceChildren();
   }
+  syncMobileState(appState);
 }
 
 function updateStageLayout() {
@@ -6001,6 +6095,14 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
   stopCameraShare({ silent: true });
   stopAllExtraScreens();
 
+  // Fora da call, o Android não deve manter captura sem o serviço de microfone.
+  if (window.TeletelaAndroid && !newChannelId) {
+    appState.localMicStream?.getTracks().forEach(track => track.stop());
+    appState.localMicStream = null;
+    appState.vadDetector?.setEnabled(false);
+    appState.myUser.isSpeaking = false;
+  }
+
   updateStageLayout();
   updateVoiceLounge();
 }
@@ -6120,6 +6222,7 @@ async function restartMicrophone(deviceId) {
       }
     }
     appState.vadDetector?.setStream(appState.localMicStream);
+    syncMobileState(appState);
     return true;
   } catch (err) {
     console.warn('[Mic] Erro ao trocar o microfone:', err);
@@ -6130,15 +6233,33 @@ async function restartMicrophone(deviceId) {
 async function onMicrophoneToggle(isMicOn) {
   console.log(`[WebRTC] Microphone toggled: ${isMicOn ? 'ON' : 'OFF'}`);
 
+  // O botão pode escolher o estado antes de entrar, sem abrir o microfone no Android.
+  if (isMicOn && window.TeletelaAndroid && !appState.currentChannelId) return;
+
   if (isMicOn) {
     try {
       if (!appState.localMicStream || appState.localMicStream.getAudioTracks().length === 0) {
         appState.localMicStream = await openMicrophone();
       }
 
+      // A permissão pode ter ficado aberta enquanto a pessoa saía da call.
+      if (window.TeletelaAndroid && !appState.currentChannelId) {
+        appState.localMicStream.getTracks().forEach(track => track.stop());
+        appState.localMicStream = null;
+        return;
+      }
+
+      // Mutar ou receber moderação durante a permissão também precisa ser respeitado.
+      if (!appState.myUser.isMicOn || appState.myUser.isDeafened || isMicLockedByAdmin()) {
+        onMicrophoneToggle(false);
+        return;
+      }
+
       appState.localMicStream.getAudioTracks().forEach((track) => {
         track.enabled = true;
       });
+
+      syncMobileState(appState);
 
       // Initialize or enable VAD
       if (!appState.vadDetector && appState.localMicStream) {
@@ -6175,6 +6296,7 @@ async function onMicrophoneToggle(isMicOn) {
     } catch (err) {
       console.error('[WebRTC] Failed to acquire microphone:', err);
       appState.myUser.isMicOn = false;
+      savePrefs({ micOn: false });
       updateMicButton();
       socket.emit('user-state-changed', { isMicOn: false });
       renderChannelsTree();
@@ -7218,6 +7340,7 @@ function initApp() {
     window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }
   initAudioSystem();
+  setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings });
   updateUserDockProfile();
   setupDockControls();
   setupServerHome();

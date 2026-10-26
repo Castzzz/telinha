@@ -6,3 +6,10 @@ electron/bin/
 # Anotações de trabalho dos agentes de IA que montaram o projeto
 .agents/
 ORIGINAL_REQUEST.md
+android/.gradle/
+android/local.properties
+android/**/build/
+android/*.jks
+android/*.keystore
+android/**/*.jks
+android/**/*.keystore

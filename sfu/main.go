@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,6 +43,9 @@ var (
 	iceForWeb  any // repassado pros navegadores no "hello"
 	roomsMu    sync.Mutex
 	rooms      = map[string]*Room{}
+	sessionsMu sync.Mutex
+	sessions   = map[string]map[*Client]bool{}
+	revoked    = map[string]time.Time{}
 	httpPort   = env("PORT", "8081")
 	sfuSecret  = os.Getenv("SFU_SECRET")
 	mediaPort  = env("MEDIA_PORT", "50000")
@@ -54,6 +58,7 @@ type Client struct {
 	role string
 	out  chan []byte
 	pc   *webrtc.PeerConnection // conexão entre este cliente e o servidor
+	ws   *websocket.Conn
 }
 
 type Room struct {
@@ -122,9 +127,84 @@ func authorized(name, role, exp, token string) bool {
 		return false
 	}
 	mac := hmac.New(sha256.New, []byte(sfuSecret))
-	mac.Write([]byte(name + "|" + role + "|" + exp))
+	message := name + "|" + role + "|" + exp
+	if parts := strings.Split(token, "."); len(parts) == 2 {
+		if len(parts[0]) != 32 {
+			return false
+		}
+		if _, err := hex.DecodeString(parts[0]); err != nil {
+			return false
+		}
+		message += "|" + parts[0]
+		token = parts[1]
+	}
+	mac.Write([]byte(message))
 	want := hex.EncodeToString(mac.Sum(nil))
 	return hmac.Equal([]byte(want), []byte(token))
+}
+
+// A identidade de mídia muda a cada entrada na call; revogar não bloqueia a próxima.
+func registerSession(id string, c *Client) bool {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	if until, ok := revoked[id]; ok && time.Now().Before(until) {
+		return false
+	}
+	if sessions[id] == nil {
+		sessions[id] = map[*Client]bool{}
+	}
+	sessions[id][c] = true
+	return true
+}
+
+func unregisterSession(id string, c *Client) {
+	sessionsMu.Lock()
+	defer sessionsMu.Unlock()
+	delete(sessions[id], c)
+	if len(sessions[id]) == 0 {
+		delete(sessions, id)
+	}
+}
+
+func revokeSession(id string) {
+	sessionsMu.Lock()
+	now := time.Now()
+	for key, until := range revoked {
+		if now.After(until) {
+			delete(revoked, key)
+		}
+	}
+	revoked[id] = now.Add(2 * time.Minute)
+	var clients []*Client
+	for c := range sessions[id] {
+		clients = append(clients, c)
+	}
+	sessionsMu.Unlock()
+	for _, c := range clients {
+		if c.ws != nil {
+			c.ws.Close()
+		}
+	}
+}
+
+func handleRevoke(w http.ResponseWriter, req *http.Request) {
+	if sfuSecret == "" || !hmac.Equal([]byte(req.Header.Get("Authorization")), []byte("Bearer "+sfuSecret)) {
+		http.Error(w, "Sem permissão", http.StatusForbidden)
+		return
+	}
+	var payload struct {
+		ID string `json:"id"`
+	}
+	if json.NewDecoder(http.MaxBytesReader(w, req.Body, 1024)).Decode(&payload) != nil || len(payload.ID) != 32 {
+		http.Error(w, "Identidade inválida", http.StatusBadRequest)
+		return
+	}
+	if _, err := hex.DecodeString(payload.ID); err != nil {
+		http.Error(w, "Identidade inválida", http.StatusBadRequest)
+		return
+	}
+	revokeSession(payload.ID)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func handleSocket(ws *websocket.Conn) {
@@ -142,8 +222,14 @@ func handleSocket(ws *websocket.Conn) {
 		return
 	}
 
+	c := &Client{id: newID(), role: role, out: make(chan []byte, 256), ws: ws}
+	if parts := strings.Split(q.Get("token"), "."); len(parts) == 2 {
+		if !registerSession(parts[0], c) {
+			return
+		}
+		defer unregisterSession(parts[0], c)
+	}
 	room := getRoom(name)
-	c := &Client{id: newID(), role: role, out: make(chan []byte, 256)}
 
 	room.mu.Lock()
 	if role == "host" && room.host != nil {
@@ -528,6 +614,7 @@ func main() {
 	mux := http.NewServeMux()
 	// Quem pode entrar é decidido pela senha, não pela origem (o app vem de telinha://)
 	mux.Handle("GET /ws", websocket.Server{Handler: handleSocket, Handshake: func(*websocket.Config, *http.Request) error { return nil }})
+	mux.HandleFunc("POST /revoke", handleRevoke)
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		roomsMu.Lock()
 		n := len(rooms)

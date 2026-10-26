@@ -2,6 +2,16 @@
    TELETELA — TEMAS (ESCURO / PRETO / CLARO) & LAYOUT STYLESHEET
    ========================================================================== */
 
+.permission-block { border-top: 1px solid var(--border-subtle); padding-top: 18px; margin-top: 18px; }
+.permission-block h4 { color: var(--text-header); margin-bottom: 12px; }
+.permission-block > label { display: block; margin-top: 10px; }
+.permission-list { margin: 12px 0; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; max-height: 220px; overflow-y: auto; }
+.permission-list legend { color: var(--text-muted); padding: 0 4px; font-size: 12px; }
+.permission-choice { display: flex !important; align-items: center; gap: 8px; padding: 8px 0; color: var(--text-normal); font-size: 13px; }
+.permission-choice input { flex: 0 0 auto; accent-color: var(--accent-brand); }
+.permission-block label.permission-choice { text-transform: none; letter-spacing: normal; font-weight: 400; }
+.badge-role { display: inline-block; color: var(--text-muted); background: var(--bg-secondary); border: 1px solid var(--border-subtle); border-radius: 5px; font-size: 10px; padding: 1px 4px; vertical-align: middle; }
+
 :root {
   /* Discord Palette Tokens */
   --bg-primary: #313338;
