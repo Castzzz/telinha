@@ -22,7 +22,7 @@ test('Electron real: atualizar 3.7 por cima, reabrir, mudar URL e recuperar pref
       const output = await new Promise((resolve, reject) => {
         const child = spawn(electron, ['--ozone-platform=x11', '--disable-gpu', 'tests/identity-desktop.cjs'], { cwd: root, env: { ...process.env,
           XDG_RUNTIME_DIR: runtime, TELETELA_IDENTITY_STAGE: String(stage), TELETELA_IDENTITY_TEST_DIR: directory, TELETELA_IDENTITY_OLD_ROOT: oldRoot,
-          TELINHA_DATA_DIR: path.join(directory, 'servidor'), ADMIN_KEY: 'propriedade-identidade-teste' } });
+          TELINHA_DATA_DIR: path.join(directory, 'servidor'), ADMIN_KEY: 'admin-antigo-identidade-teste', OWNER_KEY: 'propriedade-identidade-teste' } });
         let logs = '';
         child.stdout.on('data', data => { logs += data; }); child.stderr.on('data', data => { logs += data; });
         child.on('error', reject); child.on('exit', code => code === 0 ? resolve(logs) : reject(new Error(`Etapa ${stage}: ${logs}`)));

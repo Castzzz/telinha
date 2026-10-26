@@ -16,6 +16,7 @@ const ROOT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const TEST_PORT = 19094;
 const URL_BASE = `http://127.0.0.1:${TEST_PORT}`;
 const ADMIN_KEY = 'senha-teste-123';
+const OWNER_KEY = 'propriedade-teste-456';
 const DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'teletela-test-'));
 
 function once(socket, event) {
@@ -41,7 +42,7 @@ async function join(client, channelId, profileId, password) {
 async function startServer() {
   const proc = spawn('node', ['server.js'], {
     cwd: ROOT_DIR,
-    env: { ...process.env, PORT: String(TEST_PORT), ADMIN_KEY, TELINHA_DATA_DIR: DATA_DIR, SFU_SECRET: 'sfu-teste' },
+    env: { ...process.env, PORT: String(TEST_PORT), ADMIN_KEY, OWNER_KEY, TELINHA_DATA_DIR: DATA_DIR, SFU_SECRET: 'sfu-teste' },
     stdio: 'ignore'
   });
   for (let i = 0; i < 50; i++) {
@@ -117,7 +118,7 @@ async function runTests() {
     await join(carol, 'geral', 'carol-profile-0003');
     await join(bob, 'geral', 'bob-profile-00002');
     const crownSeen = once(carol, 'user-profile-updated');
-    assert.equal((await emit(bob, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(bob, 'owner-claim', { key: OWNER_KEY })).success, true);
     const update = await crownSeen;
     assert.equal(update.userId, bob.id);
     assert.equal(update.user.isAdmin, true);
@@ -430,7 +431,7 @@ async function runTests() {
     // Só quem criou (ou admin) apaga; apagar some com o arquivo
     await join(reader, 'geral', 'carol-profile-0003');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, false);
-    assert.equal((await emit(reader, 'owner-recover', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(reader, 'owner-recover', { key: OWNER_KEY })).success, true);
     assert.equal((await emit(reader, 'message-delete', { scope: 'text', channelId: 'arquivos', messageId: savedFile.id })).success, true);
     assert.equal((await fetch(`${URL_BASE}${savedFile.attachment.url}`)).status, 404, 'apagar mensagem remove seu arquivo');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'arquivos' })).success, true);
@@ -606,7 +607,7 @@ async function runTests() {
     assert.equal(memberKeyMsg.key.length, 64);
     clients.at(-1).disconnect();
     assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, false, 'só admin');
-    assert.equal((await emit(pinner, 'owner-recover', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(pinner, 'owner-recover', { key: OWNER_KEY })).success, true);
     const told = new Promise((resolve) => watcher.once('room-password-changed', resolve));
     assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, true);
     assert.equal((await told).password, 'pipoca', 'quem já está dentro recebe a senha nova');
@@ -631,7 +632,7 @@ async function runTests() {
     const roomAdmin = await tryConnect({ roomPassword: 'pipoca' });
     assert.equal(roomAdmin.ok, true);
     const adminSock = clients.at(-1);
-    assert.equal((await emit(adminSock, 'owner-recover', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(adminSock, 'owner-recover', { key: OWNER_KEY })).success, true);
     assert.equal((await emit(adminSock, 'admin-reset-members', {})).success, true);
     assert.equal((await tryConnect({ profileId: 'ivan-profile-0009', memberKey: memberKeyMsg.key })).ok, false, 'admin esqueceu as chaves: precisa da senha');
     assert.equal((await emit(adminSock, 'admin-set-room-password', { password: '' })).success, true);

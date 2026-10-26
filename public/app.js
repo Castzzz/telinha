@@ -463,18 +463,17 @@ function syncConnectionMonitor() {
 // -----------------------------------------------------------------------------
 // 4. SIGNALING EVENT HANDLERS
 // -----------------------------------------------------------------------------
-// Admin: a senha fica salva por sala (cada servidor tem a sua) e vai sozinha ao conectar
+// Propriedade só vem da identidade confirmada pelo protocolo novo.
 appState.isAdmin = false;
+appState.isOwner = false;
+appState.legacyAdmin = false;
+appState.ownershipSupported = false;
 appState.serverHasAdmin = false;
 const permissionUI = setupPermissions({
   socket, state: appState, showToast, escapeHtml,
   saveIdentity: token => saveRoomAccess({ permissionToken: token }),
   onChange: () => { renderAdminSettings(); renderChannelsTree(); renderTextChannels(); updateVoiceLounge(); }
 });
-
-function savedAdminKey() {
-  return prefs.adminKeys?.[SERVER_URL] || '';
-}
 
 function saveAdminKey(key) {
   const adminKeys = { ...(prefs.adminKeys || {}) };
@@ -485,7 +484,10 @@ function saveAdminKey(key) {
 
 function adminLogin(key, onDone) {
   socket.emit('admin-login', { key }, (res) => {
-    appState.isAdmin = Boolean(res?.success);
+    if (!appState.ownershipSupported) {
+      appState.legacyAdmin = Boolean(res?.success);
+      appState.isAdmin = appState.legacyAdmin;
+    }
     renderAdminSettings();
     renderChannelsTree();
     renderTextChannels();
@@ -550,13 +552,7 @@ socket.on('connect', () => {
   // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
   socket.emit('update-profile', profilePayload());
   publishGameActivity(true);
-  const adminKey = savedAdminKey();
-  if (adminKey && !appState.ownerClaimed && !appState.isAdmin) {
-    adminLogin(adminKey, (res) => {
-      // Senha trocada no servidor: esquece a velha
-      if (res.success || appState.ownerClaimed) saveAdminKey('');
-    });
-  }
+  // Uma senha de admin salva nunca reivindica a propriedade automaticamente.
 
   // Reconectar retoma apenas a call já escolhida e a senha guardada nesta janela.
   if (appState.currentChannelId) requestChannelJoin(appState.currentChannelId, activeChannelPassword);
@@ -1430,7 +1426,7 @@ function renderChannelsTree() {
         </div>
         <span class="channel-user-info"><span class="channel-user-name">
           <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
-          ${u.isAdmin ? '<span class="badge-admin" title="Dono do servidor">👑</span>' : ''}
+          ${ownershipBadge(u)}
           ${(u.roles || []).filter(role => role.id === u.displayRoleId).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('')}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>${userActivityHtml(u)}</span>
@@ -1613,7 +1609,7 @@ function updateVoiceLounge() {
           </div>
           <span class="speaking-halo"></span>
         </div>
-        <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Dono do servidor">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
+        <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${ownershipBadge(u)}${isMe ? ' (Você)' : ''}</span>
         ${userActivityHtml(u)}
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
@@ -3963,8 +3959,13 @@ function renderUserPopoverVolume() {
 }
 
 // Perfil grande no meio da tela: banner, foto com moldura, nome e bio
+function ownershipBadge(u) {
+  return u.isOwner === true ? '<span class="badge-admin" title="Dono do servidor">👑</span>'
+    : u.isAdmin ? '<span class="badge-admin" title="Admin no servidor antigo">🛡️</span>' : '';
+}
+
 function roleBadges(u) {
-  return (u.isOwner || u.isAdmin ? '<span class="badge-role">Dono do servidor</span>' : '') + (u.roles || []).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('');
+  return (u.isOwner === true ? '<span class="badge-role">Dono do servidor</span>' : u.isAdmin ? '<span class="badge-role">Admin no servidor antigo</span>' : '') + (u.roles || []).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('');
 }
 
 function openProfileCard(userId) {
@@ -3982,7 +3983,7 @@ function openProfileCard(userId) {
   const name = $('#profile-card-name');
   name.textContent = shown.name;
   applyNameStyle(name, shown);
-  $('#profile-card-badges').innerHTML = `${u.isAdmin ? ' <span class="badge-admin" title="Dono do servidor">👑</span>' : ''}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
+  $('#profile-card-badges').innerHTML = `${ownershipBadge(u)}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
   $('#profile-card-bio').textContent = shown.bio || '';
   $('#profile-card-roles').innerHTML = roleBadges(u);
   $('#profile-card-activity').innerHTML = userActivityHtml(u);
@@ -4685,9 +4686,10 @@ function renderAdminSettings() {
   $('#admin-login-row')?.classList.toggle('hidden', appState.isAdmin);
   $('#admin-logged-row')?.classList.toggle('hidden', !appState.isAdmin);
   $('#admin-room-password')?.classList.toggle('hidden', !hasPermission(appState, 'manageServer'));
-  $('#btn-admin-login').textContent = appState.ownerClaimed ? 'Servidor já tem dono' : 'Assumir propriedade';
+  $('#btn-admin-login').textContent = !appState.ownershipSupported ? 'Entrar como admin (antigo)' : appState.ownerClaimed ? 'Servidor já tem dono' : 'Assumir propriedade';
   $('#btn-admin-login').disabled = Boolean(appState.ownerClaimed);
-  $('#btn-owner-recover').classList.toggle('hidden', !appState.ownerClaimed || appState.isAdmin);
+  $('#btn-owner-recover').classList.toggle('hidden', !appState.ownershipSupported || !appState.ownerClaimed || appState.isOwner);
+  $('#admin-logged-row .admin-status').textContent = appState.isOwner ? 'Você é o dono deste servidor.' : 'Você é admin no servidor antigo. A propriedade exige o servidor atualizado.';
   const status = $('#room-password-status');
   if (status) status.textContent = appState.roomHasPassword ? '🔒 A sala tem senha.' : '🔓 A sala está aberta (sem senha).';
   $('#btn-room-password-remove')?.classList.toggle('hidden', !appState.roomHasPassword);
@@ -4726,16 +4728,18 @@ function setupAdminSettings() {
     const key = input?.value.trim();
     if (!key) return;
     loginBtn.disabled = true;
-    adminLogin(key, (res) => {
+    const finish = (res) => {
       loginBtn.disabled = false;
       if (res.success) {
         saveAdminKey('');
         input.value = '';
-        showToast('👑 Você é o dono deste servidor.', 'success');
+        showToast(appState.ownershipSupported ? '👑 Você é o dono deste servidor.' : 'Você entrou como admin no servidor antigo.', 'success');
       } else {
         showToast(`❌ ${res.error || 'Senha errada.'}`, 'error');
       }
-    });
+    };
+    if (appState.ownershipSupported) socket.emit('owner-claim', { key }, finish);
+    else adminLogin(key, finish);
   };
   loginBtn?.addEventListener('click', login);
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
@@ -4784,14 +4788,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.7.0';
+const WHATS_NEW_VERSION = '3.8.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));

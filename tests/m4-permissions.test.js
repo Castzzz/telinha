@@ -29,7 +29,7 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
   await new Promise(resolve => revoked.listen(0, '127.0.0.1', resolve));
   async function start() {
     process = spawn('node', ['server.js'], { cwd: path.resolve(import.meta.dirname, '..'), stdio: 'ignore', env: { ...globalThis.process.env,
-      PORT: '19115', TELINHA_DATA_DIR: directory, ADMIN_KEY: 'admin-permissoes-teste', SFU_SECRET: 'sfu-permissoes-teste', SFU_INTERNAL_URL: `http://127.0.0.1:${revoked.address().port}` } });
+      PORT: '19115', TELINHA_DATA_DIR: directory, ADMIN_KEY: 'admin-permissoes-teste', OWNER_KEY: 'dono-permissoes-teste', SFU_SECRET: 'sfu-permissoes-teste', SFU_INTERNAL_URL: `http://127.0.0.1:${revoked.address().port}` } });
     for (let i = 0; i < 100; i++) {
       try { if ((await fetch(base + '/api/health')).ok) return; } catch {}
       await wait(50);
@@ -60,7 +60,10 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
   try {
     await start();
     const owner = await connect('Dono'), alice = await connect('Alice'), bob = await connect('Bob');
-    await emit(owner.socket, 'admin-login', { key: 'admin-permissoes-teste' });
+    assert.equal((await emit(bob.socket, 'admin-login', { key: 'admin-permissoes-teste' })).success, false);
+    assert.equal((await emit(bob.socket, 'owner-claim', { key: 'admin-permissoes-teste' })).success, false);
+    assert.equal((await emit(bob.socket, 'owner-recover', { key: 'admin-permissoes-teste' })).success, false);
+    await emit(owner.socket, 'owner-claim', { key: 'dono-permissoes-teste' });
     let role, highRole, channelId, mediaId, privateAttachmentUrl;
     await t.test('somente o dono cria e atribui cargos; perfil público não concede poderes', async () => {
       role = (await emit(owner.socket, 'role-save', { name: 'Moderador', position: 10, permissions: ['muteMembers', 'kickMembers'] })).role;
@@ -136,7 +139,7 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
       await waitFor(() => bob.permissions.owner === true);
       assert.equal(bob.permissions.owner, true);
       assert.equal((await emit(owner.socket, 'owner-recover', { key: 'incorreta' })).success, false);
-      assert.equal((await emit(owner.socket, 'owner-recover', { key: 'admin-permissoes-teste' })).success, true);
+      assert.equal((await emit(owner.socket, 'owner-recover', { key: 'dono-permissoes-teste' })).success, true);
       await waitFor(() => bob.permissions.owner === false);
       assert.equal(bob.permissions.owner, false);
       assert.equal(owner.permissions.owner, true);

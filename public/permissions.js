@@ -130,12 +130,17 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
     state.permissions = payload.permissions || [];
     state.permissionRoles = payload.roles || [];
     $('#permission-device').textContent = payload.memberId ? `ID do seu perfil neste servidor: ${payload.memberId}. Permanece ao atualizar o app.` : '';
-    state.isAdmin = Boolean(payload.owner);
+    state.ownershipSupported = payload.ownershipVersion === 2;
+    state.isOwner = state.ownershipSupported && payload.owner === true;
+    state.legacyAdmin = !state.ownershipSupported && payload.owner === true;
+    state.isAdmin = state.isOwner || state.legacyAdmin;
     state.ownerClaimed = Boolean(payload.ownerClaimed);
-    $('#permission-status').textContent = payload.owner ? 'Você é o dono deste servidor. Seu perfil é reconhecido ao reabrir o app.' : state.permissionRoles.length ? `Seus cargos: ${state.permissionRoles.map(r => r.name).join(', ')}` : 'Seu perfil ainda não tem cargos neste servidor.';
+    $('#permission-status').textContent = state.isOwner ? 'Você é o dono deste servidor. Seu perfil é reconhecido ao reabrir o app.'
+      : state.legacyAdmin ? 'Você é admin neste servidor antigo. Isso não significa ser dono. Atualize o servidor para usar propriedade e cargos.'
+      : state.permissionRoles.length ? `Seus cargos: ${state.permissionRoles.map(r => r.name).join(', ')}` : 'Seu perfil ainda não tem cargos neste servidor.';
     $('#permission-management').classList.toggle('hidden', !payload.directory);
     $('#permission-role-management').classList.toggle('hidden', !hasPermission(state, 'manageRoles'));
-    $('#owner-transfer').classList.toggle('hidden', !payload.owner);
+    $('#owner-transfer').classList.toggle('hidden', !state.isOwner);
     $('#new-channel-access').classList.toggle('hidden', !hasPermission(state, 'manageChannels'));
     if (payload.directory) {
       const previous = directory;

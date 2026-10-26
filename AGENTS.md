@@ -36,7 +36,7 @@ como fazer release/deploy e as armadilhas conhecidas.
 ```bash
 npm run app                 # app desktop (Electron do SISTEMA; não use npx electron)
 npm start                   # servidor em http://localhost:8080
-PORT=3999 ADMIN_KEY=segredo1 TELINHA_DATA_DIR=/tmp/teletela-data node server.js   # servidor de teste completo
+PORT=3999 OWNER_KEY=segredo-dono TELINHA_DATA_DIR=/tmp/teletela-data node server.js   # servidor de teste completo
 npm test                    # 62 testes (todos passam)
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js   # todos passam
 node tests/m4-channels-admin.test.js                                   # integração do servidor

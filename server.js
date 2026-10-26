@@ -35,6 +35,8 @@ const DATA_DIR = process.env.TELINHA_DATA_DIR || '';
 const CHANNELS_FILE = DATA_DIR ? path.join(DATA_DIR, 'channels.json') : '';
 // Chave para assumir ou recuperar a propriedade; os poderes comuns vêm dos cargos.
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
+// A antiga senha compartilhada de admin nunca autoriza propriedade.
+const OWNER_KEY = process.env.OWNER_KEY || '';
 const permissions = new PermissionStore(DATA_DIR);
 
 function verifiedProfileKey(socket) {
@@ -637,9 +639,13 @@ function removeTextAttachment(msg) {
 }
 
 function isAdminKey(key) {
-  if (!ADMIN_KEY || typeof key !== 'string') return false;
+  return matchesKey(key, ADMIN_KEY);
+}
+function isOwnerKey(key) { return matchesKey(key, OWNER_KEY); }
+function matchesKey(key, expected) {
+  if (!expected || typeof key !== 'string') return false;
   const a = Buffer.from(key);
-  const b = Buffer.from(ADMIN_KEY);
+  const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
@@ -862,7 +868,7 @@ function emitVisibleUserEvent(event, payload, subject) {
 function sendPermissions(socket) {
   const user = socket.data.user;
   const directory = ['manageChannels', 'manageRoles'].some(p => permissions.has(user, p)) ? permissions.snapshot() : null;
-  socket.emit('permissions-state', { supported: true, owner: permissions.isOwner(user), ownerClaimed: Boolean(permissions.data.ownerId), memberId: user.accessId,
+  socket.emit('permissions-state', { supported: true, ownershipVersion: 2, owner: permissions.isOwner(user), ownerClaimed: Boolean(permissions.data.ownerId), memberId: user.accessId,
     permissions: PERMISSIONS.filter(p => permissions.has(user, p)), roles: permissions.roles(user), directory });
 }
 
@@ -1187,21 +1193,26 @@ io.on('connection', (socket) => {
   const summary = getChannelsSummary(user);
   socket.emit('channels-list', summary);
   socket.emit('channels-summary', summary);
-  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(ADMIN_KEY) });
+  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(OWNER_KEY) });
 
 
-  // A senha antiga só assume o dono uma vez. Recuperação é uma ação explícita.
+  // Clientes antigos continuam reconhecendo o dono por sua identidade, sem promover admins.
   socket.on('admin-login', safeHandler((raw, callback) => {
     const cb = safeCallback(callback);
     if (permissions.isOwner(user)) return cb({ success: true });
+    cb({ success: false, error: 'A administração agora é definida pelos cargos. Peça ao dono do servidor.' });
+  }));
+  socket.on('owner-claim', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (permissions.isOwner(user)) return cb({ success: true });
     if (permissions.data.ownerId) return cb({ success: false, error: 'O servidor já tem dono. Peça um cargo ou use a recuperação de propriedade.' });
-    if (!isAdminKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de propriedade incorreta.' });
+    if (!isOwnerKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de propriedade incorreta.' });
     try { permissions.setOwner(user.accessId); refreshPermissions(); cb({ success: true }); }
     catch { cb({ success: false, error: 'Não foi possível salvar a propriedade.' }); }
   }));
   socket.on('owner-recover', safeHandler((raw, callback) => {
     const cb = safeCallback(callback);
-    if (!isAdminKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de recuperação incorreta.' });
+    if (!isOwnerKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de recuperação incorreta.' });
     try { permissions.setOwner(user.accessId); refreshPermissions(); cb({ success: true }); }
     catch { cb({ success: false, error: 'Não foi possível recuperar a propriedade.' }); }
   }));

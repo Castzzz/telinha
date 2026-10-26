@@ -564,11 +564,22 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.7.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.8.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Identidade preservada:</strong> cargos e acessos ficam vinculados ao perfil, sem exigir conta. Exporte seu perfil para recuperar a identidade em outro aparelho.</li>
+          <li><strong>Dono e cargos separados:</strong> o proprietário é reconhecido pelo perfil. A moderação dos amigos depende dos cargos; admins antigos não aparecem como donos.</li>
+          <li><strong>Configurações por canal:</strong> nome, descrição, quem pode ver e quem pode escrever em canais de voz e texto. O botão fica na ponta da linha, no hover ou canal ativo.</li>
+          <li><strong>Cargos no perfil:</strong> aparecem ao clicar na pessoa. Cada um pode escolher um cargo para mostrar junto ao nome.</li>
+          <li><strong>Microfone mais audível:</strong> reforço de vozes baixas, envio mono e proteção de picos, mantendo o controle manual de volume.</li>
+          <li><strong>IA forte renovada:</strong> melhor redução de teclas também durante a fala, com IA leve como alternativa. O áudio das transmissões continua separado.</li>
+          <li><strong>Ping com visual do app:</strong> passe o mouse em Voz conectada para ver o ping e a qualidade da conexão em um cartão compacto.</li>
+        </ul>
+        <div id="whats-new-3-7-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.7.0</h4>
         <ul class="whats-new-list">
           <li><strong>Canais invisíveis sem conta:</strong> escolha as pessoas ou cargos que podem ver e entrar. Quem perde o acesso sai da call.</li>
           <li><strong>Cargos da sala:</strong> o admin pode definir permissões para moderar pessoas e gerenciar canais, com hierarquia.</li>
@@ -576,6 +587,7 @@
           <li><strong>Canais com senha:</strong> proteja uma call com senha, inclusive para quem tem cargo de admin.</li>
           <li><strong>Android em teste:</strong> APK separado com voz, chat, câmera e transmissão recebida em PiP ao minimizar. Baixe na página desta versão.</li>
         </ul>
+        </div>
         <div id="whats-new-3-6-2" class="whats-new-older hidden">
           <h4>E o que mudou na 3.6.2</h4>
         <ul class="whats-new-list">
@@ -1103,7 +1115,7 @@
                 <span class="admin-status">Você é o dono deste servidor.</span>
 
               </div>
-              <p class="form-help">O dono é vinculado ao perfil. Na primeira vez, use a chave atual do servidor. Depois, a moderação e a administração são delegadas pelos cargos. A chave fica disponível para recuperar a propriedade se você perder o perfil.</p>
+              <p class="form-help">O dono é vinculado ao perfil. A propriedade usa uma chave exclusiva, diferente da antiga senha de admin. Depois, a moderação e a administração são delegadas pelos cargos. A chave fica disponível para recuperar a propriedade se você perder o perfil.</p>
             </div>
 
             <div id="owner-transfer" class="form-group hidden"><label for="owner-transfer-member">Transferir propriedade</label><select id="owner-transfer-member" class="form-input"></select><button type="button" id="btn-owner-transfer" class="btn-secondary">Transferir para este perfil</button></div>

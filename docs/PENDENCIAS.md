@@ -152,3 +152,20 @@ Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas a
   Os sons privados continuam no disco e fora do Git, conforme `AGENTS.md`.
 - Release desktop e deploy 3.7.0 foram autorizados pelo dono nesta retomada e concluídos.
   Publicações seguintes continuam dependendo de pedido explícito.
+
+
+## Publicação 3.8.0 autorizada nesta retomada
+
+O dono autorizou deploy e release após corrigir um amigo aparecendo como proprietário
+na sala oficial. Confirmado: servidor ainda em 3.7.0, sem `ownerId`; o cliente novo havia
+interpretado o campo legado `permissions-state.owner` (admin por senha) como propriedade.
+
+Correção: protocolo `ownershipVersion: 2`, `isOwner` explícito, admin antigo identificado
+como tal e nenhuma reivindicação automática por senha salva. A antiga `ADMIN_KEY` não
+concede propriedade: `OWNER_KEY` independente fica só na VM. O deploy usa uma credencial
+HMAC verificada do perfil do dono para vinculá-lo, preservando cargos/canais. A regressão
+foi reproduzida contra o servidor 3.7 real e passou após a correção.
+
+Versões preparadas: desktop 3.8.0 e Android 3.8.0/versionCode 5. Backup anterior íntegro:
+`~/Teletela-backups/teletela-dados-2026-10-26_17-23-58.tar.gz`. Publicação em andamento;
+registrar a conclusão depois das verificações da sala e dos artefatos.

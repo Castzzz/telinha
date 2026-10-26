@@ -97,9 +97,20 @@ log "Segredos (gerados uma vez, ficam só na VM)"
 if [ ! -f /etc/telinha/telinha.env ]; then
   echo "SFU_SECRET=$(openssl rand -hex 32)" > /etc/telinha/telinha.env
 fi
-# Senha de admin da sala (Configurações > Admin no app). Pra trocar: apague a linha e rode o deploy.
+# A chave antiga só mantém compatibilidade de entrada; não concede propriedade.
 if ! grep -q '^ADMIN_KEY=' /etc/telinha/telinha.env; then
   echo "ADMIN_KEY=$(openssl rand -hex 4)" >> /etc/telinha/telinha.env
+fi
+# Independente da antiga senha compartilhada; nunca imprimir a chave de recuperação.
+if ! grep -q '^OWNER_KEY=' /etc/telinha/telinha.env; then
+  echo "OWNER_KEY=$(openssl rand -hex 32)" >> /etc/telinha/telinha.env
+fi
+if [ -f /etc/telinha/owner-bootstrap.json ]; then
+  log "Vinculando o dono à identidade confirmada (serviços parados)"
+  chmod 600 /etc/telinha/owner-bootstrap.json
+  TELINHA_DATA_DIR="$APP/data" "$APP/node/bin/node" "$APP/app/scripts/configurar-dono.mjs" < /etc/telinha/owner-bootstrap.json
+  chown telinha:telinha "$APP/data/permissions.json"
+  rm /etc/telinha/owner-bootstrap.json
 fi
 if [ -n "${DUCKDNS_TOKEN:-}" ]; then
   printf 'DUCKDNS_DOMAIN=%s\nDUCKDNS_TOKEN=%s\n' "${DOMAIN%%.duckdns.org}" "$DUCKDNS_TOKEN" > /etc/telinha/duckdns.env
@@ -296,4 +307,4 @@ sleep 3
 systemctl --no-pager --lines=0 status telinha-server telinha-sfu caddy | grep -E '●|Active:' || true
 echo
 echo "Pronto: https://$DOMAIN"
-echo "Senha de admin preservada em /etc/telinha/telinha.env (não exibida nos logs)."
+echo "Chaves de propriedade e serviços preservadas em /etc/telinha/telinha.env (não exibidas nos logs)."

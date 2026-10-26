@@ -201,14 +201,15 @@ Variáveis de ambiente do `server.js`:
 |---|---|---|
 | `PORT` | Porta HTTP | `8080` |
 | `TELINHA_DATA_DIR` | Pasta onde ficam canais, histórico de texto, soundboard | vazio = tudo temporário (some ao reiniciar) |
-| `ADMIN_KEY` | Chave para assumir ou recuperar o dono | vazio = sem reivindicação/recuperação por chave |
+| `ADMIN_KEY` | Antiga chave de admin, mantida apenas para compatibilidade de entrada na sala | vazio = sem esse atalho |
+| `OWNER_KEY` | Chave exclusiva para assumir/recuperar a propriedade | vazio = apenas proprietário já vinculado |
 | `SFU_SECRET` | Liga o SFU e assina as senhas dele | vazio = sem SFU (P2P) |
 | `SFU_PATH` | Caminho do websocket do SFU atrás do Caddy (mandado pro cliente junto com a senha) | `/sfu/ws` |
 
 Exemplo de servidor local completo pra testar admin e dados salvos:
 
 ```bash
-PORT=3999 ADMIN_KEY=segredo1 TELINHA_DATA_DIR=/tmp/teletela-data node server.js
+PORT=3999 OWNER_KEY=segredo-dono TELINHA_DATA_DIR=/tmp/teletela-data node server.js
 ```
 
 Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
@@ -222,6 +223,7 @@ node tests/m4-channels-admin.test.js       # integração: sobe o server.js de v
 node --test tests/m4-permissions.test.js tests/identity-persistence.test.js # propriedade, hierarquia, texto/voz privados, provas e persistência
 node --test tests/identity-upgrade.test.js # Electron real: dados da 3.7 → código novo, URL diferente e recuperação de prefs
 npm run test:permissions                  # formulários reais de cargos/acesso, móvel e desktop
+/usr/lib/electron42/electron tests/ownership-browser.cjs # regressão: interface nova contra servidor 3.7 real
 npm run test:mobile                       # navegação, chat, mute e tamanhos móvel/desktop
 npm run test:microphone                   # áudio real: nível, Opus/mixer, mute e comparação com 3.7.0
 npm run test:microphone:ui                # controles reais, três temas e avatares durante a fala
@@ -358,7 +360,7 @@ Caminhos na VM:
 | `/opt/telinha/data/` | **dados que ficam** (canais, texto, soundboard) |
 | `/opt/telinha/bin/telinha-sfu` | SFU compilado |
 | `/opt/telinha/node/` | Node |
-| `/etc/telinha/telinha.env` | `SFU_SECRET` e `ADMIN_KEY` (gerados uma vez, só ficam aqui) |
+| `/etc/telinha/telinha.env` | `SFU_SECRET`, `OWNER_KEY` e `ADMIN_KEY` legado (gerados uma vez, só ficam aqui) |
 | `/etc/telinha/duckdns.env` | token do DuckDNS |
 | `/etc/caddy/Caddyfile` | proxy |
 
@@ -372,8 +374,8 @@ sudo journalctl -u telinha-sfu -f                        # logs do SFU ao vivo
 sudo systemctl restart telinha-server
 ```
 
-**Chave de propriedade/recuperação (`ADMIN_KEY`):** fica em `/etc/telinha/telinha.env` e não aparece nos logs do deploy. Pra
-trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca vai pro git.**
+**Chave de propriedade/recuperação (`OWNER_KEY`):** fica em `/etc/telinha/telinha.env` e não aparece nos logs do deploy. Pra
+trocar: apague a linha `OWNER_KEY` desse arquivo e rode o deploy. **Ela nunca vai pro git.**
 
 ## 9. Dados guardados
 
@@ -507,8 +509,8 @@ pessoal.**
 
 ### Identidade persistente, dono e cargos sem conta
 
-Em desenvolvimento na branch `melhoria/perfis-cargos-e-canais`; ainda sem release/deploy.
-A 3.7.0 continua usando a identificação por instalação e a senha de admin.
+Na 3.8.0, a identidade é vinculada ao perfil e há um único dono do servidor.
+Na 3.7.0, o acesso administrativo vinha de uma senha compartilhada.
 
 Cada perfil novo preserva uma semente privada Ed25519 de 32 bytes em
 `prefs.profileCredentials[profileId]`. `public/profile-identity.js` gera/salva a chave antes
@@ -541,13 +543,16 @@ localStorage. Apagar os dados do aplicativo remove essa proteção: use o backup
 A causa exata do relato original não foi reproduzida em uma atualização normal; a gravação
 antiga direta e sem cópia era uma fragilidade, não um diagnóstico confirmado.
 
-`permissions.json.ownerId` define um único dono. `admin-login` com `ADMIN_KEY` só assume
-propriedade quando ainda não há dono; não cria administradores adicionais. Após assumir,
+`permissions.json.ownerId` define um único dono. `owner-claim` com `OWNER_KEY` só assume
+propriedade quando ainda não há dono. `ADMIN_KEY` antigo não concede propriedade nem cargos. Após assumir,
 a identidade recupera o acesso automaticamente, inclusive em sala com senha. A chave do
-servidor continua em `/etc/telinha/telinha.env` e serve para `owner-recover` explícito, que
+servidor continua em `/etc/telinha/telinha.env` e inclui `OWNER_KEY`, usada em `owner-recover` explícito, que
 substitui o dono anterior. `owner-transfer` só aceita o dono atual e um membro existente.
-Clientes antigos só assumem a propriedade inicial; depois precisam atualizar para usar
-recuperação e transferência. `isAdmin` continua no protocolo por compatibilidade, significando
+O protocolo anuncia `ownershipVersion: 2`. Em servidor 3.7, `permissions-state.owner`
+representava admin por senha, não propriedade. O cliente distingue esse caso, mostra um
+escudo de admin antigo e nunca inicia reivindicação automaticamente por senha salva.
+`publicUser.isOwner` é o campo explícito para a coroa. `admin-login` continua compatível
+para reconhecer a identidade que já é dona; a senha antiga não promove outros perfis. `isAdmin` continua no protocolo por compatibilidade, significando
 **dono**, nunca um cargo do cliente. Propriedade inválida em disco impede iniciar o servidor.
 
 Cargos têm posição de 1 a 99 e permissões `kickMembers`, `moveMembers`, `muteMembers`,
@@ -594,7 +599,7 @@ A revisão atual não muda o protocolo do SFU da 3.7.0.
 
 Sem `TELINHA_DATA_DIR`, identidade, dono e cargos vivem só no processo. O backup do servidor
 copia toda a pasta de dados, incluindo `permissions.json` e o índice dos canais. A revisão
-requer release do aplicativo e deploy do Node; nenhuma publicação foi feita nesta etapa.
+requer o aplicativo e o Node da 3.8.0. O deploy pode vincular o proprietário antes da primeira conexão, conforme a migração abaixo.
 
 ## 10. Protocolo: eventos do Socket.IO
 
@@ -619,7 +624,8 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `soundboard-add` / `soundboard-delete` / `soundboard-play` | soundboard |
 | `reaction` | emoji flutuando na call |
 | `sfu-token` | senha temporária pra entrar numa sala do SFU |
-| `admin-login` / `owner-recover` / `owner-transfer` | assumir, recuperar e transferir a propriedade |
+| `owner-claim` / `owner-recover` / `owner-transfer` | assumir, recuperar e transferir a propriedade com chave exclusiva |
+| `admin-login` | compatibilidade antiga; não promove admin a dono |
 | `role-save` / `role-delete` / `member-roles` | administrar cargos com hierarquia |
 | `get-channel-settings` / `channel-settings` | configurações de um canal `{ type: 'voice'|'text', channelId, ... }` |
 | `kick-user`, `admin-move-user`, `admin-mute-user`, `admin-deafen-user` | moderação autorizada pelos cargos |
@@ -820,3 +826,17 @@ Mudar qualquer um destes quebra a atualização automática ou faz a galera perd
    mudou arquitetura, deploy, dados ou uma armadilha nova.
 6. Pra lançar: versão no `package.json` + popup de novidades, commit sem `public/sounds/`,
    `npm run release` e/ou `npm run deploy:oracle` (tabela da §6).
+
+
+### Migração de propriedade da 3.8.0
+
+O deploy gera `OWNER_KEY` independente de `ADMIN_KEY` em `/etc/telinha/telinha.env`, sem
+imprimir seu valor. Quem conhece a senha compartilhada antiga não pode assumir/recuperar
+a propriedade. Não reutilize o valor antigo nessa chave nova.
+
+O operador pode fornecer `/etc/telinha/owner-bootstrap.json` (root, 0600) contendo apenas
+`permissionToken` do perfil confirmado. Com os serviços parados, o instalador executa
+`scripts/configurar-dono.mjs`: verifica o HMAC contra `permissions.json`, vincula o dono,
+preserva os cargos e apaga o pedido. UUID público/nome não são aceitos como comprovação.
+O script não imprime a credencial; o arquivo nunca deve entrar no Git. O backup anterior
+à migração precisa incluir `data/permissions.json` e `telinha/telinha.env`.

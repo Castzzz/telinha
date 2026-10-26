@@ -45,7 +45,7 @@ app.whenReady().then(async () => {
     const admin = io(`http://127.0.0.1:${port}`, { transports: ['websocket'] });
     await new Promise(resolve => admin.on('connect', resolve));
     const emit = (event, payload) => admin.timeout(4000).emitWithAck(event, payload);
-    if (!(await emit('admin-login', { key: 'propriedade-identidade-teste' })).success) throw new Error('Não assumiu o servidor de teste.');
+    if (!(await emit('owner-claim', { key: 'propriedade-identidade-teste' })).success) throw new Error('Não assumiu o servidor de teste.');
     const { role } = await emit('role-save', { name: 'Cargo preservado', position: 10, permissions: ['muteMembers'] });
     await emit('member-roles', { memberId: accessId, roles: [role.id] });
     await emit('admin-set-room-password', { password: 'senha-da-sala-de-teste' });

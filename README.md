@@ -111,13 +111,12 @@ aparelhos reais. [Detalhes de desenvolvimento e testes](docs/ANDROID.md).
 
 ## Dono, cargos e configurações dos canais (sem conta)
 
-Estas mudanças estão na branch `melhoria/perfis-cargos-e-canais`, ainda sem publicação.
-Os downloads da 3.7.0 usam o modelo anterior de admin por senha.
+Mudanças da versão 3.8.0. A versão 3.7.0 usava o modelo anterior de admin por senha.
 
-Em **Configurações → Servidor e cargos**, o proprietário usa a chave atual do servidor
+Em **Configurações → Servidor e cargos**, o proprietário usa uma chave exclusiva de propriedade
 para **Assumir propriedade** uma vez. Depois, o perfil é reconhecido ao reabrir o app.
 Há um único dono; ele pode transferir a propriedade a outro perfil. Quem perdeu o perfil
-pode recuperar a propriedade com a chave do servidor, que substitui o dono anterior.
+pode recuperar a propriedade com a chave exclusiva do servidor, que substitui o dono anterior. A antiga senha de admin não concede propriedade.
 
 O dono cria cargos e distribui os poderes de moderação, gerenciamento de canais, cargos,
 entrada do servidor e conteúdo. A hierarquia vai de 1 a 99: a moderação só age abaixo do
@@ -226,13 +225,13 @@ O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
 
 ### 🧠 Cancelamento de ruído
 Em ⚙️ → *Cancelamento de ruído do microfone*:
-- **Forte, com IA** (padrão): na branch `melhoria/perfis-cargos-e-canais`, usa um modelo mais forte para reduzir teclas e ruído também durante a fala;
+- **Forte, com IA** (padrão): usa um modelo mais forte para reduzir teclas e ruído também durante a fala;
 - **IA leve**: mantém o filtro anterior com menor uso de CPU;
 - **Básico**: o filtro do navegador;
 - **Desligado**: som cru do microfone.
 
 Só afeta a sua voz, nunca o som da transmissão. Se a IA forte não carregar, o app avisa
-e tenta a IA leve; se as duas falharem, usa o básico. As mudanças ainda não foram publicadas.
+e tenta a IA leve; se as duas falharem, usa o básico. As mudanças estão na 3.8.0.
 O resultado com cada teclado/microfone precisa ser conferido no aparelho real.
 
 ### ⌨️ Atalhos com o jogo aberto
@@ -320,7 +319,7 @@ O deploy também suporta x86_64; IP, usuário e chave SSH ficam em `deploy/oracl
 O dono ou quem tem permissão para gerenciar o servidor coloca em ⚙️ → *Servidor e cargos* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.
 
 ### Senha de admin
-A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e guardada em `/etc/telinha/telinha.env` na VM. Ela é preservada nas migrações e não aparece nos logs do deploy. Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.
+A propriedade da sala usa `OWNER_KEY`, exclusiva e guardada em `/etc/telinha/telinha.env` na VM. O deploy preserva essa chave sem exibi-la. Para renová-la, o operador remove a linha `OWNER_KEY` e executa o deploy. A antiga `ADMIN_KEY` não concede propriedade. Na sala hospedada no PC, configure `OWNER_KEY` para reivindicar um dono; quem cria um canal público continua podendo apagar o seu.
 
 Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 50 mil mensagens por canal), as imagens em `data/text/images/` (até 25 GB) e vídeos/arquivos em `data/text/files/` (até 5 GB). Passando dos limites de espaço, os arquivos mais antigos são apagados.
 

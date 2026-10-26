@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { PermissionStore } from '../permission-store.js';
 import { profileIdentity } from '../public/profile-identity.js';
+import { configureOwner } from '../scripts/configurar-dono.mjs';
 const { createPreferences } = createRequire(import.meta.url)('../electron/preferences.cjs');
 
 test('migra identificação 3.7 sem perder cargos e recupera por prova privada', () => {
@@ -64,4 +65,19 @@ test('chave do perfil persiste antes de conectar e pode ser recuperada da cópia
   assert.equal(await profileIdentity({}, 'perfil-teste', async () => true, storage), credential);
   assert.notEqual(await profileIdentity({}, 'outro-perfil', async () => true, storage), credential);
   await assert.rejects(profileIdentity({}, 'sem-espaco', async () => false, storage), /guardar a identidade/);
+});
+
+test('migração do operador comprova o token e preserva cargos; UUID público não basta', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'teletela-dono-'));
+  try {
+    const store = new PermissionStore(directory), owner = store.identity(), friend = store.identity();
+    const role = store.saveRole({ name: 'Moderação', position: 10, permissions: ['muteMembers'] });
+    store.assign(friend.id, [role.id]);
+    assert.throws(() => configureOwner(directory, owner.id), /não comprova/);
+    assert.equal(configureOwner(directory, owner.token), owner.id);
+    const updated = new PermissionStore(directory);
+    assert.equal(updated.isOwner({ accessId: owner.id }), true);
+    assert.equal(updated.isOwner({ accessId: friend.id }), false);
+    assert.deepEqual(updated.roles({ accessId: friend.id }).map(r => r.id), [role.id]);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
