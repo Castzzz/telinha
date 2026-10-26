@@ -109,21 +109,37 @@ e não tem atualização automática nem publicação na Play Store. A versão p
 não foi implementada. Bluetooth, bateria e qualidade de voz precisam de validação em
 aparelhos reais. [Detalhes de desenvolvimento e testes](docs/ANDROID.md).
 
-## Cargos e canais invisíveis (sem conta)
+## Dono, cargos e configurações dos canais (sem conta)
 
-Em **Configurações → Admin**, entre com a senha de admin. Crie os cargos, marque as ações
-permitidas e atribua à pessoa na lista. A hierarquia vai de 1 a 99: um cargo só pode moderar
-pessoas abaixo dele. Só quem usa a senha de admin cria, edita e atribui cargos.
+Estas mudanças estão na branch `melhoria/perfis-cargos-e-canais`, ainda sem publicação.
+Os downloads da 3.7.0 usam o modelo anterior de admin por senha.
 
-Na mesma página, escolha um canal de voz e marque **Invisível para quem não tem acesso**.
-Libere por cargo ou por pessoa. Quem não está autorizado não vê o canal nem entra pelo link;
-se perder o acesso durante a call, sai dela. Senha do canal continua sendo necessária,
-inclusive para o admin. O Geral fica visível para todos.
+Em **Configurações → Servidor e cargos**, o proprietário usa a chave atual do servidor
+para **Assumir propriedade** uma vez. Depois, o perfil é reconhecido ao reabrir o app.
+Há um único dono; ele pode transferir a propriedade a outro perfil. Quem perdeu o perfil
+pode recuperar a propriedade com a chave do servidor, que substitui o dono anterior.
 
-Isso funciona com o perfil de visitante. A identificação fica salva nesta instalação;
-outro aparelho ou dados apagados precisam de nova liberação pelo admin. O código para
-identificar cada aparelho aparece em **Configurações → Admin**. Exportar o perfil
-não transfere cargos. Os recursos exigem o servidor atualizado.
+O dono cria cargos e distribui os poderes de moderação, gerenciamento de canais, cargos,
+entrada do servidor e conteúdo. A hierarquia vai de 1 a 99: a moderação só age abaixo do
+próprio cargo. Quem gerencia cargos também só altera pessoas e cargos abaixo de si, sem
+conceder poderes que não possui.
+
+Use o botão **Configurações do canal** na lista de voz ou texto para mudar nome, descrição,
+visibilidade e quem pode enviar no chat. O envio pode ser liberado por pessoa ou cargo;
+na call essa regra afeta o chat, preservando o microfone. Canais invisíveis só aparecem
+para quem tem acesso. A revogação também bloqueia histórico e anexos; em voz, retira da
+call. A senha de entrada continua obrigatória inclusive para o dono. O Geral fica público.
+
+Os cargos aparecem ao clicar na pessoa. Em **Configurações → Perfil → Cargo ao lado do
+nome**, cada pessoa pode escolher um cargo para exibir junto ao nome; por padrão ficam
+ocultos nessa lista.
+
+A identidade do perfil fica salva no aparelho e permanece nas atualizações, sem cadastro.
+Os vínculos da 3.7.0 são migrados pela credencial já salva. **Exportar perfil** agora inclui
+a chave privada necessária para restaurar os cargos e acessos em outro aparelho: guarde
+esse backup só com você. Um backup antigo, apenas com nome e ID público, não recupera
+cargos sozinho. Apagar todos os dados sem backup exige nova liberação pelo dono.
+O servidor e os aplicativos precisam ser atualizados para todas as opções funcionarem.
 
 ## 🚪 Entrar na sala
 
@@ -179,10 +195,10 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Manter os avatares animados** | ⚙️ → *Aparência* → desmarque **Modo leve** para os GIFs animarem mesmo sem ninguém falar. Desmarque também **Pausar animações em segundo plano** para continuarem quando o app estiver sem foco ou minimizado. As duas opções são independentes e ficam salvas |
 | **Canal de texto** | *Canais de Texto* → **+**. Mensagens e imagens ficam salvas (dá pra rolar e ver as antigas) e funcionam sem estar em call. Abre em tela cheia (no cantinho se você estiver vendo uma transmissão). **🔊 Chat da call** no topo do chat volta pro chat da call, que continua temporário |
 | **Recolher os canais** | Clique em *Canais de Voz* ou *Canais de Texto*. Recolhido, fica só o canal em que você está (com as fotos lado a lado) e os canais de texto com mensagem nova |
-| **Admin: mudar alguém de call** | Arraste a pessoa da lista e solte em outro canal de voz |
-| **Admin: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até o admin desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
+| **Cargo: mover pessoas de call** | Arraste a pessoa da lista e solte em outro canal de voz |
+| **Cargo: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até a moderação desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
-| **Admin 👑** | ⚙️ → *Admin* → senha da sala. Admin tira alguém da call (clique na pessoa → *Tirar da call*) e apaga qualquer canal |
+| **Dono 👑 e cargos** | ⚙️ → *Servidor e cargos*. O dono assume a propriedade e delega moderação e administração pelos cargos |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |
@@ -297,7 +313,7 @@ trocar de VM mantendo dados e endereço, siga [docs/MIGRAR-SERVIDOR.md](docs/MIG
 O deploy também suporta x86_64; IP, usuário e chave SSH ficam em `deploy/oracle/config.sh`.
 
 ### Senha da sala
-O admin coloca em ⚙️ → *Admin* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.
+O dono ou quem tem permissão para gerenciar o servidor coloca em ⚙️ → *Servidor e cargos* → *Senha da sala*. Quem já usa o app guarda uma chave e continua entrando direto; só gente nova precisa digitar. *Pedir senha de novo pra todos* faz quem não estiver online precisar digitar.
 
 ### Senha de admin
 A sala da nuvem tem uma senha de admin, gerada no primeiro deploy e guardada em `/etc/telinha/telinha.env` na VM. Ela é preservada nas migrações e não aparece nos logs do deploy. Pra trocar, apague a linha `ADMIN_KEY` de lá e rode o deploy de novo. Sala hospedada no PC não tem admin; quem cria um canal sempre pode apagar o seu.

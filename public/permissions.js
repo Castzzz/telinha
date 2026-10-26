@@ -1,6 +1,7 @@
 export const permissionLabels = {
   kickMembers: 'Tirar pessoas da call', moveMembers: 'Mover pessoas entre calls',
-  muteMembers: 'Mutar pessoas', deafenMembers: 'Ensurdecer pessoas', manageChannels: 'Gerenciar canais e visibilidade'
+  muteMembers: 'Mutar pessoas', deafenMembers: 'Ensurdecer pessoas', manageChannels: 'Gerenciar canais e visibilidade',
+  manageRoles: 'Gerenciar cargos abaixo do seu', manageServer: 'Gerenciar senha e entrada do servidor', manageMessages: 'Moderar mensagens e soundboard'
 };
 
 export function hasPermission(state, permission) {
@@ -9,7 +10,7 @@ export function hasPermission(state, permission) {
 
 export function setupPermissions({ socket, state, saveIdentity, showToast, escapeHtml, onChange }) {
   const $ = selector => document.querySelector(selector);
-  let directory = { roles: [], members: [] }, editingChannel = null, accessRequest = 0;
+  let directory = { roles: [], members: [] }, editingChannel = null, accessRequest = 0, settingsTarget = null, settingsRequest = 0;
   const request = async (event, data) => {
     try {
       const result = await socket.timeout(5000).emitWithAck(event, data).catch(() => {
@@ -27,6 +28,48 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
     $(`#${prefix}-members`).innerHTML = checks(directory.members.map(m => ({ ...m, name: `${m.name} · ${m.id.slice(0, 6)}` })), access.members);
   };
   const readAccess = prefix => ({ private: $(`#${prefix}-private`).checked, roles: selected(`#${prefix}-roles`), members: selected(`#${prefix}-members`) });
+  const openChannelSettings = async (type, channelId) => {
+    const generation = ++settingsRequest;
+    settingsTarget = null;
+    const result = await request('get-channel-settings', { type, channelId });
+    if (!result || generation !== settingsRequest) return;
+    settingsTarget = { type, channelId };
+    const ch = result.channel;
+    $('#channel-settings-title').textContent = `Configurações de #${ch.name}`;
+    $('#channel-settings-name').value = ch.name;
+    $('#channel-settings-description').value = ch.description || '';
+    $('#channel-settings-access-private').checked = ch.access.private;
+    $('#channel-settings-access-private').disabled = ch.isDefault;
+    $('#channel-settings-write-private').checked = ch.writeAccess.private;
+    renderAccess('channel-settings-access', ch.access);
+    renderAccess('channel-settings-write', ch.writeAccess);
+    $('#channel-settings-password-field').classList.toggle('hidden', type === 'text');
+    $('#channel-settings-password').value = '';
+    $('#channel-settings-password').placeholder = ch.hasPassword ? 'Já tem senha. Deixe vazio para manter.' : 'Sem senha. Deixe vazio para manter.';
+    $('#channel-settings-remove-password').checked = false;
+    $('#modal-channel-settings').classList.remove('hidden');
+    $('#channel-settings-name').focus();
+  };
+  $('#form-channel-settings').addEventListener('submit', async event => {
+    event.preventDefault();
+    if (!settingsTarget) return;
+    const payload = { ...settingsTarget, name: $('#channel-settings-name').value, description: $('#channel-settings-description').value,
+      access: readAccess('channel-settings-access'), writeAccess: readAccess('channel-settings-write') };
+    if (payload.type === 'voice') {
+      if ($('#channel-settings-remove-password').checked) payload.password = '';
+      else if ($('#channel-settings-password').value) payload.password = $('#channel-settings-password').value;
+    }
+    if (await request('channel-settings', payload)) {
+      $('#modal-channel-settings').classList.add('hidden');
+      showToast('Configurações do canal salvas.', 'success');
+    }
+  });
+  $('#btn-owner-transfer').addEventListener('click', async () => {
+    const memberId = $('#owner-transfer-member').value;
+    const member = directory.members.find(m => m.id === memberId);
+    if (!member || !window.confirm(`Transferir a propriedade para ${member.name} (${memberId.slice(0, 6)})? Você deixará de ser dono deste servidor.`)) return;
+    if (await request('owner-transfer', { memberId })) showToast('Propriedade transferida.', 'success');
+  });
   const fillRole = () => {
     const role = directory.roles.find(r => r.id === $('#permission-role-id').value);
     $('#permission-role-name').value = role?.name || '';
@@ -86,15 +129,20 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
   socket.on('permissions-state', payload => {
     state.permissions = payload.permissions || [];
     state.permissionRoles = payload.roles || [];
-    $('#permission-device').textContent = payload.memberId ? `Código deste aparelho: ${payload.memberId.slice(0, 6)}. Informe ao admin para ele escolher a instalação certa.` : '';
+    $('#permission-device').textContent = payload.memberId ? `ID do seu perfil neste servidor: ${payload.memberId}. Permanece ao atualizar o app.` : '';
     state.isAdmin = Boolean(payload.owner);
-    $('#permission-status').textContent = payload.owner ? 'Controle total pela senha de admin.' : state.permissionRoles.length ? `Seus cargos: ${state.permissionRoles.map(r => r.name).join(', ')}` : 'Você está usando seu perfil de visitante.';
+    state.ownerClaimed = Boolean(payload.ownerClaimed);
+    $('#permission-status').textContent = payload.owner ? 'Você é o dono deste servidor. Seu perfil é reconhecido ao reabrir o app.' : state.permissionRoles.length ? `Seus cargos: ${state.permissionRoles.map(r => r.name).join(', ')}` : 'Seu perfil ainda não tem cargos neste servidor.';
     $('#permission-management').classList.toggle('hidden', !payload.directory);
-    $('#permission-role-management').classList.toggle('hidden', !payload.owner);
-    $('#new-channel-access').classList.toggle('hidden', !payload.directory);
+    $('#permission-role-management').classList.toggle('hidden', !hasPermission(state, 'manageRoles'));
+    $('#owner-transfer').classList.toggle('hidden', !payload.owner);
+    $('#new-channel-access').classList.toggle('hidden', !hasPermission(state, 'manageChannels'));
     if (payload.directory) {
       const previous = directory;
       directory = payload.directory;
+      const candidates = directory.members.filter(m => m.id !== payload.memberId).map(m => ({ ...m, name: `${m.name} · ${m.id.slice(0, 6)}` }));
+      $('#owner-transfer-member').innerHTML = options(candidates, $('#owner-transfer-member').value);
+      $('#btn-owner-transfer').disabled = !candidates.length;
       const rolesChanged = JSON.stringify(directory.roles) !== JSON.stringify(previous.roles);
       const membersChanged = JSON.stringify(directory.members) !== JSON.stringify(previous.members);
       if (rolesChanged || membersChanged) {
@@ -109,8 +157,9 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
         if (editingChannel) renderAccess('channel-access', readAccess('channel-access'));
       }
     }
+    if (!hasPermission(state, 'manageChannels')) $('#modal-channel-settings').classList.add('hidden');
     refreshChannels(); onChange();
   });
   fillRole();
-  return { refreshChannels, newAccess: () => hasPermission(state, 'manageChannels') && $('#new-channel-access-private').checked ? readAccess('new-channel-access') : undefined };
+  return { refreshChannels, openChannelSettings, newAccess: () => hasPermission(state, 'manageChannels') && $('#new-channel-access-private').checked ? readAccess('new-channel-access') : undefined };
 }

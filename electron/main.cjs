@@ -56,33 +56,10 @@ function saveConfig(patch) {
 
 // Preferências da interface (perfil, volumes, atalhos). Ficam aqui e não no localStorage
 // porque o localStorage depende do link da sala, que muda toda vez que alguém hospeda.
-const MAX_PREFS_BYTES = 30 * 1024 * 1024; // 30 MB (permite salvar avatares e banners em GIF de até 10 MB)
-
-function prefsPath() {
-  return path.join(app.getPath('userData'), 'prefs.json');
-}
-
-function loadPrefs() {
-  try {
-    return JSON.parse(fs.readFileSync(prefsPath(), 'utf8'));
-  } catch {
-    return {};
-  }
-}
-
-function savePrefs(patch) {
-  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return false;
-  const next = JSON.stringify({ ...loadPrefs(), ...patch });
-  if (next.length > MAX_PREFS_BYTES) return false;
-  try {
-    fs.mkdirSync(path.dirname(prefsPath()), { recursive: true });
-    fs.writeFileSync(prefsPath(), next);
-    return true;
-  } catch (err) {
-    console.warn('[Electron] Não foi possível salvar preferências:', err.message);
-    return false;
-  }
-}
+const { createPreferences } = require('./preferences.cjs');
+const preferences = createPreferences(app.getPath('userData'));
+const loadPrefs = preferences.load;
+const savePrefs = preferences.save;
 
 // Atalhos que funcionam mesmo com o Telinha em segundo plano (ex: mutar no meio do jogo)
 // Teclas sozinhas que o globalShortcut não aceita (Ctrl da direita, Shift, Alt...): quem

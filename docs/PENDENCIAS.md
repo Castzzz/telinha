@@ -5,43 +5,61 @@ Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
 ## Próxima sessão: pedidos acrescentados após a 3.7.0
 
-Anotados em 26/10/2026. O dono pediu **somente registrar, sem implementar agora**, pois
-vai esperar o limite de uso resetar. Estes itens têm prioridade na próxima retomada:
+Anotados em 26/10/2026 e retomados depois do reset, com autorização do dono.
+Implementados na branch `melhoria/perfis-cargos-e-canais`, ainda sem publicação:
 
-- [ ] **Corrigir cargos que somem após atualizar o app.** Relato do dono: a pessoa
+- [x] **Corrigir cargos que somem após atualizar o app.** Relato do dono: a pessoa
   atualiza e perde o cargo. Investigar antes de atribuir uma causa. A implementação já
   tem identificação assinada por instalação (`permissionToken` nas preferências e
   vínculos em `permissions.json` no servidor), mas a atualização deveria preservá-la.
   Conferir instalação/atualização real, caminhos dos dados, criação/troca/importação de
   perfil e eventual emissão de outra identificação. Não contornar criando um novo ID
   a cada atualização e exigindo redistribuir os cargos.
-- [ ] **Identidade fixa para cada perfil, sem exigir conta se possível.** O dono quer
+- [x] **Identidade fixa para cada perfil, sem exigir conta se possível.** O dono quer
   um ID que permaneça ao atualizar o app. Avaliar a ligação entre o ID do perfil local
   e a identificação usada pelos cargos, com migração que preserve os vínculos atuais.
   Conta não é obrigatória para uma identidade persistente no aparelho; preservar também
   a credencial que comprova a identidade, pois um UUID público informado pelo cliente
   sozinho não deve conceder cargos. Diferenciar atualização normal de apagar dados ou
   mudar de aparelho. Contas/amigos continuam podendo ficar para depois.
-- [ ] **Configuração própria para cada chat/canal, como no Discord.** Incluir canais
+- [x] **Configuração própria para cada chat/canal, como no Discord.** Incluir canais
   privados e públicos, com entrada clara para abrir suas configurações e administrar
   acesso/permissões por cargo ou pessoa. Na retomada, alinhar quais opções pertencem
   ao canal de texto, canal de voz e chat da call; o pedido não se limita aos invisíveis.
-- [ ] **Dono do servidor separado dos cargos.** O proprietário da sala deve ser o dono
+- [x] **Dono do servidor separado dos cargos.** O proprietário da sala deve ser o dono
   do projeto (quem fez este pedido), com identidade persistente e poderes de propriedade
   nas configurações gerais do servidor. Substituir o modelo atual de “admin pela senha”
   por essa distinção: poderes de moderação/administração comuns passam a ser definidos
   pelos cargos. Planejar a migração da senha atual para a propriedade sem perder acesso
   à sala nem permitir que alguém se declare dono pelo cliente. Definir recuperação e
   eventual transferência de propriedade ao desenhar o fluxo.
-- [ ] **Cargos no perfil ao clicar na pessoa.** Tirar os cargos do lado do nome por
+- [x] **Cargos no perfil ao clicar na pessoa.** Tirar os cargos do lado do nome por
   padrão; mostrá-los no perfil/popover aberto ao clicar na pessoa. Oferecer opção para
   a própria pessoa exibir o cargo junto ao nome, se quiser. Definir a escolha quando há
   vários cargos. Essa preferência muda a apresentação, preservando as permissões.
 
-Ordem sugerida: reproduzir a perda da identidade/cargos → persistência e migração →
-propriedade do servidor e poderes dos cargos → configurações por canal → exibição dos
-cargos. Validar a atualização por cima da versão instalada, além de reinício e reconexão.
-Nenhuma dessas mudanças foi implementada ao fazer esta anotação.
+Resultado da retomada:
+
+- Preferências desktop com gravação atômica, cópia independente da identidade e migração
+  da credencial 3.7 para a mesma identificação de membro. Chave Ed25519 persistente por
+  perfil, provada por assinatura; ID público sozinho não recupera cargos.
+- Propriedade persistente e única. A chave atual assume inicialmente; depois os poderes
+  comuns são delegados pelos cargos. Recuperação explícita com a chave do servidor e
+  transferência pelo dono disponíveis. Nenhum dono foi definido na sala oficial ainda.
+- Botão de configurações em cada canal de voz/texto: nome, descrição, acesso por pessoa
+  ou cargo, escrita do chat e senha da call. Texto privado protege eventos, histórico,
+  fixadas e downloads de imagens/anexos. Revogação retira acesso imediatamente.
+- Cargos no popover e perfil; ocultos ao lado do nome por padrão. Cada pessoa pode escolher
+  um cargo para exibir no próprio perfil. Contas e amigos continuam para outra branch.
+- Exportação de perfil v2 inclui a chave privada para recuperar cargos em outro aparelho;
+  backups antigos só com ID público não têm essa capacidade.
+- Testes de servidor, persistência e interface desktop/celular passaram. O Electron real
+  executou o código da 3.7.0 e o novo sobre os mesmos dados isolados, preservando ID, cargo
+  e propriedade; testou nova URL e recuperação após prefs ilegível. A causa exata do relato
+  original não foi reproduzida numa atualização normal. Falta conferir o instalador/atualizador
+  no Windows real e o aparelho Android; nenhuma alteração nos dados reais dos amigos.
+- A correção do microfone foi preservada nesta branch. Release/deploy continuam dependendo
+  de pedido explícito; versão oficial segue 3.7.0.
 
 ## Pedidos do dono
 
@@ -103,7 +121,8 @@ Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas a
 
 ## Onde o trabalho ficou
 
-- Branch atual: `correcao/volume-microfone`; código do reforço no commit `059e36a`.
+- Branch atual: `melhoria/perfis-cargos-e-canais`, criada de `correcao/volume-microfone`.
+  Reforço preservado no commit `059e36a`; revisão de identidade/cargos/canais nesta retomada.
   O portátil de teste está pronto, mas a correção ainda não foi publicada. Aguardar
   a validação dos microfones reais e o pedido do dono antes de outra publicação.
 - Branch de lançamento: `release/3.7-sem-contas`, baseada na `main` 3.6.2.

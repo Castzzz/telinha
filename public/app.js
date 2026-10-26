@@ -1,3 +1,4 @@
+import { profileIdentity, profileProof } from './profile-identity.js';
 /**
  * public/app.js - Telinha Client Controller
  * Milestone 1: Discord/TeamSpeak Core Signaling & Channel Sidebar Architecture
@@ -131,12 +132,12 @@ window.addEventListener('focus', () => {
 function savePrefs(patch) {
   Object.assign(prefs, patch);
   if (window.electronAPI?.setPrefs) {
-    return window.electronAPI.setPrefs(patch).catch(() => {});
+    return window.electronAPI.setPrefs(patch).catch(() => false);
   }
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
-  } catch (_) {}
-  return Promise.resolve();
+  } catch (_) { return Promise.resolve(false); }
+  return Promise.resolve(true);
 }
 
 // randomUUID só existe em https/localhost; o link de rede local (http://192.168…) não é
@@ -195,9 +196,11 @@ const myProfile = {
   bannerColor: prefs.profile?.bannerColor || '',
   banner: prefs.profile?.banner || '',
   bannerCrop: normalizeImageCrop(prefs.profile?.bannerCrop),
-  joinSound: prefs.profile?.joinSound || ''
+  joinSound: prefs.profile?.joinSound || '',
+  displayRoleId: prefs.profile?.displayRoleId || ''
 };
-if (isFirstRun) savePrefs({ profile: { ...myProfile } });
+if (isFirstRun) await savePrefs({ profile: { ...myProfile } });
+const profileCredential = await profileIdentity(prefs, myProfile.id, savePrefs);
 
 function profilePayload() {
   return {
@@ -214,7 +217,8 @@ function profilePayload() {
     bannerColor: myProfile.bannerColor,
     banner: myProfile.banner,
     bannerCrop: myProfile.bannerCrop,
-    joinSound: myProfile.joinSound
+    joinSound: myProfile.joinSound,
+    displayRoleId: myProfile.displayRoleId
   };
 }
 
@@ -343,13 +347,21 @@ function saveRoomAccess(patch) {
 }
 
 const socket = io(SERVER_URL, {
-  auth: (cb) => cb({
+  auth: async (cb) => {
+    let proof;
+    try {
+      const response = await fetch(`${SERVER_URL}/api/identity`, { signal: AbortSignal.timeout(5000), cache: 'no-store' });
+      if (response.ok) proof = await profileProof(profileCredential, SERVER_URL, (await response.json()).challenge);
+    } catch (_) { /* Servidores antigos continuam usando a credencial por sala. */ }
+    cb({
     profileId: myProfile.id,
     memberKey: roomAccess().memberKey || '',
     roomPassword: roomAccess().password || '',
     adminKey: prefs.adminKeys?.[SERVER_URL] || '',
-    permissionToken: roomAccess().permissionToken || ''
-  }),
+    permissionToken: roomAccess().permissionToken || '',
+    profileProof: proof
+    });
+  },
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: Infinity,
@@ -482,10 +494,11 @@ socket.on('member-key', ({ profileId, key } = {}) => {
 socket.on('room-password-changed', ({ password, by } = {}) => {
   saveRoomAccess({ password: password || '' });
   if (appState.isAdmin) return;
-  showToast(password ? `🔒 ${by || 'O admin'} colocou senha na sala (o seu app já guardou).` : `🔓 ${by || 'O admin'} tirou a senha da sala.`);
+  showToast(password ? `🔒 ${by || 'A moderação'} colocou senha na sala (o seu app já guardou).` : `🔓 ${by || 'A moderação'} tirou a senha da sala.`);
 });
 
-socket.on('room-info', ({ hasPassword, connectionPing } = {}) => {
+socket.on('room-info', ({ hasPassword, connectionPing, assetKey } = {}) => {
+  if (assetKey) appState.assetKey = assetKey;
   appState.roomHasPassword = Boolean(hasPassword);
   connectionPingSupported = connectionPing === true;
   syncConnectionMonitor();
@@ -498,15 +511,14 @@ socket.on('connect', () => {
   syncConnectionMonitor();
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
-  appState.isAdmin = false;
   // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
   socket.emit('update-profile', profilePayload());
   publishGameActivity(true);
   const adminKey = savedAdminKey();
-  if (adminKey) {
+  if (adminKey && !appState.ownerClaimed && !appState.isAdmin) {
     adminLogin(adminKey, (res) => {
       // Senha trocada no servidor: esquece a velha
-      if (!res.success) saveAdminKey('');
+      if (res.success || appState.ownerClaimed) saveAdminKey('');
     });
   }
 
@@ -576,6 +588,8 @@ const handleChannelsSummary = (channelsList) => {
       hasPassword: Boolean(ch.hasPassword),
       isPrivate: Boolean(ch.isPrivate),
       canManageAccess: Boolean(ch.canManageAccess),
+      canWrite: ch.canWrite !== false,
+      description: ch.description || '',
       userCount: ch.userCount ?? userMap.size,
       activeStreams: ch.activeStreams ?? 0,
       users: userMap
@@ -1131,7 +1145,7 @@ function leaveCallLocally() {
 socket.on('kicked', ({ by } = {}) => {
   leaveCallLocally();
   playCallSound(undefined, '', { kind: 'leave' });
-  showToast(`🚪 ${by || 'Um admin'} tirou você da call. Clique num canal pra entrar de novo.`, 'error');
+  showToast(`🚪 ${by || 'A moderação'} tirou você da call. Clique num canal pra entrar de novo.`, 'error');
 });
 
 socket.on('channel-deleted', ({ channelId, channelName, by } = {}) => {
@@ -1152,12 +1166,12 @@ function muteIndicatorsHtml(u) {
   let html = '';
   if (!u.isMicOn) {
     html += u.serverMuted || u.serverDeafened
-      ? `<span class="indicator-icon mic-muted" title="Mutado pelo admin">${MIC_OFF_SVG}${byAdmin}</span>`
+      ? `<span class="indicator-icon mic-muted" title="Mutado pela moderação">${MIC_OFF_SVG}${byAdmin}</span>`
       : `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>`;
   }
   if (u.isDeafened) {
     html += u.serverDeafened
-      ? `<span class="indicator-icon mic-muted" title="Ensurdecido pelo admin">${HEADPHONES_OFF_SVG}${byAdmin}</span>`
+      ? `<span class="indicator-icon mic-muted" title="Ensurdecido pela moderação">${HEADPHONES_OFF_SVG}${byAdmin}</span>`
       : `<span class="indicator-icon mic-muted" title="Áudio Desativado">${HEADPHONES_OFF_SVG}</span>`;
   }
   return html;
@@ -1182,7 +1196,7 @@ function moveUserToChannel(userId, channelId) {
 socket.on('moved-by-admin', ({ channelId, channelName, by } = {}) => {
   if (!channelId || channelId === appState.currentChannelId) return;
   switchChannel(channelId);
-  showToast(`➡️ ${by || 'Um admin'} te levou pra #${channelName || channelId}.`);
+  showToast(`➡️ ${by || 'A moderação'} te levou pra #${channelName || channelId}.`);
 });
 
 // Admin me mutou / ensurdeceu (ou desfez)
@@ -1213,9 +1227,9 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
   updateMicButton();
   renderChannelsTree();
   updateVoiceLounge();
-  if (me.serverDeafened) showToast(`🎧 ${by || 'Um admin'} te ensurdeceu.`, 'error');
-  else if (me.serverMuted) showToast(`🔇 ${by || 'Um admin'} te mutou pra todos.`, 'error');
-  else showToast(`🎙️ ${by || 'Um admin'} liberou seu microfone.`, 'success');
+  if (me.serverDeafened) showToast(`🎧 ${by || 'A moderação'} te ensurdeceu.`, 'error');
+  else if (me.serverMuted) showToast(`🔇 ${by || 'A moderação'} te mutou pra todos.`, 'error');
+  else showToast(`🎙️ ${by || 'A moderação'} liberou seu microfone.`, 'success');
 });
 
 function canDeleteChannel(ch) {
@@ -1309,9 +1323,11 @@ function renderChannelsTree() {
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
         : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
+      ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
       ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
     `;
 
+    row.querySelector('.channel-settings-btn')?.addEventListener('click', e => { e.stopPropagation(); permissionUI.openChannelSettings('voice', chId); });
     row.querySelector('.channel-delete-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       deleteChannel(chId);
@@ -1347,6 +1363,7 @@ function renderChannelsTree() {
     };
     row.addEventListener('click', openVoice);
     row.addEventListener('keydown', (e) => {
+      if (e.target !== row) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openVoice();
@@ -1377,8 +1394,8 @@ function renderChannelsTree() {
         </div>
         <span class="channel-user-info"><span class="channel-user-name">
           <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
-          ${u.isAdmin ? '<span class="badge-admin" title="Admin">👑</span>' : ''}
-          ${(u.roles || []).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('')}
+          ${u.isAdmin ? '<span class="badge-admin" title="Dono do servidor">👑</span>' : ''}
+          ${(u.roles || []).filter(role => role.id === u.displayRoleId).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('')}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
         </span>${userActivityHtml(u)}</span>
         <div class="user-indicators">
@@ -1441,6 +1458,9 @@ function updateTopBar() {
   const textCh = appState.textView ? appState.textChannels.get(appState.textView) : null;
   const chatLabel = $('#chat-channel-label');
   if (chatLabel) chatLabel.textContent = textCh ? `#${textCh.name}` : inCall ? `#${name}-chat` : 'Fora da call';
+  const description = textCh?.description || (!textCh && appState.channels.get(appState.currentChannelId)?.description) || '';
+  $('#chat-channel-description').textContent = description;
+  $('#chat-channel-description').classList.toggle('hidden', !description);
   $('#btn-chat-back-voice')?.classList.toggle('hidden', !textCh || !inCall);
   $('#btn-chat-pins')?.classList.toggle('hidden', !textCh);
   if (!textCh) $('#pins-popover')?.classList.add('hidden');
@@ -1450,8 +1470,10 @@ function updateTopBar() {
   const chatInput = $('#chat-input');
   if (chatInput) {
     // Canal de texto não precisa estar em call
-    chatInput.disabled = !inCall && !textCh;
-    chatInput.placeholder = textCh
+    const canWrite = Boolean(textCh || inCall) && (textCh || appState.channels.get(appState.currentChannelId))?.canWrite !== false;
+    chatInput.disabled = !canWrite;
+    $('#chat-form')?.querySelectorAll('button').forEach(button => { button.disabled = !canWrite; });
+    chatInput.placeholder = !canWrite && (textCh || inCall) ? 'Você pode ler este chat, mas não enviar mensagens.' : textCh
       ? `Mensagem em #${textCh.name}...`
       : inCall ? `Conversar em #${name}...` : 'Entre num canal pra conversar';
   }
@@ -1555,7 +1577,7 @@ function updateVoiceLounge() {
           </div>
           <span class="speaking-halo"></span>
         </div>
-        <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
+        <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAdmin ? ' <span class="badge-admin" title="Dono do servidor">👑</span>' : ''}${isMe ? ' (Você)' : ''}</span>
         ${userActivityHtml(u)}
         <div class="user-indicators">
           ${liveBadgesHtml(u)}
@@ -1838,7 +1860,7 @@ function buildChatMessage(msg) {
     ['react', 'Reagir'],
     ...(appState.textView ? [['pin', msg.pinned ? 'Desfixar' : 'Fixar']] : []),
     ...(mine && msg.text !== undefined ? [['edit', 'Editar']] : []),
-    ...(mine || appState.isAdmin ? [['delete', 'Apagar']] : [])
+    ...(mine || hasPermission(appState, 'manageMessages') ? [['delete', 'Apagar']] : [])
   ] : [];
 
   div.innerHTML = `
@@ -2225,7 +2247,7 @@ function renderSoundboard() {
     : '';
   const builtIns = CALL_SOUNDS.map((_, i) => ({ id: `amigo-${i + 1}`, name: `Áudio ${i + 1}`, emoji: '🗣️' }));
   grid.innerHTML = section('Seus sons', mine, () => true)
-    + section('Da galera', others, () => appState.isAdmin)
+    + section('Da galera', others, () => hasPermission(appState, 'manageMessages'))
     + section('Do app', builtIns, () => false)
     + (mine.length ? '' : '<p class="soundboard-hint">Clique em <strong>＋ Adicionar som</strong> pra subir os seus (até 16).</p>');
 }
@@ -2481,7 +2503,7 @@ socket.on('typing', ({ userId, name, scope, channelId } = {}) => {
 // ---------- Exportar / importar perfil (trocar de PC sem perder nada) ----------
 function setupProfileTransfer() {
   $('#btn-profile-export')?.addEventListener('click', () => {
-    const data = { app: 'teletela', tipo: 'perfil', versao: 1, exportadoEm: new Date().toISOString(), profile: { ...myProfile } };
+    const data = { app: 'teletela', tipo: 'perfil', versao: 2, accessIdentity: profileCredential, exportadoEm: new Date().toISOString(), profile: { ...myProfile } };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -2491,7 +2513,7 @@ function setupProfileTransfer() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast('💾 Perfil exportado. Guarde o arquivo: ele também é a sua "identidade" nas salas.');
+    showToast('💾 Perfil exportado. Guarde o arquivo: ele permite recuperar seus cargos e acessos. Não compartilhe esse backup.');
   });
   $('#input-profile-import')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
@@ -2524,8 +2546,10 @@ function setupProfileTransfer() {
       };
       // A chave de membro é do perfil antigo: a do novo vem ao conectar
       const roomAccessAll = { ...(prefs.roomAccess || {}) };
-      for (const k of Object.keys(roomAccessAll)) roomAccessAll[k] = { ...roomAccessAll[k], memberKey: undefined };
-      await savePrefs({ profile, roomAccess: roomAccessAll });
+      for (const k of Object.keys(roomAccessAll)) roomAccessAll[k] = { ...roomAccessAll[k], memberKey: undefined, permissionToken: p.id === myProfile.id ? roomAccessAll[k].permissionToken : undefined };
+      const profileCredentials = { ...prefs.profileCredentials };
+      if (/^[a-f0-9]{64}$/.test(data.accessIdentity || '')) profileCredentials[p.id] = data.accessIdentity;
+      await savePrefs({ profile, profileCredentials, roomAccess: roomAccessAll });
       location.reload();
     } catch (err) {
       showToast(`❌ ${err.message || 'Não consegui ler esse arquivo.'}`, 'error');
@@ -2596,19 +2620,21 @@ function linkifyText(text) {
   return html + mentionify(escapeHtml(raw.slice(last)));
 }
 
+function chatAssetUrl(url) { return `${SERVER_URL}${url}?access=${encodeURIComponent(appState.assetKey || '')}`; }
+
 function chatImageHtml(image) {
   if (!image || typeof image.url !== 'string' || !/^\/api\/(chat|text)-image\/[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(image.url)) return '';
   const size = image.width && image.height ? ` width="${Number(image.width)}" height="${Number(image.height)}"` : '';
-  return `<img class="chat-image" src="${escapeHtml(SERVER_URL + image.url)}"${size} alt="Imagem" loading="lazy" />`;
+  return `<img class="chat-image" src="${escapeHtml(chatAssetUrl(image.url))}"${size} alt="Imagem" loading="lazy" />`;
 }
 
 function chatAttachmentHtml(attachment) {
   if (!attachment || typeof attachment.url !== 'string' || !/^\/api\/(chat|text)-file\/[a-f0-9-]{36}\.(bin|mp4|webm)$/.test(attachment.url)) return '';
-  const url = SERVER_URL + attachment.url;
+  const url = chatAssetUrl(attachment.url);
   const name = typeof attachment.name === 'string' ? attachment.name : 'Arquivo';
   const size = Number(attachment.size) || 0;
   const sizeText = size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(size / 1024)} KB`;
-  const download = `${url}?download=1&name=${encodeURIComponent(name)}`;
+  const download = `${url}&download=1&name=${encodeURIComponent(name)}`;
   const video = /\.(mp4|webm)$/.test(attachment.url);
   return `${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
     <a class="chat-file" href="${escapeHtml(download)}" download="${escapeHtml(name)}">
@@ -2844,17 +2870,20 @@ function renderTextChannels() {
         <span class="channel-speaker-icon channel-hash">#</span>
         <span class="channel-name">${escapeHtml(ch.name)}</span>
         ${appState.textMentions.has(ch.id) && !active ? '<span class="channel-mention-badge" title="Te marcaram aqui">@</span>' : ''}
-        ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+        ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
+      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
       </div>
     `;
     const row = li.querySelector('.channel-row');
     row.addEventListener('click', () => openTextChannel(ch.id));
     row.addEventListener('keydown', (e) => {
+      if (e.target !== row) return;
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
         openTextChannel(ch.id);
       }
     });
+    li.querySelector('.channel-settings-btn')?.addEventListener('click', e => { e.stopPropagation(); permissionUI.openChannelSettings('text', ch.id); });
     li.querySelector('.channel-delete-btn')?.addEventListener('click', (e) => {
       e.stopPropagation();
       if (!window.confirm(`Apagar o canal de texto #${ch.name}? Todas as mensagens e imagens dele somem. Não dá pra desfazer.`)) return;
@@ -2937,6 +2966,7 @@ function loadTextHistory(id, before = null) {
   if (!before) renderTextChat(); // mostra "carregando" enquanto chega
   socket.emit('text-history', before ? { channelId: id, before } : { channelId: id }, (res) => {
     state.loading = false;
+    if (!appState.textChannels.has(id)) return;
     if (!res?.success) return;
     const container = $('#chat-messages');
     const keepFromBottom = container ? container.scrollHeight - container.scrollTop : 0;
@@ -2990,6 +3020,8 @@ function setupTextChannels() {
 socket.on('text-channels', (list) => {
   if (!Array.isArray(list)) return;
   appState.textChannels = new Map(list.map((ch) => [ch.id, ch]));
+  for (const id of appState.textMessages.keys()) if (!appState.textChannels.has(id)) { appState.textMessages.delete(id); appState.textMentions.delete(id); }
+  permissionUI.refreshChannels();
   // O canal aberto foi apagado enquanto estávamos desconectados
   if (appState.textView && !appState.textChannels.has(appState.textView)) closeTextView();
   renderTextChannels();
@@ -3092,7 +3124,7 @@ function setupDockControls() {
   // Mic Mute Toggle
   micBtn?.addEventListener('click', async () => {
     if (!appState.myUser.isMicOn && isMicLockedByAdmin()) {
-      showToast(appState.myUser.serverDeafened ? '🎧 Um admin te ensurdeceu.' : '🔇 Um admin te mutou pra todos.', 'error');
+      showToast(appState.myUser.serverDeafened ? '🎧 A moderação te ensurdeceu.' : '🔇 A moderação te mutou pra todos.', 'error');
       return;
     }
     const nextMicOn = !appState.myUser.isMicOn;
@@ -3117,7 +3149,7 @@ function setupDockControls() {
   // Deafen Toggle
   deafenBtn?.addEventListener('click', () => {
     if (appState.myUser.isDeafened && appState.myUser.serverDeafened) {
-      showToast('🎧 Um admin te ensurdeceu.', 'error');
+      showToast('🎧 A moderação te ensurdeceu.', 'error');
       return;
     }
     const nextDeafened = !appState.myUser.isDeafened;
@@ -3458,7 +3490,7 @@ function setupModals() {
     const isVoice = document.querySelector('input[name="channel-type"]:checked')?.value === 'voice';
     $('#channel-password-field').classList.toggle('hidden', !isVoice);
     $('#input-channel-password-new').disabled = !isVoice;
-    $('#new-channel-access').classList.toggle('hidden', !isVoice || !hasPermission(appState, 'manageChannels'));
+    $('#new-channel-access').classList.toggle('hidden', !hasPermission(appState, 'manageChannels'));
   };
   $$('input[name="channel-type"]').forEach((radio) => radio.addEventListener('change', syncChannelPasswordField));
   $('#form-channel-password').addEventListener('submit', (e) => {
@@ -3524,7 +3556,7 @@ function setupModals() {
     };
     if (!socket.connected) return showToast('Espere a conexão voltar para criar o canal.', 'error');
     if (type === 'text') {
-      socket.emit('create-text-channel', { name, profileId: myProfile.id }, (response) => {
+      socket.emit('create-text-channel', { name, profileId: myProfile.id, access: permissionUI.newAccess() }, (response) => {
         if (response?.success) { finish(); openTextChannel(response.channelId); }
         else showToast(`❌ ${response?.error || 'Não deu pra criar o canal.'}`, 'error');
       });
@@ -3839,7 +3871,7 @@ function applyUserVolume(userId) {
   const u = findUser(userId);
   if (!u) return;
   const { volume, muted } = getVolumePref(u);
-  // Mutado (por ele ou pelo admin): ninguém ouve, mesmo que o app dele insista em mandar a
+  // Mutado (por ele ou pela moderação): ninguém ouve, mesmo que o app dele insista em mandar a
   // voz (ex: app antigo que não desliga o mic quando o admin muta)
   appState.setUserVolume(userId, muted || u.serverMuted || u.serverDeafened || u.isMicOn === false ? 0 : volume);
 }
@@ -3861,6 +3893,7 @@ function openUserPopover(userId, anchorEvent) {
   const banner = $('#user-popover-banner');
   renderBanner(banner, u);
   $('#user-popover-bio').textContent = u.bio || '';
+  $('#user-popover-roles').innerHTML = roleBadges(u);
   $('#user-popover-activity').innerHTML = userActivityHtml(u);
   renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', !hasPermission(appState, 'kickMembers') || !u.channelId);
@@ -3894,6 +3927,10 @@ function renderUserPopoverVolume() {
 }
 
 // Perfil grande no meio da tela: banner, foto com moldura, nome e bio
+function roleBadges(u) {
+  return (u.isOwner || u.isAdmin ? '<span class="badge-role">Dono do servidor</span>' : '') + (u.roles || []).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('');
+}
+
 function openProfileCard(userId) {
   const u = findUser(userId);
   if (!u) return;
@@ -3909,8 +3946,9 @@ function openProfileCard(userId) {
   const name = $('#profile-card-name');
   name.textContent = shown.name;
   applyNameStyle(name, shown);
-  $('#profile-card-badges').innerHTML = `${u.isAdmin ? ' <span class="badge-admin" title="Admin">👑</span>' : ''}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
+  $('#profile-card-badges').innerHTML = `${u.isAdmin ? ' <span class="badge-admin" title="Dono do servidor">👑</span>' : ''}${isMe ? ' <span class="badge-self">(você)</span>' : ''}`;
   $('#profile-card-bio').textContent = shown.bio || '';
+  $('#profile-card-roles').innerHTML = roleBadges(u);
   $('#profile-card-activity').innerHTML = userActivityHtml(u);
   const ch = appState.channels.get(u.channelId);
   $('#profile-card-meta').textContent = ch ? `🔊 Na call: ${ch.name}` : '';
@@ -3998,6 +4036,9 @@ function resetProfileDraft() {
   profileDraft = { ...myProfile };
   $('#input-profile-name').value = profileDraft.name;
   $('#input-profile-bio').value = profileDraft.bio;
+  const roleSelect = $('#profile-display-role');
+  roleSelect.innerHTML = '<option value="">Ocultar ao lado do nome</option>' + (appState.permissionRoles || []).map(role => `<option value="${escapeHtml(role.id)}">${escapeHtml(role.name)}</option>`).join('');
+  roleSelect.value = profileDraft.displayRoleId || '';
   renderProfileDraft();
 }
 
@@ -4352,7 +4393,8 @@ function setupProfileSettings() {
     if (!name || !profileDraft) return;
     Object.assign(myProfile, profileDraft, {
       name,
-      bio: $('#input-profile-bio').value.trim().slice(0, 140)
+      bio: $('#input-profile-bio').value.trim().slice(0, 140),
+      displayRoleId: $('#profile-display-role').value
     });
     savePrefs({ profile: { ...myProfile } });
 
@@ -4598,15 +4640,18 @@ function setupMasterVolume() {
   input.addEventListener('change', () => savePrefs({ masterVolume: Number(input.value) }));
 }
 
-// Configurações > Admin: só aparece em sala com senha de admin (a da nuvem)
+// Propriedade e poderes delegados por cargo; os IDs antigos mantêm compatibilidade.
 function renderAdminSettings() {
   const group = $('#admin-settings');
   if (!group) return;
-  group.classList.toggle('hidden', !appState.serverHasAdmin);
-  $('#settings-tab-admin')?.classList.toggle('hidden', !appState.serverHasAdmin);
+  group.classList.toggle('hidden', !appState.serverHasAdmin && !appState.isAdmin);
+  $('#settings-tab-admin')?.classList.remove('hidden');
   $('#admin-login-row')?.classList.toggle('hidden', appState.isAdmin);
   $('#admin-logged-row')?.classList.toggle('hidden', !appState.isAdmin);
-  $('#admin-room-password')?.classList.toggle('hidden', !appState.isAdmin);
+  $('#admin-room-password')?.classList.toggle('hidden', !hasPermission(appState, 'manageServer'));
+  $('#btn-admin-login').textContent = appState.ownerClaimed ? 'Servidor já tem dono' : 'Assumir propriedade';
+  $('#btn-admin-login').disabled = Boolean(appState.ownerClaimed);
+  $('#btn-owner-recover').classList.toggle('hidden', !appState.ownerClaimed || appState.isAdmin);
   const status = $('#room-password-status');
   if (status) status.textContent = appState.roomHasPassword ? '🔒 A sala tem senha.' : '🔓 A sala está aberta (sem senha).';
   $('#btn-room-password-remove')?.classList.toggle('hidden', !appState.roomHasPassword);
@@ -4648,9 +4693,9 @@ function setupAdminSettings() {
     adminLogin(key, (res) => {
       loginBtn.disabled = false;
       if (res.success) {
-        saveAdminKey(key);
+        saveAdminKey('');
         input.value = '';
-        showToast('👑 Agora você é admin nessa sala.', 'success');
+        showToast('👑 Você é o dono deste servidor.', 'success');
       } else {
         showToast(`❌ ${res.error || 'Senha errada.'}`, 'error');
       }
@@ -4658,9 +4703,13 @@ function setupAdminSettings() {
   };
   loginBtn?.addEventListener('click', login);
   input?.addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
-  $('#btn-admin-logout')?.addEventListener('click', () => {
-    saveAdminKey('');
-    adminLogin('', () => showToast('Você não é mais admin nessa sala.'));
+  $('#btn-owner-recover')?.addEventListener('click', () => {
+    const key = input?.value.trim();
+    if (!key || !window.confirm('Recuperar a propriedade para este perfil? O dono anterior perderá a propriedade.')) return;
+    socket.emit('owner-recover', { key }, res => {
+      if (res?.success) { input.value = ''; saveAdminKey(''); showToast('Propriedade recuperada para este perfil.', 'success'); }
+      else showToast(res?.error || 'Não foi possível recuperar.', 'error');
+    });
   });
   renderAdminSettings();
 }

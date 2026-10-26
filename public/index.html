@@ -339,6 +339,7 @@
         <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
       </div>
 
+      <p id="chat-channel-description" class="chat-channel-description hidden"></p>
       <div id="pins-popover" class="pins-popover hidden" role="dialog" aria-label="Mensagens fixadas"></div>
 
       <!-- SCROLLABLE MESSAGES LIST -->
@@ -395,7 +396,7 @@
       <div class="mobile-settings-group">
         <button type="button" class="mobile-settings-row" data-mobile-settings="transmissao"><span class="mobile-row-icon" data-mobile-icon="camera"></span><span>Transmissões<small>Qualidade de vídeo</small></span><span aria-hidden="true">›</span></button>
         <button type="button" id="mobile-open-news" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3z"/></svg></span><span>Novidades<small>O que mudou no Teletela</small></span><span aria-hidden="true">›</span></button>
-        <button type="button" id="mobile-open-admin" class="mobile-settings-row hidden" data-mobile-settings="admin"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18 3 8l5 4 4-7 4 7 5-4-1 10"/></svg></span><span>Administração da sala</span><span aria-hidden="true">›</span></button>
+        <button type="button" id="mobile-open-admin" class="mobile-settings-row hidden" data-mobile-settings="admin"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18 3 8l5 4 4-7 4 7 5-4-1 10"/></svg></span><span>Servidor e cargos</span><span aria-hidden="true">›</span></button>
       </div>
       <p class="mobile-profile-footnote">Teletela · feito pra conversar junto</p>
     </section>
@@ -410,7 +411,7 @@
         <h3 id="modal-room-password-title">🔒 Sala com senha</h3>
       </div>
       <form id="form-room-password" class="modal-body">
-        <p class="form-help">Essa sala tem senha. Peça pra um amigo ou pro admin; o Teletela guarda e não pede de novo.</p>
+        <p class="form-help">Essa sala tem senha. Peça pra um amigo ou para o dono; o Teletela guarda e não pede de novo.</p>
         <p class="form-help room-password-error hidden" id="room-password-error">Senha errada, tenta de novo.</p>
         <div class="form-group">
           <input type="password" id="input-room-password" class="form-input" placeholder="Senha da sala" autocomplete="off" maxlength="100" required />
@@ -423,6 +424,30 @@
   </div>
 
   <!-- Perfil grande de alguém (clique na foto no popup ou no chat) -->
+  <div id="modal-channel-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="channel-settings-title">
+    <div class="modal-card channel-settings-modal">
+      <div class="modal-header"><h3 id="channel-settings-title">Configurações do canal</h3><button type="button" class="modal-close-btn" data-close-modal="modal-channel-settings" aria-label="Fechar">✕</button></div>
+      <form id="form-channel-settings">
+        <div class="channel-settings-fields">
+        <div class="form-group"><label for="channel-settings-name">Nome</label><input id="channel-settings-name" class="form-input" maxlength="30" required></div>
+        <div class="form-group"><label for="channel-settings-description">Descrição</label><textarea id="channel-settings-description" class="form-input" maxlength="200" rows="2"></textarea></div>
+        <fieldset class="permission-list"><legend>Quem pode ver e acessar</legend>
+          <label class="permission-choice"><input type="checkbox" id="channel-settings-access-private"> Invisível para quem não tem acesso</label>
+          <p class="form-help">Desmarcado: todos podem ver. Marcado: só o dono e as pessoas ou cargos escolhidos. O Geral permanece público.</p>
+          <strong>Cargos</strong><div id="channel-settings-access-roles"></div><strong>Pessoas</strong><div id="channel-settings-access-members"></div>
+        </fieldset>
+        <fieldset class="permission-list"><legend>Quem pode enviar no chat</legend>
+          <label class="permission-choice"><input type="checkbox" id="channel-settings-write-private"> Restringir o envio de mensagens e anexos</label>
+          <p class="form-help">Desmarcado: todos com acesso podem enviar. Marcado: só o dono e os cargos ou pessoas escolhidos. Na call, afeta o chat; o microfone continua funcionando.</p>
+          <strong>Cargos</strong><div id="channel-settings-write-roles"></div><strong>Pessoas</strong><div id="channel-settings-write-members"></div>
+        </fieldset>
+        <div id="channel-settings-password-field" class="form-group"><label for="channel-settings-password">Senha para entrar na call</label><input id="channel-settings-password" class="form-input" type="password" minlength="4" maxlength="100" autocomplete="new-password"><label class="permission-choice"><input id="channel-settings-remove-password" type="checkbox"> Remover a senha atual</label></div>
+        </div>
+        <div class="modal-actions"><button type="button" class="btn-secondary" data-close-modal="modal-channel-settings">Cancelar</button><button type="submit" class="btn-primary">Salvar configurações</button></div>
+      </form>
+    </div>
+  </div>
+
   <div id="modal-user-profile" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="profile-card-name">
     <div class="profile-card-big">
       <div class="profile-card-banner" id="profile-card-banner"></div>
@@ -430,6 +455,7 @@
       <div class="profile-card-main">
         <div class="user-avatar profile-card-avatar" id="profile-card-avatar" title="Ver a foto grande"></div>
         <h3 class="profile-card-name"><span id="profile-card-name"></span><span id="profile-card-badges"></span></h3>
+        <div id="profile-card-roles" class="profile-roles"></div>
         <p class="profile-card-bio" id="profile-card-bio"></p>
         <div id="profile-card-activity"></div>
         <div class="profile-card-meta" id="profile-card-meta"></div>
@@ -494,13 +520,13 @@
         <div class="form-group" id="channel-password-field">
           <label for="input-channel-password-new">Senha do canal (opcional)</label>
           <input type="password" id="input-channel-password-new" class="form-input" placeholder="Sem senha, qualquer pessoa pode entrar" autocomplete="new-password" minlength="4" maxlength="100" aria-describedby="channel-password-new-help" />
-          <p class="form-help" id="channel-password-new-help">De 4 a 100 caracteres. Todo mundo precisa da senha, inclusive admin.</p>
+          <p class="form-help" id="channel-password-new-help">De 4 a 100 caracteres. Todo mundo precisa da senha, inclusive o dono.</p>
         </div>
 
         <div id="new-channel-access" class="form-group hidden">
-          <label class="permission-choice"><input type="checkbox" id="new-channel-access-private"> Canal de voz invisível</label>
+          <label class="permission-choice"><input type="checkbox" id="new-channel-access-private"> Canal invisível</label>
           <div id="new-channel-access-choices" class="hidden">
-            <p class="form-help">Só as pessoas ou cargos marcados podem ver e entrar. Quem usa a senha de admin também vê. A senha do canal continua valendo.</p>
+            <p class="form-help">Só as pessoas ou cargos marcados podem ver e entrar. O dono do servidor também vê. A senha do canal continua valendo.</p>
             <fieldset class="permission-list"><legend>Cargos permitidos</legend><div id="new-channel-access-roles"></div></fieldset>
             <fieldset class="permission-list"><legend>Pessoas permitidas</legend><div id="new-channel-access-members"></div></fieldset>
           </div>
@@ -520,7 +546,7 @@
         <button type="button" class="modal-close-btn" data-close-modal="modal-channel-password" aria-label="Cancelar entrada">✕</button>
       </div>
       <form id="form-channel-password">
-        <p class="form-help" id="channel-password-help">Digite a senha de <strong id="channel-password-name"></strong>. Todo mundo precisa dela, inclusive admin.</p>
+        <p class="form-help" id="channel-password-help">Digite a senha de <strong id="channel-password-name"></strong>. Todo mundo precisa dela, inclusive o dono.</p>
         <div class="form-group">
           <label for="input-channel-password">Senha do canal</label>
           <input type="password" id="input-channel-password" class="form-input" autocomplete="off" maxlength="100" required aria-describedby="channel-password-error" />
@@ -717,7 +743,7 @@
           <button type="button" class="settings-tab" data-settings-tab="som"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/></svg><span>Som</span></button>
           <button type="button" class="settings-tab" data-settings-tab="transmissao"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span>Transmissão</span></button>
           <button type="button" class="settings-tab" data-settings-tab="atalhos"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg><span>Atalhos</span></button>
-          <button type="button" class="settings-tab" data-settings-tab="admin" id="settings-tab-admin"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18l-1-10 5 4 4-7 4 7 5-4-1 10"/></svg><span>Admin</span></button>
+          <button type="button" class="settings-tab" data-settings-tab="admin" id="settings-tab-admin"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18h20M4 18l-1-10 5 4 4-7 4 7 5-4-1 10"/></svg><span>Servidor e cargos</span></button>
           <button type="button" class="settings-news-button" id="btn-settings-whats-new" title="Ver novidades da versão">
             <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3M8 8h3M8 12h8M8 16h5"/><path d="m18 2 1.2 2.8L22 6l-2.8 1.2L18 10l-1.2-2.8L14 6l2.8-1.2L18 2z"/></svg>
             <span>Novidades<small id="settings-app-version"></small></span>
@@ -738,6 +764,8 @@
                     <input type="text" id="input-profile-name" class="form-input" placeholder="Ex: Castzin" maxlength="24" required autocomplete="off" />
                   </div>
                   <div class="form-group">
+                    <label for="profile-display-role">Cargo ao lado do nome</label><select id="profile-display-role" class="form-input"><option value="">Ocultar ao lado do nome</option></select>
+                    <p class="form-help">Os cargos aparecem ao clicar no perfil. Se quiser, escolha um para mostrar junto ao nome neste servidor.</p>
                     <label for="input-profile-bio">Bio</label>
                     <textarea id="input-profile-bio" class="form-input profile-bio" maxlength="140" rows="3" placeholder="Conte um pouco sobre você"></textarea>
                     <p class="form-help">Aparece quando alguém abre seu perfil.</p>
@@ -924,7 +952,7 @@
               </div>
               <p class="form-help">Entre numa call e ligue o microfone para testar. A barra acompanha a voz enviada; o anel verde no seu avatar acende quando você fala.</p>
             </div>
-      
+
           </section>
           <section class="settings-section hidden" data-settings-section="som">
             <h4 class="settings-section-title">Som</h4>
@@ -1059,38 +1087,40 @@
             </div>
           </section>
           <section class="settings-section hidden" data-settings-section="admin">
-            <h4 class="settings-section-title">Admin</h4>
+            <h4 class="settings-section-title">Servidor e cargos</h4>
             <p id="permission-status" class="form-help"></p>
             <p id="permission-device" class="form-help"></p>
             <!-- Admin (só em sala com senha de admin) -->
             <div class="form-group hidden" id="admin-settings">
-              <label for="input-admin-key">Admin 👑</label>
+              <label for="input-admin-key">Dono do servidor 👑</label>
               <div class="admin-row" id="admin-login-row">
-                <input type="password" id="input-admin-key" class="form-input" placeholder="Senha de admin da sala" autocomplete="off" />
-                <button type="button" class="btn-primary" id="btn-admin-login">Entrar</button>
+                <input type="password" id="input-admin-key" class="form-input" placeholder="Chave de propriedade / recuperação" autocomplete="off" />
+                <button type="button" class="btn-primary" id="btn-admin-login">Assumir propriedade</button>
+                <button type="button" class="btn-secondary hidden" id="btn-owner-recover">Recuperar propriedade</button>
               </div>
               <div class="admin-row hidden" id="admin-logged-row">
-                <span class="admin-status">Você é admin nessa sala.</span>
-                <button type="button" class="btn-secondary" id="btn-admin-logout">Deixar de ser admin</button>
+                <span class="admin-status">Você é o dono deste servidor.</span>
+
               </div>
-              <p class="form-help">Admin pode tirar alguém da call (clique na pessoa) e apagar qualquer canal (🗑️ ao passar o mouse). Quem cria um canal sempre pode apagar o seu.</p>
+              <p class="form-help">O dono é vinculado ao perfil. Na primeira vez, use a chave atual do servidor. Depois, a moderação e a administração são delegadas pelos cargos. A chave fica disponível para recuperar a propriedade se você perder o perfil.</p>
             </div>
 
+            <div id="owner-transfer" class="form-group hidden"><label for="owner-transfer-member">Transferir propriedade</label><select id="owner-transfer-member" class="form-input"></select><button type="button" id="btn-owner-transfer" class="btn-secondary">Transferir para este perfil</button></div>
             <div id="permission-management" class="hidden">
-              <p class="form-help">Cargos e acesso funcionam sem conta. Cada instalação tem sua identificação; o código curto diferencia pessoas com o mesmo nome. Ao trocar de aparelho ou apagar os dados, o admin precisa liberar a nova instalação.</p>
+              <p class="form-help">Cargos e acesso funcionam sem conta. Cada perfil guarda uma identidade privada que permanece nas atualizações. Exporte seu perfil para levar os cargos a outro aparelho ou recuperá-los se apagar os dados. Guarde o backup só com você.</p>
               <div id="permission-role-management" class="hidden">
                 <form id="permission-role-form" class="form-group permission-block">
                   <h4>Cargos</h4>
                   <label for="permission-role-id">Criar ou editar</label><select id="permission-role-id" class="form-input"><option value="">Criar cargo</option></select>
                   <label for="permission-role-name">Nome do cargo</label><input id="permission-role-name" class="form-input" maxlength="30" required>
                   <label for="permission-role-position">Hierarquia (1 a 99)</label><input id="permission-role-position" class="form-input" type="number" min="1" max="99" value="10" required>
-                  <p class="form-help">Um cargo só modera pessoas abaixo dele. Só quem tem a senha de admin cria, edita e atribui cargos.</p>
+                  <p class="form-help">Um cargo só modera pessoas abaixo dele. O dono pode gerenciar todos os cargos. Quem tem a permissão de gerenciar cargos só altera cargos e pessoas abaixo da própria hierarquia, sem conceder poderes que não possui.</p>
                   <div id="permission-role-flags" class="permission-list"></div>
                   <div class="admin-row"><button type="submit" class="btn-primary">Salvar cargo</button><button type="button" id="permission-role-delete" class="btn-secondary" disabled>Remover cargo</button></div>
                 </form>
                 <div class="form-group permission-block">
                   <h4>Cargos de uma pessoa</h4>
-                  <label for="permission-member-id">Pessoa / instalação</label><select id="permission-member-id" class="form-input"></select>
+                  <label for="permission-member-id">Pessoa / perfil</label><select id="permission-member-id" class="form-input"></select>
                   <div id="permission-member-roles" class="permission-list"></div>
                   <button type="button" id="permission-member-save" class="btn-primary" disabled>Salvar cargos da pessoa</button>
                 </div>
@@ -1099,7 +1129,7 @@
                 <h4>Canais invisíveis</h4>
                 <label for="permission-channel-id">Canal de voz</label><select id="permission-channel-id" class="form-input"><option value="">Escolha um canal</option></select>
                 <label class="permission-choice"><input type="checkbox" id="channel-access-private"> Invisível para quem não tem acesso</label>
-                <p class="form-help">Marque os cargos ou as pessoas permitidas. Sem marcações, só quem usa a senha de admin vê. Desmarcar torna o canal visível para todos. O Geral fica público.</p>
+                <p class="form-help">Marque os cargos ou as pessoas permitidas. Sem marcações, só o dono do servidor vê. Desmarcar torna o canal visível para todos. O Geral fica público.</p>
                 <fieldset class="permission-list"><legend>Cargos permitidos</legend><div id="channel-access-roles"></div></fieldset>
                 <fieldset class="permission-list"><legend>Pessoas permitidas</legend><div id="channel-access-members"></div></fieldset>
                 <button type="button" id="permission-channel-save" class="btn-primary" disabled>Salvar visibilidade</button>
@@ -1145,6 +1175,7 @@
       <div class="user-avatar user-popover-avatar" id="user-popover-avatar"></div>
       <div class="user-popover-names">
         <strong id="user-popover-name"></strong>
+        <div id="user-popover-roles" class="profile-roles"></div>
         <span id="user-popover-bio" class="user-popover-bio"></span>
         <span id="user-popover-activity"></span>
       </div>
@@ -1159,7 +1190,7 @@
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
     </div>
     <div class="user-popover-admin hidden" id="user-popover-admin">
-      <span class="user-popover-label">Admin 👑 (vale pra todo mundo)</span>
+      <span class="user-popover-label">Moderação (vale pra todo mundo)</span>
       <div class="user-popover-menu">
         <button type="button" class="popover-menu-item" id="user-popover-server-mute">Mutar pra todos</button>
         <button type="button" class="popover-menu-item" id="user-popover-server-deafen">Ensurdecer pra todos</button>

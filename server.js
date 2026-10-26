@@ -10,7 +10,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import { execSync } from 'node:child_process';
-import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, randomBytes } from 'node:crypto';
+import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, randomBytes, createPublicKey, verify } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { PermissionStore, PERMISSIONS } from './permission-store.js';
@@ -33,15 +33,36 @@ const PUBLIC_DIR = path.join(import.meta.dirname, 'public');
 // Pasta onde os canais criados ficam salvos (sobrevivem a reinício e deploy). Sem ela, só na memória.
 const DATA_DIR = process.env.TELINHA_DATA_DIR || '';
 const CHANNELS_FILE = DATA_DIR ? path.join(DATA_DIR, 'channels.json') : '';
-// Senha de admin: quem digitar nas Configurações pode tirar gente da call e apagar qualquer canal
+// Chave para assumir ou recuperar a propriedade; os poderes comuns vêm dos cargos.
 const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const permissions = new PermissionStore(DATA_DIR);
+
+function verifiedProfileKey(socket) {
+  const proof = socket.handshake.auth?.profileProof;
+  if (!proof || typeof proof.challenge !== 'string' || !/^\d{13}\.[a-f0-9]{32}\.[a-f0-9]{64}$/.test(proof.challenge)
+    || typeof proof.signature !== 'string' || !/^[a-f0-9]{128}$/.test(proof.signature)
+    || typeof proof.publicKey !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(proof.publicKey)) return null;
+  const [expires, nonce, signature] = proof.challenge.split('.');
+  if (Number(expires) < Date.now() || Number(expires) > Date.now() + 65000) return null;
+  const expected = permissions.signature(`profile-challenge|${expires}.${nonce}`);
+  if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  try {
+    const rawKey = Buffer.from(proof.publicKey, 'base64url');
+    const key = createPublicKey({ key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), rawKey]), format: 'der', type: 'spki' });
+    const host = String(socket.handshake.headers.host || '').toLowerCase();
+    return verify(null, Buffer.from(`teletela-profile|${host}|${proof.challenge}`), key, Buffer.from(proof.signature, 'hex')) ? rawKey.toString('hex') : null;
+  } catch { return null; }
+}
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   maxHttpBufferSize: 3e7 // 30MB (acomoda GIFs de 10MB em base64)
+});
+app.get('/api/identity', (_req, res) => {
+  const challenge = `${Date.now() + 60000}.${randomBytes(16).toString('hex')}`;
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' }).json({ challenge: `${challenge}.${permissions.signature('profile-challenge|' + challenge)}` });
 });
 
 // Middleware for method validation on static files
@@ -183,8 +204,8 @@ const DEFAULT_CHANNELS = [
 // link antigo (?channel=x) ou de versão antiga do app é temporário: some quando esvazia.
 const channels = new Map();
 
-function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null }) {
-  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, users: new Map(), messages: [] };
+function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null, writeAccess = null, description = '' }) {
+  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, writeAccess, description, users: new Map(), messages: [] };
 }
 
 for (const def of DEFAULT_CHANNELS) {
@@ -200,10 +221,22 @@ function validChannelPasswordHash(password) {
 // Cada pessoa transmite até 3 telas: a 1 (isSharing) e as extras 2 e 3
 const EXTRA_SCREEN_NUMBERS = [2, 3];
 
+function storedAccess(raw) {
+  if (raw == null) return null;
+  try { return permissions.access(raw, true); }
+  catch { return { private: true, roles: [], members: [] }; }
+}
+
 function loadSavedChannels() {
   if (!CHANNELS_FILE) return;
   try {
     const saved = JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf8'));
+    const general = saved.defaultSettings?.geral;
+    if (general && typeof general === 'object') Object.assign(channels.get('geral'), {
+      name: safeString(general.name, 'Geral', 30), description: safeString(general.description, '', 200),
+      writeAccess: storedAccess(general.writeAccess),
+      password: general.password == null ? null : validChannelPasswordHash(general.password) ? general.password : { salt: '', hash: '' }
+    });
     for (const c of Array.isArray(saved?.channels) ? saved.channels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || channels.has(c.id)) continue;
       // Um hash corrompido nunca deve transformar um canal protegido em aberto.
@@ -216,7 +249,7 @@ function loadSavedChannels() {
         try { access = permissions.access(c.access, true); }
         catch { access = { private: true, roles: [], members: [] }; }
       }
-      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password, access }));
+      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password, access, writeAccess: storedAccess(c.writeAccess), description: safeString(c.description, '', 200) }));
     }
     for (const c of Array.isArray(saved?.textChannels) ? saved.textChannels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || textChannels.has(c.id)) continue;
@@ -225,7 +258,7 @@ function loadSavedChannels() {
         id: c.id,
         name,
         createdBy: typeof c.createdBy === 'string' ? c.createdBy : null,
-        createdAt: Number(c.createdAt) || Date.now()
+        createdAt: Number(c.createdAt) || Date.now(), access: storedAccess(c.access), writeAccess: storedAccess(c.writeAccess), description: safeString(c.description, '', 200)
       }));
     }
   } catch (err) {
@@ -238,12 +271,13 @@ function saveChannels(strict = false) {
   if (!CHANNELS_FILE) return;
   const list = [...channels.values()]
     .filter((c) => !c.isDefault && !c.temporary)
-    .map(({ id, name, createdBy, createdAt, password, access }) => ({ id, name, createdBy, createdAt, ...(password ? { password } : {}), ...(access ? { access } : {}) }));
+    .map(({ id, name, createdBy, createdAt, password, access, writeAccess, description }) => ({ id, name, createdBy, createdAt, password, access, writeAccess, description }));
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
-    const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt }) => ({ id, name, createdBy, createdAt }));
-    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList }, null, 2), { mode: 0o600 });
+    const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt, access, writeAccess, description }) => ({ id, name, createdBy, createdAt, access, writeAccess, description }));
+    const { name, description, writeAccess, password } = channels.get('geral');
+    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList, defaultSettings: { geral: { name, description, writeAccess, password } } }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, CHANNELS_FILE);
   } catch (err) {
     console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
@@ -267,11 +301,26 @@ const TEXT_IMAGE_FILE_RE = /^[a-f0-9-]{36}\.(png|jpg|webp|gif)$/;
 
 // Map<id, { id, name, createdBy, createdAt, recent: [], count, lastMessageAt }>
 const textChannels = new Map();
+const assetChannels = new Map();
+function indexAssets(ch, messages, type = 'text') {
+  for (const msg of messages) for (const asset of [msg.image, msg.attachment]) {
+    if (asset?.url) assetChannels.set(asset.url, { type, id: ch.id });
+  }
+}
+function canReadAsset(req) {
+  const reference = assetChannels.get(req.path);
+  if (!reference) return false;
+  const ch = (reference.type === 'text' ? textChannels : channels).get(reference.id);
+  if (!ch) return false;
+  if (!ch.access?.private) return true;
+  const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access)?.data.user;
+  return Boolean(viewer && permissions.visible(viewer, ch));
+}
 const textImages = []; // [{ file, size, mtime }] do mais antigo pro mais novo
 let textImagesBytes = 0;
 
-function newTextChannel({ id, name, createdBy = null, createdAt = Date.now() }) {
-  return { id, name, createdBy, createdAt, recent: [], count: 0, lastMessageAt: 0 };
+function newTextChannel({ id, name, createdBy = null, createdAt = Date.now(), access = null, writeAccess = null, description = '' }) {
+  return { id, name, createdBy, createdAt, access, writeAccess, description, recent: [], count: 0, lastMessageAt: 0 };
 }
 
 function textFile(id) {
@@ -335,6 +384,7 @@ function appendTextOp(ch, op) {
 
 function loadTextChannelHistory(ch) {
   const all = readTextMessages(ch.id);
+  indexAssets(ch, all);
   ch.opCount = readTextLines(ch.id).filter((l) => l.op).length;
   ch.count = all.length;
   ch.recent = all.slice(-TEXT_RECENT_IN_MEMORY);
@@ -356,6 +406,7 @@ function removeTextImage(file) {
 }
 
 function appendTextMessage(ch, msg) {
+  indexAssets(ch, [msg]);
   fs.mkdirSync(TEXT_DIR, { recursive: true });
   fs.appendFileSync(textFile(ch.id), `${JSON.stringify(msg)}\n`);
   ch.recent.push(msg);
@@ -415,10 +466,18 @@ function deleteTextChannelData(ch) {
   fs.rm(textFile(ch.id), { force: true }, () => {});
 }
 
-function getTextChannelsSummary() {
-  return [...textChannels.values()]
-    .map(({ id, name, createdBy, createdAt, lastMessageAt }) => ({ id, name, createdBy, createdAt, lastMessageAt }))
+function getTextChannelsSummary(viewer = null) {
+  return [...textChannels.values()].filter(ch => permissions.visible(viewer, ch))
+    .map(ch => ({ id: ch.id, name: ch.name, description: ch.description, createdBy: ch.createdBy, createdAt: ch.createdAt,
+      lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
+      canManageAccess: permissions.has(viewer, 'manageChannels') }))
     .sort((a, b) => a.createdAt - b.createdAt);
+}
+function broadcastTextChannels() {
+  for (const client of io.sockets.sockets.values()) client.emit('text-channels', getTextChannelsSummary(client.data.user));
+}
+function emitText(ch, event, data, except = null) {
+  for (const client of io.sockets.sockets.values()) if (client !== except && permissions.visible(client.data.user, ch)) client.emit(event, data);
 }
 
 loadSavedChannels();
@@ -623,7 +682,9 @@ function publicUser(u) {
     bio: u.bio,
     activity: u.activity || null,
     profileId: u.profileId,
-    isAdmin: Boolean(u.isAdmin),
+    isAdmin: permissions.isOwner(u),
+    isOwner: permissions.isOwner(u),
+    displayRoleId: u.displayRoleId || '',
     roles: permissions.roles(u).map(({ id, name }) => ({ id, name })),
     serverMuted: Boolean(u.serverMuted),
     serverDeafened: Boolean(u.serverDeafened),
@@ -660,6 +721,7 @@ const FRAME_PRESETS = ['', 'cor', 'ouro', 'neon', 'fogo', 'gelo', 'arco-iris'];
 function applyProfile(user, raw) {
   const profile = safeObject(raw);
   let changed = false;
+  if (typeof profile.displayRoleId === 'string' && profile.displayRoleId.length <= 36 && profile.displayRoleId !== user.displayRoleId) { user.displayRoleId = profile.displayRoleId; changed = true; }
   for (const key of ['avatarCrop', 'bannerCrop']) {
     if (!profile[key] || typeof profile[key] !== 'object' || Array.isArray(profile[key])) continue;
     const crop = normalizeImageCrop(profile[key]);
@@ -765,7 +827,8 @@ function getChannelsSummary(viewer = null) {
       createdBy: channel.createdBy,
       hasPassword: Boolean(channel.password),
       isPrivate: Boolean(channel.access?.private),
-      canManageAccess: permissions.has(viewer, 'manageChannels') && !channel.isDefault,
+      canManageAccess: permissions.has(viewer, 'manageChannels'),
+      description: channel.description, canWrite: permissions.canWrite(viewer, channel),
       userCount: channel.users.size,
       activeStreams: sharers.length,
       sharers,
@@ -798,14 +861,17 @@ function emitVisibleUserEvent(event, payload, subject) {
 
 function sendPermissions(socket) {
   const user = socket.data.user;
-  const directory = permissions.has(user, 'manageChannels') ? permissions.snapshot() : null;
-  socket.emit('permissions-state', { supported: true, owner: user.isAdmin, memberId: user.accessId,
+  const directory = ['manageChannels', 'manageRoles'].some(p => permissions.has(user, p)) ? permissions.snapshot() : null;
+  socket.emit('permissions-state', { supported: true, owner: permissions.isOwner(user), ownerClaimed: Boolean(permissions.data.ownerId), memberId: user.accessId,
     permissions: PERMISSIONS.filter(p => permissions.has(user, p)), roles: permissions.roles(user), directory });
 }
 
 function refreshPermissions() {
   for (const socket of io.sockets.sockets.values()) {
     const user = socket.data.user;
+    const wasOwner = user.isAdmin;
+    user.isAdmin = permissions.isOwner(user);
+    if (wasOwner !== user.isAdmin) emitVisibleUserEvent('user-profile-updated', { userId: user.id, user: publicUser(user) }, user);
     if (user.channelId && !permissions.visible(user, channels.get(user.channelId))) {
       socket.emit('kicked', { by: 'A permissão desse canal mudou' });
       leaveCurrentChannel(socket);
@@ -813,6 +879,7 @@ function refreshPermissions() {
     sendPermissions(socket);
   }
   broadcastChannels();
+  broadcastTextChannels();
 }
 
 function isSameChannel(socket, targetId) {
@@ -835,8 +902,8 @@ app.get('/api/channels', (req, res) => {
 
 app.get('/api/chat-image/:file', (req, res) => {
   const file = req.params.file;
-  if (!CHAT_IMAGE_ID_RE.test(file)) return res.status(404).end();
-  res.set({ 'Cache-Control': 'public, max-age=86400, immutable', 'X-Content-Type-Options': 'nosniff' });
+  if (!CHAT_IMAGE_ID_RE.test(file) || !canReadAsset(req)) return res.status(404).end();
+  res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
   res.sendFile(path.join(CHAT_IMAGE_DIR, file), (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
@@ -844,8 +911,8 @@ app.get('/api/chat-image/:file', (req, res) => {
 
 app.get('/api/text-image/:file', (req, res) => {
   const file = req.params.file;
-  if (!TEXT_IMAGE_FILE_RE.test(file)) return res.status(404).end();
-  res.set({ 'Cache-Control': 'public, max-age=86400, immutable', 'X-Content-Type-Options': 'nosniff' });
+  if (!TEXT_IMAGE_FILE_RE.test(file) || !canReadAsset(req)) return res.status(404).end();
+  res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
   res.sendFile(path.join(TEXT_IMAGE_DIR, file), (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
@@ -854,8 +921,8 @@ app.get('/api/text-image/:file', (req, res) => {
 for (const [scope, storage] of [['text', textAttachments], ['chat', chatAttachments]]) {
   app.get(`/api/${scope}-file/:file`, (req, res) => {
     const file = req.params.file;
-    if (!ATTACHMENT_FILE_RE.test(file)) return res.status(404).end();
-    res.set({ 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'public, max-age=86400, immutable' });
+    if (!ATTACHMENT_FILE_RE.test(file) || !canReadAsset(req)) return res.status(404).end();
+    res.set({ 'Access-Control-Allow-Origin': '*', 'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'private, no-store' });
     // Arquivos arbitrários nunca são interpretados como HTML/SVG na origem da sala.
     const download = file.endsWith('.bin') || req.query.download === '1';
     if (download) {
@@ -877,7 +944,7 @@ function serveUserMedia(field) {
       // O app abre de telinha://app e baixa o som com fetch: sem isso o navegador bloqueia
       'Access-Control-Allow-Origin': '*',
       'Content-Type': media.mime,
-      'Cache-Control': 'public, max-age=86400, immutable',
+      'Cache-Control': 'private, no-store',
       'X-Content-Type-Options': 'nosniff'
     });
     res.send(media.data);
@@ -889,7 +956,7 @@ app.get('/api/soundboard/:id', (req, res) => {
   res.set({
     'Access-Control-Allow-Origin': '*',
     'Content-Type': sound.mime,
-    'Cache-Control': 'public, max-age=86400, immutable',
+    'Cache-Control': 'private, no-store',
     'X-Content-Type-Options': 'nosniff'
   });
   res.sendFile(path.join(SOUNDBOARD_DIR, sound.file), (err) => {
@@ -905,7 +972,7 @@ app.get('/api/avatar/:userId', (req, res) => {
   res.set({
     'Access-Control-Allow-Origin': '*',
     'Content-Type': user.avatar.mime,
-    'Cache-Control': 'public, max-age=86400, immutable',
+    'Cache-Control': 'private, no-store',
     'X-Content-Type-Options': 'nosniff'
   });
   res.send(user.avatar.data);
@@ -1045,6 +1112,9 @@ loadRoomPassword();
 // Quem não tem a senha nem chega a entrar (a senha de admin também abre a porta)
 io.use((socket, next) => {
   const auth = socket.handshake.auth || {};
+  socket.data.profileKey = verifiedProfileKey(socket);
+  const accessId = permissions.authenticatedId(auth.permissionToken, socket.data.profileKey);
+  if (permissions.isOwner({ accessId })) return next();
   if (isRoomPassword(auth.roomPassword) || isAdminKey(auth.adminKey) || isMemberKey(auth.profileId, auth.memberKey)) return next();
   const err = new Error('room-password');
   err.data = { reason: auth.roomPassword ? 'wrong' : 'required' };
@@ -1062,7 +1132,7 @@ io.on('connection', (socket) => {
     console.error(`⚠️ [Socket Error] Socket ID ${socket.id}:`, err?.message || err);
   });
   const colorIndex = (channels.size + io.engine.clientsCount) % USER_COLORS.length;
-  const accessIdentity = permissions.identity(socket.handshake.auth?.permissionToken);
+  const accessIdentity = permissions.identity(socket.handshake.auth?.permissionToken, socket.data.profileKey, safeString(socket.handshake.auth?.profileId, '', 64));
   const user = {
     accessId: accessIdentity.id,
     mediaId: randomBytes(16).toString('hex'),
@@ -1082,6 +1152,7 @@ io.on('connection', (socket) => {
     joinSoundV: 0,
     profileId: null,
     isAdmin: false,
+    assetKey: randomBytes(32).toString('hex'),
     serverMuted: false,
     serverDeafened: false,
     avatar: null,
@@ -1098,6 +1169,7 @@ io.on('connection', (socket) => {
     joinedAt: Date.now()
   };
 
+  user.isAdmin = permissions.isOwner(user);
   socket.data.user = user;
   socket.emit('permission-identity', { token: accessIdentity.token });
   sendPermissions(socket);
@@ -1118,29 +1190,59 @@ io.on('connection', (socket) => {
   socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(ADMIN_KEY) });
 
 
-  // Vira admin com a senha (o app manda sozinho ao conectar, se já tiver salvo)
-  socket.on('admin-login', safeHandler((rawPayload, maybeCallback) => {
-    const cb = safeCallback(maybeCallback);
-    const ok = isAdminKey(safeObject(rawPayload).key);
-    if (ok !== user.isAdmin) {
-      user.isAdmin = ok;
-      if (user.channelId) io.to(user.channelId).emit('user-profile-updated', { userId: socket.id, user: publicUser(user) });
-      broadcastChannels();
-    }
-    refreshPermissions();
-    cb({ success: ok, error: ok ? undefined : (ADMIN_KEY ? 'Senha errada.' : 'Essa sala não tem admin.') });
+  // A senha antiga só assume o dono uma vez. Recuperação é uma ação explícita.
+  socket.on('admin-login', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (permissions.isOwner(user)) return cb({ success: true });
+    if (permissions.data.ownerId) return cb({ success: false, error: 'O servidor já tem dono. Peça um cargo ou use a recuperação de propriedade.' });
+    if (!isAdminKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de propriedade incorreta.' });
+    try { permissions.setOwner(user.accessId); refreshPermissions(); cb({ success: true }); }
+    catch { cb({ success: false, error: 'Não foi possível salvar a propriedade.' }); }
+  }));
+  socket.on('owner-recover', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (!isAdminKey(safeObject(raw).key)) return cb({ success: false, error: 'Chave de recuperação incorreta.' });
+    try { permissions.setOwner(user.accessId); refreshPermissions(); cb({ success: true }); }
+    catch { cb({ success: false, error: 'Não foi possível recuperar a propriedade.' }); }
+  }));
+  socket.on('owner-transfer', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (!permissions.isOwner(user)) return cb({ success: false, error: 'Só o dono pode transferir a propriedade.' });
+    try { permissions.setOwner(safeObject(raw).memberId); refreshPermissions(); cb({ success: true }); }
+    catch (err) { cb({ success: false, error: err.message }); }
   }));
 
-  const permissionAction = (ownerOnly, action) => safeHandler((raw, callback) => {
+  const permissionAction = (permission, action) => safeHandler((raw, callback) => {
     const cb = safeCallback(callback);
-    if (ownerOnly ? !user.isAdmin : !permissions.has(user, 'manageChannels')) return cb({ success: false, error: 'Você não tem permissão para fazer isso.' });
+    if (!permissions.has(user, permission)) return cb({ success: false, error: 'Você não tem permissão para fazer isso.' });
     try { const result = action(safeObject(raw)); refreshPermissions(); cb({ success: true, ...result }); }
     catch (err) { cb({ success: false, error: err.message || 'Não deu para salvar as permissões.' }); }
   });
-  socket.on('role-save', permissionAction(true, payload => ({ role: permissions.saveRole(payload) })));
-  socket.on('role-delete', permissionAction(true, payload => { permissions.deleteRole(payload.id); }));
-  socket.on('member-roles', permissionAction(true, payload => { permissions.assign(payload.memberId, payload.roles); }));
-  socket.on('channel-access', permissionAction(false, payload => {
+  socket.on('role-save', permissionAction('manageRoles', payload => {
+    const existing = permissions.data.roles.find(r => r.id === payload.id);
+    if (existing) permissions.checkRole(user, existing);
+    permissions.checkRole(user, payload);
+    return { role: permissions.saveRole(payload) };
+  }));
+  socket.on('role-delete', permissionAction('manageRoles', payload => {
+    const role = permissions.data.roles.find(r => r.id === payload.id);
+    if (!role) throw new Error('Esse cargo não existe mais.');
+    permissions.checkRole(user, role); permissions.deleteRole(payload.id);
+  }));
+  socket.on('member-roles', permissionAction('manageRoles', payload => {
+    const target = { accessId: payload.memberId };
+    if (!permissions.isOwner(user) && (target.accessId === user.accessId || permissions.rank(target) >= permissions.rank(user))) throw new Error('Você só pode atribuir cargos a pessoas abaixo de você.');
+    if (!Array.isArray(payload.roles)) throw new Error('Cargos inválidos.');
+    const previous = permissions.roles(target).map(r => r.id);
+    for (const id of new Set([...previous, ...payload.roles])) {
+      if (previous.includes(id) === payload.roles.includes(id)) continue;
+      const role = permissions.data.roles.find(r => r.id === id);
+      if (!role) throw new Error('Cargo inválido.');
+      permissions.checkRole(user, role);
+    }
+    permissions.assign(payload.memberId, payload.roles);
+  }));
+  socket.on('channel-access', permissionAction('manageChannels', payload => {
     const channel = channels.get(payload.channelId);
     if (!channel || !permissions.visible(user, channel)) throw new Error('Esse canal não está disponível.');
     if (channel.isDefault) throw new Error('O Geral fica visível para todos.');
@@ -1155,6 +1257,32 @@ io.on('connection', (socket) => {
     cb({ success: true, access: channel.access || { private: false, roles: [], members: [] } });
   }));
 
+  const settingsChannel = payload => (payload.type === 'text' ? textChannels : channels).get(payload.channelId);
+  socket.on('get-channel-settings', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback), payload = safeObject(raw), ch = settingsChannel(payload);
+    if (!ch || !permissions.visible(user, ch) || !permissions.has(user, 'manageChannels')) return cb({ success: false, error: 'Canal indisponível.' });
+    cb({ success: true, channel: { id: ch.id, name: ch.name, description: ch.description, isDefault: Boolean(ch.isDefault), hasPassword: Boolean(ch.password),
+      access: ch.access || { private: false, roles: [], members: [] }, writeAccess: ch.writeAccess || { private: false, roles: [], members: [] } } });
+  }));
+  socket.on('channel-settings', permissionAction('manageChannels', payload => {
+    const ch = settingsChannel(payload);
+    if (!ch || !permissions.visible(user, ch)) throw new Error('Canal indisponível.');
+    const name = typeof payload.name === 'string' ? payload.name.trim() : '';
+    if (!name || name.length > 30) throw new Error('O nome precisa ter de 1 a 30 caracteres.');
+    if (typeof payload.description !== 'string' || payload.description.length > 200) throw new Error('Descrição inválida.');
+    const access = permissions.access(payload.access), writeAccess = permissions.access(payload.writeAccess);
+    if (ch.isDefault && access.private) throw new Error('O Geral fica visível para todos.');
+    const patch = { name, description: payload.description.trim(), access, writeAccess };
+    if (payload.type !== 'text' && typeof payload.password === 'string') {
+      if (channelPasswordRateLimited()) throw new Error('Aguarde antes de alterar a senha de novo.');
+      if (payload.password && (payload.password.length < 4 || payload.password.length > 100)) throw new Error('A senha precisa ter de 4 a 100 caracteres.');
+      const salt = randomBytes(16).toString('hex');
+      patch.password = payload.password ? { salt, hash: hashRoomPassword(payload.password, salt) } : null;
+    }
+    const previous = { ...ch }; Object.assign(ch, patch);
+    try { saveChannels(true); } catch (err) { Object.assign(ch, previous); throw err; }
+  }));
+
   // Entrou (com senha, chave de membro ou sala aberta): ganha a chave pra próxima vez
   const sendMemberKey = (s) => {
     const pid = s.handshake.auth?.profileId;
@@ -1163,10 +1291,10 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode fazer isso.' });
+    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite pode fazer isso.' });
     resetMembers();
     // Quem está online agora continua sendo de confiança: ganha a chave nova
     for (const s of io.sockets.sockets.values()) sendMemberKey(s);
@@ -1174,7 +1302,7 @@ io.on('connection', (socket) => {
   }));
   socket.on('admin-set-room-password', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!user.isAdmin) return cb({ success: false, error: 'Só admin pode mudar a senha da sala.' });
+    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite pode mudar a senha da sala.' });
     const raw = safeObject(rawPayload).password;
     const password = typeof raw === 'string' ? raw.trim() : '';
     if (password && (password.length < 4 || password.length > 100)) return cb({ success: false, error: 'A senha precisa ter de 4 a 100 caracteres.' });
@@ -1269,7 +1397,7 @@ io.on('connection', (socket) => {
     const channel = typeof channelId === 'string' ? channels.get(channelId) : null;
     if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
     if (!canDeleteChannel(user, channel)) {
-      return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só admin ou quem criou o canal pode apagar.' });
+      return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     }
     // Avisa antes: quem está no canal sai da call sozinho no app
     for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
@@ -1680,7 +1808,7 @@ io.on('connection', (socket) => {
     if (!rawText) return;
 
     const channel = channels.get(user.channelId);
-    if (!channel) return;
+    if (!channel || !permissions.canWrite(user, channel)) return;
 
     const chatMsg = {
       id: `msg-${Date.now()}-${randomUUID().slice(0, 8)}`,
@@ -1699,6 +1827,7 @@ io.on('connection', (socket) => {
       timestamp: Date.now()
     };
 
+    indexAssets(channel, [chatMsg], 'voice');
     channel.messages.push(chatMsg);
     if (channel.messages.length > 50) {
       channel.messages.shift();
@@ -1712,7 +1841,7 @@ io.on('connection', (socket) => {
   const chatTarget = (payload) => {
     if (payload.scope === 'text') {
       const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
-      return ch ? { scope: 'text', ch } : null;
+      return ch && permissions.visible(user, ch) ? { scope: 'text', ch } : null;
     }
     const channel = user.channelId ? channels.get(user.channelId) : null;
     return channel ? { scope: 'call', channel } : null;
@@ -1729,7 +1858,7 @@ io.on('connection', (socket) => {
   }
   const announceChat = (target, event, data) => {
     if (target.scope === 'call') io.to(target.channel.id).emit(`chat-${event}`, data);
-    else io.emit(`text-${event}`, { channelId: target.ch.id, ...data });
+    else emitText(target.ch, `text-${event}`, { channelId: target.ch.id, ...data });
   };
   // A cópia que está na memória (call ou as recentes do canal de texto) também muda
   const patchChatMessage = (target, message) => {
@@ -1761,6 +1890,7 @@ io.on('connection', (socket) => {
     const ctx = chatOpPrelude(rawPayload, cb);
     if (!ctx) return;
     const { payload, target, msg } = ctx;
+    if (!permissions.canWrite(user, target.ch || target.channel)) return cb({ success: false, error: 'Você não pode escrever neste canal.' });
     if (!msg.profileId || msg.profileId !== user.profileId) return cb({ success: false, error: 'Só dá pra editar as suas mensagens.' });
     const max = target.scope === 'text' ? MAX_TEXT_LENGTH : 600;
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, max) : '';
@@ -1783,7 +1913,7 @@ io.on('connection', (socket) => {
     if (!ctx) return;
     const { target, msg } = ctx;
     const mine = msg.profileId && msg.profileId === user.profileId;
-    if (!mine && !user.isAdmin) return cb({ success: false, error: 'Só dá pra apagar as suas mensagens.' });
+    if (!mine && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só dá pra apagar as suas mensagens.' });
     try {
       if (target.scope === 'text') {
         appendTextOp(target.ch, { op: 'delete', id: msg.id });
@@ -1867,7 +1997,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const id = safeObject(rawPayload).channelId;
     const ch = typeof id === 'string' ? textChannels.get(id) : null;
-    if (!ch) return cb({ success: false, messages: [] });
+    if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [] });
     const messages = readTextMessages(ch.id).filter((m) => m.pinned).sort((a, b) => b.pinned.at - a.pinned.at);
     cb({ success: true, messages });
   }));
@@ -1881,9 +2011,10 @@ io.on('connection', (socket) => {
     const payload = safeObject(rawPayload);
     const data = { userId: socket.id, name: user.name };
     if (payload.scope === 'text') {
-      if (typeof payload.channelId !== 'string' || !textChannels.has(payload.channelId)) return;
-      socket.broadcast.emit('typing', { ...data, scope: 'text', channelId: payload.channelId });
-    } else if (user.channelId) {
+      const ch = textChannels.get(payload.channelId);
+      if (!ch || !permissions.canWrite(user, ch)) return;
+      emitText(ch, 'typing', { ...data, scope: 'text', channelId: payload.channelId }, socket);
+    } else if (user.channelId && permissions.canWrite(user, channels.get(user.channelId))) {
       socket.to(user.channelId).emit('typing', { ...data, scope: 'call', channelId: user.channelId });
     }
   }));
@@ -1922,7 +2053,7 @@ io.on('connection', (socket) => {
     const id = safeObject(rawPayload).id;
     const sound = soundboard.find((s) => s.id === id);
     if (!sound) return cb({ success: false, error: 'Esse som não existe mais.' });
-    if (sound.profileId !== user.profileId && !user.isAdmin) return cb({ success: false, error: 'Só quem colocou (ou admin) apaga.' });
+    if (sound.profileId !== user.profileId && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só quem colocou ou quem modera o soundboard pode apagar.' });
     removeSoundboardSound(sound);
     io.emit('soundboard-list', soundboardList());
     cb({ success: true });
@@ -1943,8 +2074,7 @@ io.on('connection', (socket) => {
   }));
 
   // ---------------- Canais de texto ----------------
-  socket.emit('text-channels', getTextChannelsSummary());
-  const broadcastTextChannels = () => io.emit('text-channels', getTextChannelsSummary());
+  socket.emit('text-channels', getTextChannelsSummary(user));
 
   socket.on('create-text-channel', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
@@ -1958,8 +2088,15 @@ io.on('connection', (socket) => {
       .replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '') || `texto-${Date.now().toString(36).slice(-4)}`;
     let id = slug.slice(0, 60);
     for (let n = 2; textChannels.has(id); n++) id = `${slug.slice(0, 56)}-${n}`;
-    textChannels.set(id, newTextChannel({ id, name: cleanName, createdBy: user.profileId }));
-    saveChannels();
+    let access = null;
+    try {
+      if (data.access) {
+        if (!permissions.has(user, 'manageChannels')) throw new Error('Seu cargo não permite configurar canais invisíveis.');
+        access = permissions.access(data.access);
+      }
+      textChannels.set(id, newTextChannel({ id, name: cleanName, createdBy: user.profileId, access }));
+      saveChannels(true);
+    } catch (err) { textChannels.delete(id); return cb({ success: false, error: err.message }); }
     broadcastTextChannels();
     cb({ success: true, channelId: id, channelName: cleanName });
   }));
@@ -1968,12 +2105,12 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const id = safeObject(rawPayload).channelId;
     const ch = typeof id === 'string' ? textChannels.get(id) : null;
-    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
-    if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só admin ou quem criou o canal pode apagar.' });
+    if (!ch || !permissions.visible(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
+    if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     textChannels.delete(ch.id);
     deleteTextChannelData(ch);
     saveChannels();
-    io.emit('text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });
+    emitText(ch, 'text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });
     broadcastTextChannels();
     cb({ success: true });
   }));
@@ -1983,7 +2120,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
     const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
-    if (!ch) return cb({ success: false, messages: [], hasMore: false });
+    if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [], hasMore: false });
     if (typeof payload.before !== 'string') {
       const messages = ch.recent.slice(-TEXT_PAGE_SIZE);
       return cb({ success: true, messages, hasMore: ch.count > messages.length });
@@ -2026,7 +2163,7 @@ io.on('connection', (socket) => {
       console.error('⚠️ [Texto] Não deu pra salvar a mensagem:', err.message);
       return cb({ success: false, error: 'O servidor não conseguiu salvar a mensagem.' });
     }
-    io.emit('text-message', msg);
+    emitText(ch, 'text-message', msg);
     cb({ success: true });
   };
 
@@ -2034,7 +2171,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
     const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
-    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (!ch || !permissions.canWrite(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
     if (!text) return cb({ success: false, error: 'Mensagem vazia.' });
     if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
@@ -2045,7 +2182,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
     const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
-    if (!ch) return cb({ success: false, error: 'Esse canal não existe mais.' });
+    if (!ch || !permissions.canWrite(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
     const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
     const data = Buffer.isBuffer(payload.data) ? payload.data : null;
     if (!CHAT_IMAGE_TYPES[mime] || !data || data.length === 0) return cb({ success: false, error: 'Esse arquivo não é uma imagem.' });
@@ -2075,7 +2212,7 @@ io.on('connection', (socket) => {
       const payload = safeObject(rawPayload);
       const isText = scope === 'text';
       const channel = isText ? textChannels.get(payload.channelId) : channels.get(user.channelId);
-      if (!channel) return cb({ success: false, error: isText ? 'Esse canal não existe mais.' : 'Entre numa call pra enviar arquivos.' });
+      if (!channel || !permissions.canWrite(user, channel)) return cb({ success: false, error: isText ? 'Esse canal não existe mais.' : 'Entre numa call pra enviar arquivos.' });
       let prepared;
       try { prepared = prepareAttachment(payload); }
       catch (err) { return cb({ success: false, error: err.message }); }
@@ -2094,10 +2231,11 @@ io.on('connection', (socket) => {
         };
         if (isText) {
           appendTextMessage(channel, msg);
-          io.emit('text-message', msg);
+          emitText(channel, 'text-message', msg);
         } else {
           lastChatImageAt = Date.now();
           msg.senderName = user.name;
+          indexAssets(channel, [msg], 'voice');
           channel.messages.push(msg);
           if (channel.messages.length > 50) channel.messages.shift();
           io.to(channel.id).emit('chat-message', msg);
@@ -2117,7 +2255,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
     const channel = user.channelId ? channels.get(user.channelId) : null;
-    if (!channel) return cb({ success: false, error: 'Entre num canal pra mandar imagem.' });
+    if (!channel || !permissions.canWrite(user, channel)) return cb({ success: false, error: 'Você não pode enviar imagens neste canal.' });
     const now = Date.now();
     if (now - lastChatImageAt < 2000) return cb({ success: false, error: 'Calma, uma imagem de cada vez.' });
     const mime = typeof payload.mime === 'string' ? payload.mime.toLowerCase() : '';
@@ -2153,6 +2291,7 @@ io.on('connection', (socket) => {
       image: { url: `/api/chat-image/${file}`, width: dim(payload.width), height: dim(payload.height) },
       timestamp: now
     };
+    indexAssets(channel, [chatMsg], 'voice');
     channel.messages.push(chatMsg);
     if (channel.messages.length > 50) channel.messages.shift();
     io.to(user.channelId).emit('chat-message', chatMsg);

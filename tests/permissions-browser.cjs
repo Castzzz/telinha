@@ -54,12 +54,46 @@ app.whenReady().then(async () => {
   const guestMemberId = await js(owner, 'document.querySelector("#permission-member-id").value');
   await js(owner, `document.querySelectorAll('#channel-access-roles input').forEach(input=>input.checked=false);document.querySelector('#channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#permission-channel-save').click();void 0`);
   await until(guest, 'Boolean(document.querySelector("#channel-call-reservada"))');
+  // Configuração individual de texto pelo botão do próprio canal.
+  await js(owner, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#btn-add-text-channel').click();document.querySelector('#input-channel-name').value='Texto reservado';document.querySelector('#new-channel-access-private').click();document.querySelector('#new-channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#form-create-channel').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await until(owner, 'appState.textChannels.has("texto-reservado")');
+  await until(guest, 'appState.textChannels.has("texto-reservado")');
+  if (await js(outsider, 'appState.textChannels.has("texto-reservado")')) throw new Error('Texto privado vazou');
+  await click(owner, '[data-text-channel-id="texto-reservado"] .channel-settings-btn');
+  await until(owner, '!document.querySelector("#modal-channel-settings").classList.contains("hidden")');
+  await js(owner, `document.querySelector('#channel-settings-name').value='Texto da turma';document.querySelector('#channel-settings-description').value='Recados para os amigos';document.querySelector('#channel-settings-write-private').checked=true;document.querySelector('#form-channel-settings').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await until(owner, 'appState.textChannels.get("texto-reservado").name === "Texto da turma"');
+  await click(guest, '[data-text-channel-id="texto-reservado"] .channel-row');
+  await until(guest, 'appState.textView === "texto-reservado" && document.querySelector("#chat-input").disabled');
+  // Reatribuir o cargo para conferir perfil e escolha de exibição.
+  await js(owner, `document.querySelector('#permission-member-id').value='${guestMemberId}';document.querySelector('#permission-member-id').dispatchEvent(new Event('change'));document.querySelector('#permission-member-roles input[value="${roleId}"]').checked=true;document.querySelector('#permission-member-save').click();void 0`);
+  await until(guest, 'appState.permissionRoles.some(r=>r.name === "Moderador")');
+  await click(guest, '#channel-call-reservada .channel-row');
+  await until(guest, 'appState.currentChannelId === "call-reservada"');
+  await until(owner, '[...document.querySelectorAll(".channel-user")].some(el=>el.dataset.username === "Pessoa permitida")');
+  const hasBadge = await js(owner, '[...document.querySelectorAll(".channel-user")].find(el=>el.dataset.username === "Pessoa permitida").querySelector(".badge-role") !== null');
+  if (hasBadge) throw new Error('Cargo apareceu ao lado do nome sem a pessoa escolher');
+  await js(owner, `[...document.querySelectorAll('.channel-user')].find(el=>el.dataset.username === 'Pessoa permitida').click();void 0`);
+  await until(owner, 'document.querySelector("#user-popover-roles").textContent.includes("Moderador")');
+  await click(owner, '#user-popover-avatar');
+  await until(owner, 'document.querySelector("#profile-card-roles").textContent.includes("Moderador")');
+  await js(guest, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('.channel-user.is-me').click();document.querySelector('#profile-display-role').value='${roleId}';document.querySelector('#form-profile').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await until(owner, '[...document.querySelectorAll(".channel-user")].find(el=>el.dataset.username === "Pessoa permitida")?.querySelector(".badge-role")?.textContent === "Moderador"');
+  await js(owner, "document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
+  await click(owner, '[data-text-channel-id="texto-reservado"] .channel-settings-btn');
+  await until(owner, '!document.querySelector("#modal-channel-settings").classList.contains("hidden")');
   await fs.writeFile(path.join(os.tmpdir(), 'teletela-cargos-desktop.png'), (await owner.webContents.capturePage()).toPNG());
   owner.setSize(390, 844); await wait(200);
   if (await js(owner, 'document.documentElement.scrollWidth > innerWidth')) throw new Error('Configuração de cargos transbordou no celular');
+  if (!await js(owner, 'document.querySelector("#form-channel-settings button[type=submit]").getBoundingClientRect().bottom <= innerHeight')) throw new Error('Salvar configurações ficou fora da tela no celular');
   await fs.writeFile(path.join(os.tmpdir(), 'teletela-cargos-mobile.png'), (await owner.webContents.capturePage()).toPNG());
+  for (const theme of ['escuro', 'preto', 'claro']) {
+    await js(owner, `document.documentElement.dataset.theme='${theme}';void 0`);
+    await wait(150);
+    await fs.writeFile(path.join(os.tmpdir(), `teletela-canal-${theme}.png`), (await owner.webContents.capturePage()).toPNG());
+  }
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log('Interface passou: criar cargo, atribuir sem conta, criar canal invisível, retirar acesso na call, liberar por pessoa e layout móvel.');
+  console.log('Interface passou: criar cargo, atribuir sem conta, criar canal invisível, retirar acesso na call, liberar por pessoa, texto privado, configurações por canal, escrita restrita, cargos no perfil, exibição opcional e layout móvel nos três temas.');
   await finish(0);
 }).catch(async err => { console.error(err); await finish(1); });
 const timeout = setTimeout(() => { console.error('Teste de cargos excedeu 45 segundos.'); finish(1); }, 45000);

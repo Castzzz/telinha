@@ -430,7 +430,7 @@ async function runTests() {
     // Só quem criou (ou admin) apaga; apagar some com o arquivo
     await join(reader, 'geral', 'carol-profile-0003');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'memes' })).success, false);
-    assert.equal((await emit(reader, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(reader, 'owner-recover', { key: ADMIN_KEY })).success, true);
     assert.equal((await emit(reader, 'message-delete', { scope: 'text', channelId: 'arquivos', messageId: savedFile.id })).success, true);
     assert.equal((await fetch(`${URL_BASE}${savedFile.attachment.url}`)).status, 404, 'apagar mensagem remove seu arquivo');
     assert.equal((await emit(reader, 'delete-text-channel', { channelId: 'arquivos' })).success, true);
@@ -606,7 +606,7 @@ async function runTests() {
     assert.equal(memberKeyMsg.key.length, 64);
     clients.at(-1).disconnect();
     assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, false, 'só admin');
-    assert.equal((await emit(pinner, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(pinner, 'owner-recover', { key: ADMIN_KEY })).success, true);
     const told = new Promise((resolve) => watcher.once('room-password-changed', resolve));
     assert.equal((await emit(pinner, 'admin-set-room-password', { password: 'pipoca' })).success, true);
     assert.equal((await told).password, 'pipoca', 'quem já está dentro recebe a senha nova');
@@ -631,7 +631,7 @@ async function runTests() {
     const roomAdmin = await tryConnect({ roomPassword: 'pipoca' });
     assert.equal(roomAdmin.ok, true);
     const adminSock = clients.at(-1);
-    assert.equal((await emit(adminSock, 'admin-login', { key: ADMIN_KEY })).success, true);
+    assert.equal((await emit(adminSock, 'owner-recover', { key: ADMIN_KEY })).success, true);
     assert.equal((await emit(adminSock, 'admin-reset-members', {})).success, true);
     assert.equal((await tryConnect({ profileId: 'ivan-profile-0009', memberKey: memberKeyMsg.key })).ok, false, 'admin esqueceu as chaves: precisa da senha');
     assert.equal((await emit(adminSock, 'admin-set-room-password', { password: '' })).success, true);

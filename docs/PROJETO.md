@@ -119,14 +119,15 @@ Pontos importantes:
 
 ```
 server.js                  Servidor da sala (Express + Socket.IO).
-permission-store.js        Identificação de instalações, cargos e regras de visibilidade sem conta.
+permission-store.js        Identidade persistente, propriedade, cargos e regras dos canais sem conta.
 sfu/main.go                SFU em Go (Pion). Compilado no deploy.
 go.mod, go.sum             Dependências do SFU.
 
 public/                    A interface (vai dentro do app E é servida pelo server.js)
   index.html               Toda a estrutura da tela, modais e o popup de novidades
   app.js                   Toda a lógica do cliente (~6400 linhas, dividido em seções numeradas)
-  permissions.js           Administração de cargos e visibilidade por pessoa/cargo
+  permissions.js           Cargos, propriedade e configurações de voz/texto por pessoa/cargo
+  profile-identity.js       Chave local Ed25519 e prova de identidade no handshake
   mobile-pip.js            Seleção de vídeo e apresentação compacta do PiP Android
   audio-manager.js         Mixer de volume, ensurdecer, captura de áudio, VAD
   microphone.js            Envio mono, reforço nativo, ganho manual e proteção de picos (teste)
@@ -145,6 +146,7 @@ electron/
   main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
                            captura de tela/áudio, atalhos globais, auto-update, preferências
   game-activity.cjs         Catálogo de jogos, leitura local dos processos e tempo da atividade
+  preferences.cjs          Preferências atômicas e cópia independente da identidade
   preload.cjs              Ponte segura (window.electronAPI) entre a página e o main
   app-protocol.cjs         Protocolo telinha://app que serve public/ empacotado
   connect.html             Tela inicial (entrar na sala do servidor / hospedar / colar link)
@@ -195,7 +197,7 @@ Variáveis de ambiente do `server.js`:
 |---|---|---|
 | `PORT` | Porta HTTP | `8080` |
 | `TELINHA_DATA_DIR` | Pasta onde ficam canais, histórico de texto, soundboard | vazio = tudo temporário (some ao reiniciar) |
-| `ADMIN_KEY` | Senha de admin da sala | vazio = sala sem admin |
+| `ADMIN_KEY` | Chave para assumir ou recuperar o dono | vazio = sem reivindicação/recuperação por chave |
 | `SFU_SECRET` | Liga o SFU e assina as senhas dele | vazio = sem SFU (P2P) |
 | `SFU_PATH` | Caminho do websocket do SFU atrás do Caddy (mandado pro cliente junto com a senha) | `/sfu/ws` |
 
@@ -213,7 +215,8 @@ Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
 npm test                                   # runner próprio: 62 testes, devem passar todos
 node --test tests/m1-*.test.js tests/m2-*.test.js tests/m3-*.test.js
 node tests/m4-channels-admin.test.js       # integração: sobe o server.js de verdade
-node --test tests/m4-permissions.test.js    # cargos, canais invisíveis, revogação e persistência
+node --test tests/m4-permissions.test.js tests/identity-persistence.test.js # propriedade, hierarquia, texto/voz privados, provas e persistência
+node --test tests/identity-upgrade.test.js # Electron real: dados da 3.7 → código novo, URL diferente e recuperação de prefs
 npm run test:permissions                  # formulários reais de cargos/acesso, móvel e desktop
 npm run test:mobile                       # navegação, chat, mute e tamanhos móvel/desktop
 npm run test:microphone                   # áudio real: nível, Opus/mixer, mute e comparação com 3.7.0
@@ -365,7 +368,7 @@ sudo journalctl -u telinha-sfu -f                        # logs do SFU ao vivo
 sudo systemctl restart telinha-server
 ```
 
-**Senha de admin:** fica em `/etc/telinha/telinha.env` e não aparece nos logs do deploy. Pra
+**Chave de propriedade/recuperação (`ADMIN_KEY`):** fica em `/etc/telinha/telinha.env` e não aparece nos logs do deploy. Pra
 trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca vai pro git.**
 
 ## 9. Dados guardados
@@ -374,13 +377,13 @@ trocar: apague a linha `ADMIN_KEY` desse arquivo e rode o deploy. **Ela nunca va
 
 | Arquivo | O quê |
 |---|---|
-| `channels.json` | `{ channels, textChannels }`: canais de voz e de texto criados (o Geral é fixo) |
+| `channels.json` | `{ channels, textChannels, defaultSettings }`: canais de voz/texto, regras de acesso/escrita e configurações do Geral (fixo e público) |
 | `text/<canal>.jsonl` | histórico de cada canal de texto (veja abaixo) |
 | `text/images/` | imagens/GIFs dos canais de texto (15 MB por envio, até 25 GB no total) |
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
-| `permissions.json` | segredo das identificações de instalação, cargos, nomes e vínculos; acesso 0600 |
+| `permissions.json` | segredo HMAC, dono (`ownerId`), cargos, nomes, vínculos e hash das chaves públicas; acesso 0600 |
 | `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
 | `chat-files/` | vídeos e arquivos da call (20 MB por envio, até 1 GB; **apagados a cada reinício**) |
 
@@ -484,7 +487,7 @@ pessoal.**
 
 ### Senha da sala e chave de membro
 
-- O admin define a senha pelo app (`admin-set-room-password`; vazio tira). O servidor guarda
+- O dono ou quem tem `manageServer` define a senha pelo app (`admin-set-room-password`; vazio tira). O servidor guarda
   só o hash (scrypt + sal) em `room.json`.
 - Um middleware do Socket.IO (`io.use`) barra a conexão sem uma destas, mandadas no
   `auth` do handshake: `roomPassword`, `adminKey` ou `profileId` + `memberKey`. O erro é
@@ -494,45 +497,99 @@ pessoal.**
   app, ou estava online quando a senha foi colocada, não precisa digitar nada.
 - `admin-reset-members` troca o `memberSecret`: quem não estiver online precisa da senha de
   novo (quem está online ganha a chave nova na hora).
-- Com senha, `/api/channels` responde 401. As outras rotas de mídia usam ids difíceis de
-  adivinhar.
+- Com senha, `/api/channels` responde 401. As rotas de imagens/arquivos privados também exigem a chave efêmera da conexão e conferem a visibilidade do canal.
 - App antigo (antes da 3.2) não sabe pedir senha: **só coloque senha depois que todo mundo
   atualizar**, senão quem estiver desatualizado fica preso.
 
-### Cargos e canais invisíveis sem conta
+### Identidade persistente, dono e cargos sem conta
 
-`PermissionStore` emite uma identificação aleatória com prova HMAC para cada instalação.
-O token fica em `prefs.roomAccess[SERVER_URL].permissionToken` e chega no handshake;
-só o respectivo cliente recebe `permission-identity`. Nomes, `profileId`, conta e perfil
-importado não concedem cargos. Outra instalação precisa de nova liberação. Os cargos
-ficam por instalação. Contas e amigos não fazem parte desta versão.
+Em desenvolvimento na branch `melhoria/perfis-cargos-e-canais`; ainda sem release/deploy.
+A 3.7.0 continua usando a identificação por instalação e a senha de admin.
 
-Só quem entrou com a senha de admin gerencia cargos e atribuições. Cargos têm nome,
-posição de 1 a 99 e permissões `kickMembers`, `moveMembers`, `muteMembers`, `deafenMembers`
-e `manageChannels`. Moderação exige posição maior que a do alvo. A senha de admin
-continua dando controle total; os demais poderes antigos de admin não são herdados.
+Cada perfil novo preserva uma semente privada Ed25519 de 32 bytes em
+`prefs.profileCredentials[profileId]`. `public/profile-identity.js` gera/salva a chave antes
+de conectar. Ela nunca entra em `profilePayload`, listagens ou mensagens. O backup de
+perfil v2 inclui `accessIdentity`: é privado e permite usar o mesmo perfil em outro aparelho.
+Backups v1, só com `profileId`, não comprovam a identidade e não recuperam cargos.
 
-Canais de voz podem guardar `access: { private, roles: [], members: [] }` em `channels.json`.
-Acesso privado é permitido por pessoa OU cargo, com exceção para a senha de admin.
-O Geral fica público. A senha do canal continua obrigatória para todos. `manageChannels`
-permite editar apenas os canais que o moderador consegue ver. Listas Socket.IO são
-individuais; REST público só mostra canais públicos, e eventos de perfil/atividade de
-participantes privados só chegam a quem pode ver o canal. Regras inválidas em disco
-mantêm o canal fechado. `permissions.json` corrompido impede iniciar; restaurar backup.
+Antes do handshake, o cliente consulta `GET /api/identity` (CORS liberado, sem cache).
+O servidor gera um desafio com expiração de 60 s, nonce e HMAC. O cliente assina
+`teletela-profile|host:porta|desafio` e manda `profileProof: { publicKey, challenge, signature }`.
+O Node verifica a assinatura e o host da conexão; uma sala não consegue reutilizar a prova
+assinada para outro host. A chave privada permanece no aparelho. O hash da chave pública
+fica no registro de membro; o UUID desse registro continua sendo usado em cargos e ACLs.
 
-Mudar acesso, remover cargo ou sair do admin reavalia a call atual; quem perdeu acesso
-sai, recebe `kicked` e deixa de obter sinalização ou tokens de mídia. Na nuvem, cada entrada
-na call tem um `mediaId` aleatório. O token SFU novo é `mediaId.assinatura`, com HMAC de
-`sala|role|exp|mediaId`, sem mudar os campos que apps antigos já enviam. O Node chama
-`POST /revoke` no SFU (Bearer `SFU_SECRET`) para fechar WebSockets/WebRTC daquele ID e
-impedir reutilização dos tokens ainda válidos. A próxima entrada usa outro ID.
-`SFU_INTERNAL_URL` permite configurar o endereço interno; padrão `http://127.0.0.1:8081`.
-Node e SFU devem ser atualizados no mesmo deploy. O SFU continua aceitando tokens antigos;
-canais privados novos só recebem tokens com identificação revogável.
+O `permissionToken` HMAC da 3.7.0 ainda é aceito. Na primeira conexão com os dados antigos,
+a prova associa a chave pública ao mesmo membro, sem recriar cargos ou alterar as regras.
+Depois, a prova assinada recupera o membro mesmo se mudar a URL da sala e o token por URL
+não estiver disponível. Essa recuperação exige que o vínculo tenha sido migrado antes.
+IDs públicos, nomes e chaves públicas sem assinatura não concedem poderes. Servidores
+antigos continuam funcionando pelo token por sala, sem receber a semente privada.
+A prova assinada requer WebCrypto Ed25519 (disponível no Electron atual e WebViews recentes);
+sem esse suporte, o cliente mantém a identificação pelo token salvo por URL.
 
-Sem `TELINHA_DATA_DIR`, cargos e identificação vivem só no processo. O backup existente
-inclui os novos arquivos por copiar toda a pasta de dados. Os formulários estão em
-Configurações → Admin e também permitem criar o canal já invisível, sem anúncio público.
+No desktop, `electron/preferences.cjs` mantém a pasta **Telinha** e grava `prefs.json` com
+arquivo temporário + rename (0600). `identities.json` mantém uma cópia pequena do ID do
+perfil, chaves privadas e tokens por sala, independente das fotos/banners. A leitura recupera
+a identidade se `prefs.json` estiver ilegível; dados visuais não são recuperados por essa
+cópia. No navegador/Android, há também uma cópia da semente em uma chave própria do
+localStorage. Apagar os dados do aplicativo remove essa proteção: use o backup de perfil.
+A causa exata do relato original não foi reproduzida em uma atualização normal; a gravação
+antiga direta e sem cópia era uma fragilidade, não um diagnóstico confirmado.
+
+`permissions.json.ownerId` define um único dono. `admin-login` com `ADMIN_KEY` só assume
+propriedade quando ainda não há dono; não cria administradores adicionais. Após assumir,
+a identidade recupera o acesso automaticamente, inclusive em sala com senha. A chave do
+servidor continua em `/etc/telinha/telinha.env` e serve para `owner-recover` explícito, que
+substitui o dono anterior. `owner-transfer` só aceita o dono atual e um membro existente.
+Clientes antigos só assumem a propriedade inicial; depois precisam atualizar para usar
+recuperação e transferência. `isAdmin` continua no protocolo por compatibilidade, significando
+**dono**, nunca um cargo do cliente. Propriedade inválida em disco impede iniciar o servidor.
+
+Cargos têm posição de 1 a 99 e permissões `kickMembers`, `moveMembers`, `muteMembers`,
+`deafenMembers`, `manageChannels`, `manageRoles`, `manageServer` e `manageMessages`.
+O dono tem todos os poderes. Moderação exige hierarquia maior que a do alvo, inclusive
+contra o dono. `manageRoles` só altera cargos abaixo do ator, com poderes que ele já tem;
+atribuições não podem alterar o próprio ator nem pessoas de hierarquia igual/maior.
+`manageServer` administra senha e chaves de entrada; `manageMessages` modera mensagens
+e soundboard. Os cargos ficam no popover/perfil. `displayRoleId` escolhe um cargo para
+aparecer junto ao nome, sem alterar as permissões; vazio é o padrão.
+
+### Configurações por canal e privacidade
+
+Voz e texto guardam `description`, `access` e `writeAccess` em `channels.json`. Ambas as
+regras usam `{ private, roles: [], members: [] }`. Em `access`, privado libera a visualização
+por pessoa OU cargo, com exceção para o dono. `writeAccess` restringe mensagens/anexos
+entre quem já tem acesso; não restringe o microfone. Sem restrição, todos com acesso podem
+enviar. O Geral permanece público e salva nome, descrição, senha e escrita em
+`defaultSettings.geral`. Regras inválidas carregadas do disco falham fechadas.
+
+O botão de configurações em cada canal usa `get-channel-settings` / `channel-settings`.
+`manageChannels` exige que o ator veja o canal. A alteração valida todos os campos antes
+de salvar; uma falha de gravação restaura as configurações anteriores. Senhas de voz são
+scrypt com sal, não são retornadas pelo editor e continuam obrigatórias para todos.
+Os eventos `get-channel-access` / `channel-access` continuam disponíveis para a 3.7.
+
+Listas Socket.IO são individuais para voz e texto. Histórico, fixadas, edição, reações,
+mensagens, anexos e digitação de texto verificam o acesso no servidor. REST público só
+mostra voz pública. Cada conexão recebe `assetKey` efêmera em `room-info`; o cliente a usa
+nas URLs de imagens/arquivos. O servidor mantém índice de anexo → canal (reconstruído do
+histórico ao iniciar) e verifica o acesso atual em todo download privado. URLs privadas
+sem chave válida respondem 404; mídia usa `Cache-Control: private, no-store`. Revogar o
+acesso bloqueia novos downloads imediatamente, sem conseguir apagar cópias já recebidas.
+O cliente fecha o texto revogado e descarta seu histórico em memória.
+
+Mudar acesso, cargo ou propriedade reavalia a call atual. Quem perdeu acesso sai, recebe
+`kicked` e deixa de obter sinalização ou tokens de mídia. Cada entrada tem um `mediaId`
+aleatório. O Node chama `POST /revoke` no SFU (Bearer `SFU_SECRET`) para fechar conexões
+WebSockets/WebRTC desse ID e impedir reutilização de tokens válidos. O token revogável é
+`mediaId.assinatura`, com HMAC de `sala|role|exp|mediaId`. A próxima entrada usa outro ID.
+`SFU_INTERNAL_URL` configura o endereço interno; padrão `http://127.0.0.1:8081`.
+A revisão atual não muda o protocolo do SFU da 3.7.0.
+
+Sem `TELINHA_DATA_DIR`, identidade, dono e cargos vivem só no processo. O backup do servidor
+copia toda a pasta de dados, incluindo `permissions.json` e o índice dos canais. A revisão
+requer release do aplicativo e deploy do Node; nenhuma publicação foi feita nesta etapa.
 
 ## 10. Protocolo: eventos do Socket.IO
 
@@ -557,7 +614,10 @@ Cliente → servidor (com callback `cb({ success, error })` quando faz sentido):
 | `soundboard-add` / `soundboard-delete` / `soundboard-play` | soundboard |
 | `reaction` | emoji flutuando na call |
 | `sfu-token` | senha temporária pra entrar numa sala do SFU |
-| `admin-login`, `kick-user`, `admin-move-user`, `admin-mute-user`, `admin-deafen-user` | admin |
+| `admin-login` / `owner-recover` / `owner-transfer` | assumir, recuperar e transferir a propriedade |
+| `role-save` / `role-delete` / `member-roles` | administrar cargos com hierarquia |
+| `get-channel-settings` / `channel-settings` | configurações de um canal `{ type: 'voice'|'text', channelId, ... }` |
+| `kick-user`, `admin-move-user`, `admin-mute-user`, `admin-deafen-user` | moderação autorizada pelos cargos |
 | `webrtc-offer` / `webrtc-answer` / `webrtc-ice-candidate` / `webrtc-signal` / `request-stream` | sinalização P2P (sala no PC) |
 
 Servidor → cliente (principais): `channels-list` (e `channels-summary`, mesmo conteúdo, pra

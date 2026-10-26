@@ -3997,3 +3997,30 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
 #admin-room-password .admin-row + .admin-row {
   margin-top: 8px;
 }
+
+/* Configurações do canal ficam acessíveis também pelo toque e pelo teclado. */
+.channel-settings-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.channel-settings-btn:hover, .channel-settings-btn:focus-visible { color: var(--text-normal); background: var(--bg-hover); }
+.channel-settings-modal { max-width: 620px; width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow: hidden; }
+#form-channel-settings { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.channel-settings-fields { min-height: 0; overflow-y: auto; padding-right: 6px; }
+#form-channel-settings .modal-actions { flex-shrink: 0; margin-top: 16px; }
+.channel-settings-modal .permission-list { margin: 12px 0; max-height: none; overflow: visible; }
+.channel-settings-modal .permission-list > div { max-height: 160px; overflow-y: auto; }
+.profile-roles { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+#permission-device { overflow-wrap: anywhere; }
+#admin-login-row { flex-wrap: wrap; }
+.chat-channel-description { flex-shrink: 0; padding: 8px 16px; margin: 0; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; border-bottom: 1px solid var(--border-subtle); }
