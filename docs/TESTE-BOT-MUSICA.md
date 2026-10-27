@@ -188,3 +188,19 @@ Playlists e álbuns não devem ser tratados silenciosamente como uma única faix
   Extração de faixa Spotify e publicação Opus no SFU funcionaram. Corrigido o ICE padrão:
   Pion exige `urls` como lista; o teste local também pode receber essa configuração.
   A escuta externa ainda está sendo conferida antes da publicação dos instaladores.
+
+## Validação na Oracle (27/10/2026, 3.9.0)
+
+- Servidor/SFU/Caddy ativos; endpoint `/api/health` respondeu OK. Interface e versão 3.9.0
+  instaladas. Node/Caddy preservados. Segredos preservados e não exibidos.
+- Faixa Spotify `4cOdK2wGLETKBW3PvgPWqT` encontrada e tocada pelo YouTube na Oracle.
+- Dois ouvintes Electron no PC receberam a mesma sala SFU pública por HTTPS/WSS:
+  picos 0,234, ~49,99 pacotes/s, correções de ritmo ~0,15% (6 segundos de medição).
+  A escuta de teste precisou de elemento Audio ativo para iniciar a decodificação;
+  a interface real já mantém esse elemento. Não era falha na transmissão do servidor.
+- Logs finais em `/tmp/teletela-390-*.log`: testes62/62, permissões78/78, música15/15,
+  Go/race, microfone/controles, celular/permissões na interface, SFU com STUN e escuta Oracle.
+  A integração m4 passou na repetição; na primeira tentativa pegou evento de atividade
+  anterior ao disconnect (corrida já existente entre sockets).
+- Canal de teste temporário; nenhum chat enviado ou canal real alterado.
+- Código enviado ao GitHub. Publicação dos artefatos 3.9.0 em andamento.

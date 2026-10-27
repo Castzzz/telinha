@@ -5,7 +5,8 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🔊 Canais de voz: o `Geral` e os que vocês criarem (ficam salvos até alguém apagar)
 - 🖥️ Várias pessoas transmitindo a tela ao mesmo tempo, com modo mosaico
 - 🎧 No Windows e no Linux dá pra mandar **só o som de um app** (sem as vozes da chamada)
-- 🧠 Cancelamento de ruído com IA no microfone (tira teclado, ventilador, barulho da rua)
+- 🧠 Cancelamento de ruído com RNNoise no microfone e volume manual de 0–300%
+- 🎵 Música compartilhada na call: links YouTube/Spotify, playlists, fila e volume individual
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
