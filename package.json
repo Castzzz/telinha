@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "3.8.0",
+  "version": "3.9.0",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -8,6 +8,14 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "music:setup": "node scripts/music-lab/setup.mjs",
+    "music:lab": "node scripts/music-lab/server.mjs",
+    "music:build": "node music/build.mjs",
+    "music:call": "node scripts/music-call.mjs",
+    "music:call:sfu": "node scripts/music-call.mjs --sfu",
+    "test:music": "node --test tests/music-lab.test.js tests/music-call.test.js tests/music-sources.test.js",
+    "test:music:call": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/music-call-browser.cjs)'",
+    "test:music:ui": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/music-lab-browser.cjs)'",
     "app": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) electron/main.cjs)'",
     "test": "node tests/runner.js",
     "test:microphone": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-browser.cjs)'",
@@ -54,6 +62,7 @@
       "public/**",
       "server.js",
       "permission-store.js",
+      "music/**",
       "package.json"
     ],
     "linux": {

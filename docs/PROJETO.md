@@ -93,12 +93,12 @@ Pontos importantes:
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
   no volume geral. Veja `VolumeMixerManager` em `public/audio-manager.js`.
-- **Microfone (3.8.0):** envio mono, GTCRN na IA forte e RNNoise na IA leve, com opções
-  básico/desligado. O reforço nativo fica depois do filtro, seguido de ganho manual e
-  proteção de picos. Não altera o AGC do sistema. `prefs.micVoiceBoost` controla o reforço
-  e `prefs.micOn` lembra o mute. O worklet confirma a inicialização antes do envio; falha
-  na IA forte tenta a leve e depois o básico. Comparações e limites em
-  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md).
+- **Microfone (3.9.0):** revertido ao processamento da 3.7 por relato de áudio estranho.
+  `microphone.js` usa RNNoise opcional → ganho manual → destino Web Audio, sem GTCRN,
+  compressão, limitador ou reforço automático. Mantém o formato do destino da 3.7.
+  `prefs.micOn` lembra o mute; `micGain` controla 0–300%. O modo antigo `ia-leve` é
+  tratado como IA/RNNoise. A troca de filtro preserva o mute e libera a captura anterior.
+  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md) guarda o experimento histórico.
 - **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais e Você.
   A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
   disponíveis ao navegar. Os botões móveis disparam os controles originais, sem duplicar
@@ -140,8 +140,7 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   sounds/audio-*.ogg       Avisos locais de desativar/restaurar o áudio (fora do git)
   sounds/controle-alternativo-*.ogg  Segunda dupla de avisos, compartilhada entre mic/áudio
   vendor/emoji-picker/     Seletor de emojis (emoji-picker-element, copiado; ver README.txt dele)
-  noise-processor.js       Worklet que confirma inicialização dos modelos de IA
-  vendor/noise-suppressor/ GTCRN (forte) e RNNoise (leve), WASM local e licenças
+  vendor/noise-suppressor/ RNNoise, WASM local e licenças
 
 electron/
   main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
@@ -202,6 +201,7 @@ Variáveis de ambiente do `server.js`:
 | `OWNER_KEY` | Chave exclusiva para assumir/recuperar a propriedade | vazio = apenas proprietário já vinculado |
 | `SFU_SECRET` | Liga o SFU e assina as senhas dele | vazio = sem SFU (P2P) |
 | `SFU_PATH` | Caminho do websocket do SFU atrás do Caddy (mandado pro cliente junto com a senha) | `/sfu/ws` |
+| `TELINHA_MUSIC` | Liga o bot experimental de música nos canais de voz | desligado; `1` liga |
 
 Exemplo de servidor local completo pra testar admin e dados salvos:
 
@@ -210,6 +210,134 @@ PORT=3999 OWNER_KEY=segredo-dono TELINHA_DATA_DIR=/tmp/teletela-data node server
 ```
 
 Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
+
+### Laboratório isolado do bot de música
+
+`npm run music:setup` instala o yt-dlp oficial em `.cache/music-lab/` (fora do git),
+conferindo SHA-256. O laboratório exige Python 3.10+, Node 22+ para os desafios JavaScript
+do YouTube e FFmpeg. Não modifica dependências nem pacotes do sistema.
+Quando chamado dentro do Electron, o extrator deve usar `node` do PATH, nunca
+`process.execPath` (que nesse caso abre outro Electron em vez do runtime de console).
+`npm run music:lab` abre um Express independente em **127.0.0.1:3998**, sem importar
+`server.js`, conectar à VM nem ler dados/perfis da sala. `MUSIC_LAB_PORT` troca a porta;
+`MUSIC_YTDLP` pode indicar outro executável yt-dlp já instalado.
+
+`music/source.mjs` (reexportado por `scripts/music-lab/resolver.mjs`) identifica vídeos e faixas Spotify pelo
+oEmbed público, busca cinco versões no YouTube e prepara MP3 temporário usando yt-dlp +
+FFmpeg; `broadcast.mjs` executa **uma reprodução central** no ritmo real e distribui os
+mesmos blocos MP3 por HTTP para todos; `server.mjs` coordena busca, reprodução, parada,
+eventos SSE e arquivos temporários. Os clientes só decodificam a transmissão recebida.
+O ponto de entrada tardia é o ponto atual do bot, não o começo do arquivo. O volume é local.
+O laboratório limita as faixas a vídeos gravados de até 20 minutos e 80 MB de entrada,
+uma preparação de áudio por vez e uma busca por vez. Limpa a faixa ao fechar seu FFmpeg e
+o diretório temporário ao encerrar o processo por Ctrl+C/SIGTERM.
+
+**Limites do laboratório HTTP:** oEmbed Spotify só informa o título, sem garantir o artista; mostrar
+as versões e permitir ajuste manual evita prometer correspondência exata. Playlists/álbuns
+ainda são recusados. Identificar o link ou encontrar uma versão não prova que o áudio
+funciona: testar a preparação e a escuta. YouTube pode bloquear downloads, inclusive
+dependendo do IP; sucesso no PC não valida a Oracle. HTTP MP3 central permite conferir a
+distribuição, mas os buffers dos navegadores podem diferir em segundos. A integração das
+calls descrita abaixo já transmite Opus por WebRTC/SFU, com permissões e fila por canal.
+
+`npm run test:music` cobre a distribuição real com FFmpeg, dois ouvintes, entrada tardia,
+validação de links, origem local e cancelamento. `npm run test:music:ui` verifica dois
+ouvintes Electron, áudio efetivo, volume individual, temas e tela estreita com um tom
+gerado localmente. `MUSIC_LAB_REAL=1 npm run test:music:ui` faz o mesmo percurso com uma
+faixa Spotify pública e a versão correspondente no YouTube (usa internet).
+Andamento e próximos passos: [TESTE-BOT-MUSICA.md](TESTE-BOT-MUSICA.md).
+
+### Bot experimental nas calls (teste local)
+
+`npm run music:build` compila `cmd/music-publisher/` e o SFU para `.cache/music-lab/`.
+`npm run music:call` inicia o servidor normal só em **127.0.0.1:3999**, com música habilitada,
+dados/credenciais temporários e WebRTC direto. `npm run music:call:sfu` também sobe um SFU
+isolado em portas livres, com segredo novo e ICE local. Nenhum dos comandos acessa a VM.
+`MUSIC_CALL_PORT` troca a porta da sala. O SFU aceita `SFU_HOST` para limitar seu endereço
+HTTP de escuta; o padrão de produção continua igual. Os comandos de teste usam `127.0.0.1`.
+
+`music/manager.mjs` mantém uma fila em memória por canal (até 50 pedidos, até quatro canais
+ativos), transmite uma faixa por vez, pré-carrega a próxima, descarta faixas que falham e avança após o fim. Parar
+limpa a fila; pular preserva os próximos pedidos. Sair da última pessoa cancela preparação,
+fecha as conexões do bot e limpa a fila. Faixas são apagadas após seus processos fecharem.
+Pausa interrompe só o consumo de música na ponte Go e mantém Opus de silêncio a cada 20 ms.
+O encoder não é suspenso por SIGSTOP e os receptores não ficam sem relógio RTP ao pausar.
+
+`music/transport.mjs` executa um FFmpeg por canal para codificar Opus estéreo a 160 kbps,
+48 kHz, pacotes de 20 ms. Opus em Ogg segue por TCP no loopback para a ponte Go/Pion.
+`audio.go` separa os pacotes pelas tabelas de segmentos Ogg e controla a emissão com relógio
+monotônico. Atrasos pulam posições RTP (perda/silêncio), sem enviar rajadas para recuperar
+tempo. Pausa e falta de dados usam silêncio Opus, sem consumir a faixa nem acelerar depois.
+Com SFU, a ponte
+publica como host em `<canal>__musica` pelo protocolo existente: o SFU distribui aos ouvintes.
+Sem SFU, a mesma faixa RTP é entregue a uma conexão WebRTC por ouvinte. O navegador nunca
+abre um player de YouTube/Spotify; recebe apenas o áudio central do bot.
+
+`prepareStream` resolve e guarda os metadados da fonte em cache por cinco minutos (até 64
+entradas). Consultas simultâneas compartilham o trabalho; cancelar um consumidor não cancela
+os outros. Após uma busca, a primeira versão pode adiantar a consulta em segundo plano.
+Na primeira reprodução, o yt-dlp lê a fonte para stdout e o FFmpeg decodifica a partir do
+pipe, sem MP3 intermediário nem espera pelo arquivo inteiro. `available_at` do YouTube é
+respeitado: ignorar essa liberação causou 403 no teste com FFmpeg abrindo a URL diretamente.
+A próxima faixa da fila pode ser baixada em formato original para evitar outra espera na
+troca. Pular durante esse download o cancela e usa streaming. Cada operação tem sua pasta
+temporária, removida ao terminar/cancelar. A pausa não pausa o encoder, e fim do encoder
+não significa fim da música: a ponte avisa quando tocou todos os pacotes recebidos.
+Ao encerrar, aguardar o evento `exit` e destruir os pipes: esperar somente `close` pode
+travar se um stdout estiver pausado após o FFmpeg encerrar sua entrada.
+
+Playlists YouTube usam extração plana paginada (`offset` e até 50 itens), sem baixar todas
+as músicas para listar. Vídeo com `list=` mantém a opção de tocar só o vídeo ou carregar
+a playlist explicitamente. Playlists/álbuns Spotify usam somente os dados públicos de
+`open.spotify.com/embed/...`; não usam cookies de usuário nem credenciais. O leitor extrai
+título/artista/URI de `__NEXT_DATA__`, ignora podcasts/arquivos locais e informa o limite
+da leitura pública (listas grandes podem vir incompletas). Não pressupor que esse HTML é
+uma API estável: falhas respondem com erro claro. Resolver as versões YouTube é adiado
+para a reprodução/pré-carregamento, sem fazer 50 buscas antes de aceitar a lista.
+
+`music/integration.mjs` registra eventos Socket.IO somente com `TELINHA_MUSIC=1`. Todos
+derivam o canal da presença atual do socket; payloads não permitem escolher outro canal.
+Buscar, adicionar e controlar exigem permissão de escrita e ausência de mute/deafen de
+moderação. A busca guarda escolhas por socket/canal; adicionar exige uma dessas escolhas.
+Consultar/assinar exige presença e visibilidade. Sinais usam a geração atual da faixa.
+O token SFU de música é só de **viewer**, vinculado à identidade de mídia revogável já usada
+pelas calls. O host só é criado pelo servidor; clientes não podem pedir esse papel.
+
+`public/music.js` integra o botão de fone, o modal, a fila e a presença visual do bot, com
+alternativa nas opções móveis. O áudio passa por `VolumeMixerManager.attachUserStream`
+(`teletela-music-bot`), respeitando volume geral, saída de áudio e ensurdecer. O controle
+individual é salvo como `musicVolume` nas preferências. Trocar de canal/desconectar fecha
+a recepção. A interface continua escondida quando o backend não anuncia `music: true` em `me`.
+
+Eventos: `music-get` → estado; `music-search` → versões; `music-enqueue` → pedido;
+`music-control` (`pause`, `resume`, `skip`, `stop`, `remove`) → fila/reprodução;
+`music-state` → atualização só aos membros da call; `music-subscribe`/`music-offer`/
+`music-signal` → sinalização no modo direto; `sfu-token` com `kind: 'music'` → acesso pelo SFU.
+
+`music-search` também retorna `playlist` com faixas e `nextOffset` quando o link é uma
+coleção. `music-enqueue-playlist` aceita apenas IDs da página carregada pelo socket no
+canal atual, com seleção e embaralhamento. A inclusão é atômica: se não couberem todas as
+selecionadas, nenhuma entra. `music-control` aceita `shuffle` e `repeat` (`off`, `one`, `all`).
+Repetir vale para fim natural; pular/erro não recolocam a faixa no início. Escolhas de
+busca e cache da página são descartados ao desconectar.
+
+Validação: `npm run test:music` testa laboratório, fila e autorização; `npm run test:music:call`
+usa três janelas Electron, tom gerado, dois ouvintes no mesmo encoder, volume, deafen, pausa,
+fila, isolamento e troca de canais. `MUSIC_TEST_SFU=1` repete pelo SFU;
+`MUSIC_LAB_REAL=1 MUSIC_TEST_SFU=1` usa uma faixa Spotify real, buscando áudio no YouTube.
+O teste mede cadência RTP e amostras alteradas por aceleração/desaceleração no receptor,
+confere silêncio com relógio ativo durante a pausa e exercita seleção de playlist/repetição.
+`go test -race ./cmd/music-publisher` testa páginas Ogg, pausa sem consumir música e atraso
+do processo sem rajadas de recuperação.
+
+O deploy compila a ponte para a arquitetura da VM e instala em
+`/opt/telinha/bin/telinha-music-publisher`. Instala Python 3.10+ e FFmpeg/libopus via apt
+na Ubuntu antes de parar a sala. Baixa o yt-dlp oficial com SHA-256, versão fixada em
+`2026.10.26` (altere com `YTDLP_VERSION`), e instala em `/opt/telinha/bin/yt-dlp`.
+O serviço define `MUSIC_PUBLISHER`, `MUSIC_YTDLP` e `TELINHA_MUSIC=1`; não altera os
+segredos da VM. `ENABLE_MUSIC=0` desativa o recurso e dispensa as ferramentas no deploy.
+Salas hospedadas pelo app continuam com música desativada por padrão; as ferramentas
+nativas não vão dentro dos instaladores desktop.
 
 ## 5. Testes
 
@@ -301,8 +429,8 @@ npm run deploy:oracle
 
 O que o `deploy/oracle/deploy.sh` faz, no seu PC:
 
-1. Detecta a arquitetura da VM pelo SSH e compila o SFU pra `linux/amd64` ou `linux/arm64`.
-2. Empacota `server.js`, `permission-store.js`, `package.json`, `package-lock.json` e `public/` com
+1. Detecta a arquitetura da VM pelo SSH e compila o SFU e a ponte de música para `linux/amd64` ou `linux/arm64`.
+2. Empacota `server.js`, `permission-store.js`, `package.json`, `package-lock.json`, `public/` e `music/` com
    `npm ci --omit=dev` (sem as dependências do app desktop).
 3. Descobre a versão LTS mais nova do Node e a mais nova do Caddy (ou usa `NODE_VERSION` e
    `CADDY_VERSION`, se definidos).
@@ -688,7 +816,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Prévia própria sob demanda | `showLocalPreview` guarda o stream mesmo oculto; `openStream` registra a prévia local ao clicar no próprio selo; `removeScreenStream` fecha a prévia sem parar a captura |
 | Quem está assistindo | `syncWatching`, `renderStreamViewers` |
 | Volume / ensurdecer | `audio-manager.js`: `VolumeMixerManager`, `DeafenController` |
-| Volume e IA do microfone | `microphone.js`, `noise-processor.js`: mono, reforço nativo e ganho; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
+| Volume e IA do microfone | `microphone.js`: RNNoise e ganho manual como na 3.7; `app.js`: `setupMicGain`, `openMicrophone`, `restartMicrophone` |
 | Atalhos de teclado | seção 8d (`eventToAccelerator`, `SOLO_KEY_CODES`); globais: `setGlobalHotkeys` no `main.cjs` (Ctrl/Shift/Alt sozinhos via `uiohook-napi`) |
 | Temas e visual | `style.css` (tokens em `:root`, `[data-theme="preto"]`, `[data-theme="claro"]`), `redesign.css` |
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |

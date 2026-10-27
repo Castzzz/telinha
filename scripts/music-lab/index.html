@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="escuro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teletela · Laboratório de música</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <div class="brand"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M9 18V5l12-2v13M9 8l12-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/></svg><span>Teletela <small>Laboratório local</small></span></div>
+      <label class="theme-label">Tema <select id="theme"><option value="escuro">Escuro</option><option value="preto">Preto</option><option value="claro">Claro</option></select></label>
+    </header>
+    <div class="intro"><span class="badge">TESTE DE MÚSICA</span><h1>Uma música. Todo mundo ouvindo.</h1><p>O bot toca no servidor deste PC e transmite o mesmo áudio para as janelas conectadas.</p></div>
+    <section class="panel" aria-labelledby="search-title">
+      <h2 id="search-title">Escolher uma música</h2>
+      <form id="search-form">
+        <label for="music-input">Link do YouTube, faixa do Spotify ou título e artista</label>
+        <div class="search-row"><input id="music-input" name="music" type="text" maxlength="500" placeholder="Cole um link ou escreva uma música" required><button id="search-button" type="submit">Buscar versões</button></div>
+        <details><summary>Ajustar a busca do Spotify</summary><label for="refinement">Título e artista para procurar no YouTube (opcional)</label><input id="refinement" maxlength="300" placeholder="Ex.: Rick Astley Never Gonna Give You Up"></details>
+      </form>
+      <p id="search-status" class="status" role="status" aria-live="polite">Cole uma faixa para conferir se ela pode tocar.</p>
+      <div id="results" aria-label="Versões encontradas"></div>
+    </section>
+    <section class="panel broadcast" aria-labelledby="broadcast-title">
+      <div class="section-title"><h2 id="broadcast-title">Transmissão do bot</h2><span id="listeners" class="badge">0 ouvintes</span></div>
+      <p id="now-playing" class="now-playing">Nenhuma música tocando</p>
+      <p id="broadcast-status" class="status" role="status" aria-live="polite">Escolha uma versão acima e clique em Tocar para todos.</p>
+      <div class="controls"><button id="listen" type="button">Ativar escuta nesta janela</button><button id="stop" class="secondary" type="button" disabled>Parar para todos</button></div>
+      <label class="volume-label" for="volume">Seu volume <input id="volume" type="range" min="0" max="100" value="50"><output id="volume-value" for="volume">50%</output></label>
+      <audio id="audio" preload="none"></audio>
+      <p class="hint">Abra este mesmo endereço em outra janela e ative a escuta. Quem entra depois recebe o ponto atual da transmissão. Pode haver alguns segundos de diferença de buffer entre ouvintes neste teste.</p>
+    </section>
+    <footer><p id="tools-status" role="status">Conferindo ferramentas…</p><p>Faixas individuais de até 20 minutos. Playlists, fila e integração aos canais ficam para a próxima etapa.</p></footer>
+  </main>
+</body>
+</html>

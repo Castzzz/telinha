@@ -27,7 +27,6 @@ app.whenReady().then(async () => {
       const pathname = new URL(req.url, 'http://localhost').pathname;
       if (pathname === '/') { res.end('<!doctype html><title>Teste do microfone</title>'); return; }
       const file = pathname === '/__test.js' ? path.join(root, 'tests/helpers/microphone-browser.js')
-        : pathname === '/__noise-test.js' ? path.join(root, 'tests/helpers/noise-suppression-browser.js')
         : path.resolve(root, 'public', '.' + pathname);
       if (!file.startsWith(root + path.sep)) throw new Error('Caminho inválido');
       res.setHeader('Content-Type', types[path.extname(file)] || 'application/octet-stream');

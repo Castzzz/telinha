@@ -1,5 +1,11 @@
 # Volume baixo do microfone
 
+**Histórico da 3.8, revertido na 3.9.0 a pedido do dono em 27/10/2026:** o áudio ficou
+estranho no uso real. Retirados GTCRN, reforço automático, compressores, limitador e
+mono explícito no grafo. Voltaram RNNoise opcional e ganho manual da 3.7. Os testes
+comparam o áudio atual ao grafo da 3.7; as medições abaixo descrevem o experimento
+anterior e não comprovam a qualidade nos microfones dos amigos.
+
 Retomada em 26/10/2026 na branch `correcao/volume-microfone`, após a publicação da 3.7.0.
 O dono confirmou volume baixo também com o filtro básico ou desligado. A investigação
 anterior e o experimento foram preservados na branch de contas/amigos, sem entrar na 3.7.0.

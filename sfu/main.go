@@ -632,5 +632,5 @@ func main() {
 		fmt.Printf("  IP público anunciado: %s\n", publicIP)
 	}
 	fmt.Println()
-	log.Fatal(http.ListenAndServe(":"+httpPort, mux))
+	log.Fatal(http.ListenAndServe(net.JoinHostPort(os.Getenv("SFU_HOST"), httpPort), mux))
 }

@@ -36,7 +36,7 @@ app.whenReady().then(async () => {
     await until(() => appState.micProcessor && appState.localMicStream?.getAudioTracks()[0].enabled);
     const track = appState.localMicStream.getAudioTracks()[0];
     const boost = document.querySelector('#input-mic-voice-boost');
-    check(boost.checked, 'O reforço deve vir ligado');
+    check(!boost, 'O reforço automático da 3.8 deve ter sido removido');
     document.querySelector('#modal-settings').classList.remove('hidden');
     document.querySelector('[data-settings-tab="microfone"]').click();
     const gain = document.querySelector('#input-mic-gain');
@@ -45,21 +45,19 @@ app.whenReady().then(async () => {
       check(document.querySelector('#mic-gain-text').textContent === value + '%', 'O volume precisa refletir o ajuste manual');
       check(appState.localMicStream.getAudioTracks()[0] === track, 'Ajustar ganho não pode trocar a faixa enviada');
     }
-    boost.click(); boost.click();
-    check(appState.localMicStream.getAudioTracks()[0] === track, 'Alternar reforço não deve reiniciar o microfone');
     const avatar = document.querySelector('.lounge-user-card .user-avatar');
     check(avatar, 'A call precisa manter o avatar visível');
     for (let i = 0; i < 8; i++) { appState.vadDetector.onSpeakingChange(i % 2 === 0); await pause(80); }
     check(document.querySelector('.lounge-user-card .user-avatar') === avatar, 'Atualizar a fala não pode recriar o avatar');
     document.querySelector('#btn-toggle-mic').click();
-    for (const mode of ['ia', 'ia-leve', 'basico', 'off']) {
+    for (const mode of ['ia', 'basico', 'off']) {
       const oldTrack = appState.localMicStream.getAudioTracks()[0];
       noise.value = mode; noise.dispatchEvent(new Event('change'));
       await until(() => appState.localMicStream.getAudioTracks()[0] !== oldTrack);
       check(oldTrack.readyState === 'ended', 'Trocar filtro deve liberar a captura anterior');
       check(!appState.localMicStream.getAudioTracks()[0].enabled && !appState.myUser.isMicOn, 'Trocar filtro precisa manter o mute');
-      check(appState.micProcessor, 'O reforço deve existir com qualquer filtro');
-      check(appState.micProcessor.noiseFilter === (mode === 'ia' ? 'ia' : mode === 'ia-leve' ? 'rnnoise' : 'off'), 'O filtro escolhido precisa carregar de verdade');
+      check(appState.micProcessor, 'O ganho manual deve existir com qualquer filtro');
+      check(appState.micProcessor.noiseFilter === (mode === 'ia' ? 'rnnoise' : 'off'), 'O filtro escolhido precisa carregar de verdade');
     }
   })()`);
   for (const theme of ['escuro', 'preto', 'claro']) {
@@ -68,7 +66,7 @@ app.whenReady().then(async () => {
     await fs.writeFile(path.join(os.tmpdir(), `teletela-mic-controles-${theme}.png`), (await win.webContents.capturePage()).toPNG());
   }
   if (errors.length) throw new Error(errors.join('\n'));
-  console.log('Controles passaram: três temas, filtros IA/básico/desligado, reforço, ganho, mute e avatar estável durante fala.');
+  console.log('Controles passaram: três temas, filtros IA/básico/desligado, ganho, mute e avatar estável durante fala.');
   await finish(0);
 }).catch(async err => { console.error(err); await finish(1); });
 const timeout = setTimeout(() => { console.error('Teste dos controles excedeu 45 segundos.'); finish(1); }, 45000);

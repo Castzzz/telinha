@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="redesign.css" />
   <link rel="stylesheet" href="mobile.css" />
+  <link rel="stylesheet" href="music.css" />
 </head>
 <body class="theme-discord">
 
@@ -46,6 +47,7 @@
   <dialog id="mobile-call-options" class="mobile-sheet" aria-labelledby="mobile-call-options-title">
     <div class="mobile-sheet-handle" aria-hidden="true"></div>
     <div class="mobile-sheet-header"><h2 id="mobile-call-options-title">Opções da chamada</h2><button type="button" id="mobile-close-options" class="mobile-icon-button" aria-label="Fechar opções">✕</button></div>
+    <button type="button" id="btn-mobile-music" class="mobile-settings-row hidden"><span>Música<small>Fila e controles do bot nesta call</small></span><span aria-hidden="true">›</span></button>
     <button type="button" id="btn-mobile-audio-output" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></span><span>Saída de áudio<small>Escolher alto-falante ou fone</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Volume e redução de ruído</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Volume e sons<small>Áudio da call e das transmissões</small></span><span aria-hidden="true">›</span></button>
@@ -316,6 +318,7 @@
         </div>
 
         <div class="stage-controls-right">
+          <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
           <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
           <button id="btn-stage-pip" class="btn-control-icon hidden" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
@@ -560,15 +563,50 @@
     </div>
   </div>
 
+  <div id="modal-music" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="music-title">
+    <div class="modal-card music-modal">
+      <div class="modal-header"><h3 id="music-title">Música do canal</h3><button type="button" class="modal-close-btn" data-close-modal="modal-music" aria-label="Fechar música">✕</button></div>
+      <div class="modal-body music-body">
+        <section class="music-current" aria-label="Tocando agora">
+          <strong id="music-now">Nenhuma música tocando</strong><p id="music-phase" role="status" aria-live="polite"></p>
+          <div class="music-controls"><button type="button" id="music-pause" class="btn-secondary">Pausar</button><button type="button" id="music-skip" class="btn-secondary">Pular</button><button type="button" id="music-stop" class="btn-secondary">Parar e limpar fila</button></div>
+          <div class="music-controls"><label class="music-repeat" for="music-repeat">Repetir <select id="music-repeat"><option value="off">Desligado</option><option value="one">Esta faixa</option><option value="all">Fila inteira</option></select></label><button type="button" id="music-shuffle" class="btn-secondary">Embaralhar fila</button></div>
+          <label class="music-volume" for="music-volume">Seu volume <input type="range" id="music-volume" min="0" max="200" value="50"><output id="music-volume-value" for="music-volume">50%</output></label>
+        </section>
+        <form id="music-form" class="music-form">
+          <label for="music-input">Música ou playlist do YouTube/Spotify, ou título e artista</label>
+          <div class="music-search-row"><input id="music-input" class="form-input" maxlength="500" placeholder="Cole um link ou escreva uma música" required><button type="submit" id="music-search-button" class="btn-primary">Buscar</button></div>
+          <details><summary>Ajustar a busca do Spotify</summary><label for="music-refinement">Título e artista (opcional)</label><input id="music-refinement" class="form-input" maxlength="300" placeholder="Título e artista para encontrar a versão certa"></details>
+          <p id="music-search-status" role="status" aria-live="polite"></p>
+        </form>
+        <section id="music-playlist-tools" class="music-playlist-tools hidden" aria-label="Opções da playlist">
+          <strong id="music-playlist-name"></strong>
+          <div class="music-playlist-options"><label><input type="checkbox" id="music-select-all" checked> Selecionar todas</label><label><input type="checkbox" id="music-playlist-shuffle"> Embaralhar ao adicionar</label></div>
+          <div class="music-controls"><button type="button" id="music-add-playlist" class="btn-primary">Adicionar selecionadas</button><button type="button" id="music-next-page" class="btn-secondary hidden">Próxima página</button></div>
+        </section>
+        <div id="music-results" aria-label="Versões encontradas"></div>
+        <h4 id="music-queue-title" class="music-queue-title">Próximas músicas (0)</h4><ol id="music-queue" class="music-queue"></ol>
+        <p class="music-help">O bot transmite uma única reprodução para a call. O seu volume é individual e ensurdecer silencia a música. Playlists carregam até 50 faixas por página; selecione quais adicionar. Faixas do Spotify procuram versões no YouTube. Listas privadas não são acessadas.</p>
+      </div>
+    </div>
+  </div>
+
   <!-- NOVIDADES: aparece uma vez na primeira vez que abre a versão nova -->
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.8.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 3.9.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Música para a call inteira:</strong> abra o botão de fone de ouvido, cole um link do YouTube ou Spotify e escolha a versão. Todos no canal recebem a mesma reprodução.</li>
+          <li><strong>Playlists e fila:</strong> selecione faixas de playlists públicas e álbuns, embaralhe a ordem e repita uma música ou a fila. Volume individual, pausa e pular ficam no painel.</li>
+          <li><strong>Microfones como na 3.7:</strong> retirados a IA forte e o reforço automático da 3.8. O filtro RNNoise e o volume manual voltam ao comportamento anterior.</li>
+        </ul>
+        <div id="whats-new-3-8-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.8.0</h4>
         <ul class="whats-new-list">
           <li><strong>Identidade preservada:</strong> cargos e acessos ficam vinculados ao perfil, sem exigir conta. Exporte seu perfil para recuperar a identidade em outro aparelho.</li>
           <li><strong>Dono e cargos separados:</strong> o proprietário é reconhecido pelo perfil. A moderação dos amigos depende dos cargos; admins antigos não aparecem como donos.</li>
@@ -578,6 +616,7 @@
           <li><strong>IA forte renovada:</strong> melhor redução de teclas também durante a fala, com IA leve como alternativa. O áudio das transmissões continua separado.</li>
           <li><strong>Ping com visual do app:</strong> passe o mouse em Voz conectada para ver o ping e a qualidade da conexão em um cartão compacto.</li>
         </ul>
+        </div>
         <div id="whats-new-3-7-0" class="whats-new-older hidden">
           <h4>E o que chegou na 3.7.0</h4>
         <ul class="whats-new-list">
@@ -927,14 +966,6 @@
             </div>
 
 
-            <div class="form-group">
-              <label class="hotkey-global">
-                <input type="checkbox" id="input-mic-voice-boost" checked />
-                Reforçar vozes baixas
-              </label>
-              <p class="form-help">Deixa a voz mais presente e contém os picos, com qualquer filtro selecionado. Não muda o volume do sistema. Comece com o microfone e os amigos em 100%.</p>
-            </div>
-
             <!-- Ganho do microfone -->
             <div class="form-group">
               <label for="input-mic-gain">Volume do seu microfone</label>
@@ -949,12 +980,11 @@
             <div class="form-group">
               <label for="select-noise-suppression">Cancelamento de ruído do microfone</label>
               <select id="select-noise-suppression" class="form-select">
-                <option value="ia">Forte, com IA (voz e ruídos de fundo)</option>
-                <option value="ia-leve">IA leve (menor uso de CPU)</option>
+                <option value="ia">Forte, com IA (RNNoise): tira teclado, ventilador, barulho da rua</option>
                 <option value="basico">Básico (filtro do navegador)</option>
                 <option value="off">Desligado (sem filtro de ruído)</option>
               </select>
-              <p class="form-help">A IA forte reduz teclas e ruídos mesmo enquanto você fala. Se pesar no aparelho, use a IA leve. Só afeta o microfone; o som da transmissão de tela não passa pelo filtro.</p>
+              <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
             </div>
 
             <!-- VAD Test Meter -->

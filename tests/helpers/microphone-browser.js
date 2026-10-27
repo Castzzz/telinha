@@ -1,6 +1,5 @@
 import { createMicrophonePipeline } from '/microphone.js';
 import { enhanceOpusVoiceSdp, VolumeMixerManager } from '/audio-manager.js';
-import { runNoiseComparison } from '/__noise-test.js';
 
 const pause = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 const check = (ok, message) => { if (!ok) throw new Error(message); };
@@ -25,7 +24,7 @@ async function measure(ctx, stream, duration = 350) {
   return { db: db(Math.sqrt(energy / count)), peak };
 }
 
-async function fixture({ noise = false, speech = false, useRnnoise = false, noiseFilter = useRnnoise ? 'rnnoise' : 'off', boost = true, level = -38, gain = 1 } = {}) {
+async function fixture({ noise = false, speech = false, useRnnoise = false, noiseFilter = useRnnoise ? 'rnnoise' : 'off', level = -38, gain = 1 } = {}) {
   const ctx = new AudioContext({ sampleRate: 48000 });
   let source;
   if (speech) {
@@ -70,7 +69,7 @@ async function fixture({ noise = false, speech = false, useRnnoise = false, nois
   source.connect(volume).connect(dest); source.start();
   await ctx.resume();
   let stops = 0;
-  const pipeline = await createMicrophonePipeline(dest.stream, { noiseFilter, boost, gain, onStop: () => stops++ });
+  const pipeline = await createMicrophonePipeline(dest.stream, { noiseFilter, gain, onStop: () => stops++ });
   await pause(1400);
   return { ctx, pipeline, volume, raw: dest.stream, get stops() { return stops; },
     async close() { pipeline.stop(); source.stop(); await ctx.close(); } };
@@ -121,112 +120,70 @@ export async function run() {
   const results = {};
   const f = await fixture();
   try {
-    check(f.pipeline.stream.getAudioTracks()[0].getSettings().channelCount === 1, 'A saída precisa ser mono');
-    results.weak = await measure(f.ctx, f.pipeline.stream);
-    check(results.weak.db > -29 && results.weak.db < -22, 'A voz baixa deve subir sem ficar excessiva');
     const previous = await previousPipeline(f.raw, false);
     try {
       await pause(250);
-      results.previousWithoutAI = await measure(f.ctx, previous.stream);
-      check(results.weak.db - results.previousWithoutAI.db > 10, 'Sem IA, o novo reforço precisa melhorar a entrada baixa em relação à 3.7.0');
+      results.raw = await measure(f.ctx, f.raw);
+      results.current = await measure(f.ctx, f.pipeline.stream);
+      results.previous = await measure(f.ctx, previous.stream);
+      check(Math.abs(results.current.db - results.previous.db) < 0.5, 'Sem IA, o nível precisa ser igual ao da 3.7');
+      check(Math.abs(results.current.db - results.raw.db) < 0.5, '100% não deve adicionar reforço automático');
     } finally { await previous.close(); }
-    f.pipeline.setBoost(false); await pause(800);
-    results.withoutBoost = await measure(f.ctx, f.pipeline.stream);
-    check(results.weak.db - results.withoutBoost.db > 8, 'O reforço precisa aumentar entradas fracas');
-    f.pipeline.setBoost(true); f.pipeline.setGain(2); await pause(800);
+    const track = f.pipeline.stream.getAudioTracks()[0];
+    f.pipeline.setGain(2); await pause(250);
     results.manual200 = await measure(f.ctx, f.pipeline.stream);
-    check(Math.abs(results.manual200.db - results.weak.db - 6.02) < 0.6, '200% deve dobrar a amplitude sem o reforço anular o ajuste');
-    f.pipeline.setGain(0); await pause(500);
+    check(Math.abs(results.manual200.db - results.current.db - 6.02) < 0.6, '200% deve dobrar a amplitude');
+    check(f.pipeline.stream.getAudioTracks()[0] === track, 'Ajustar ganho não pode substituir a faixa');
+    f.pipeline.setGain(0); await pause(250);
     check((await measure(f.ctx, f.pipeline.stream)).peak < 1e-5, '0% deve enviar silêncio');
-    f.pipeline.setGain(3); f.volume.gain.value = 1; await pause(500);
-    results.loud = await measure(f.ctx, f.pipeline.stream);
-    check(results.loud.peak <= 0.951, 'Picos precisam ficar abaixo do teto digital');
-    f.pipeline.setGain(1); f.volume.gain.value = 10 ** (-38 / 20) * Math.sqrt(2); await pause(1000);
+    f.pipeline.setGain(1); await pause(250);
     const peer = await peerStream(f.pipeline.stream);
     try {
       await pause(800);
       results.received = await measure(f.ctx, peer.stream);
-      console.log(JSON.stringify({ weak: results.weak, received: results.received }));
-      check(Math.abs(results.received.db - results.weak.db) < 2, 'Opus mono deve preservar o nível no receptor em 100%');
+      check(Math.abs(results.received.db - results.current.db) < 2, 'O envio Opus deve preservar o sinal sem IA');
       const mixer = new VolumeMixerManager({ audioContext: f.ctx });
       mixer.outputGain.disconnect();
-      const receivedOutput = f.ctx.createMediaStreamDestination();
-      receivedOutput.channelCount = 1;
-      mixer.outputGain.connect(receivedOutput);
+      const output = f.ctx.createMediaStreamDestination();
+      output.channelCount = 1;
+      mixer.outputGain.connect(output);
       mixer.setMasterVolume(100);
       mixer.attachUserStream('voz-de-teste', peer.stream, 'Teste');
       mixer.setUserVolume('voz-de-teste', 100);
       await pause(200);
-      results.receivedAt100 = await measure(f.ctx, receivedOutput.stream);
-      check(Math.abs(results.receivedAt100.db - results.received.db) < 1, 'Volume geral e individual em 100% não podem atenuar a voz');
-      f.pipeline.stream.getAudioTracks()[0].enabled = false; await pause(500);
+      results.mixer = await measure(f.ctx, output.stream);
+      check(Math.abs(results.mixer.db - results.received.db) < 1, 'Volume geral e individual em 100% devem preservar a voz');
+      track.enabled = false; await pause(500);
       check((await measure(f.ctx, peer.stream)).peak < 0.001, 'Mute deve silenciar o áudio recebido');
-      check((await measure(f.ctx, receivedOutput.stream)).peak < 0.001, 'Mute deve silenciar também a saída do mixer');
-      f.pipeline.stream.getAudioTracks()[0].enabled = true;
-      mixer.detachUserStream('voz-de-teste');
-      mixer.outputGain.disconnect();
-      receivedOutput.stream.getTracks().forEach(track => track.stop());
+      check((await measure(f.ctx, output.stream)).peak < 0.001, 'Mute deve silenciar também o mixer');
+      mixer.detachUserStream('voz-de-teste'); mixer.outputGain.disconnect();
+      output.stream.getTracks().forEach(track => track.stop());
     } finally { peer.close(); }
     f.pipeline.stop(); f.pipeline.stop();
-    check(f.raw.getAudioTracks()[0].readyState === 'ended' && f.stops === 1, 'Parar precisa liberar a captura uma vez só');
+    check(f.raw.getAudioTracks()[0].readyState === 'ended' && f.stops === 1, 'Parar deve liberar a captura uma vez só');
   } finally { await f.close(); }
 
-  const filtered = await fixture({ speech: true, useRnnoise: true, boost: false, level: -30 });
+  const filtered = await fixture({ speech: true, useRnnoise: true, level: -30 });
   try {
-    check(filtered.pipeline.stream.getAudioTracks()[0].getSettings().channelCount === 1, 'RNNoise também deve sair em mono');
-    results.rnnoise = await measure(filtered.ctx, filtered.pipeline.stream);
     const previous = await previousPipeline(filtered.raw, true);
     try {
       await pause(1500);
-      const [oldLevel, newLevel] = await Promise.all([measure(filtered.ctx, previous.stream, 1200), measure(filtered.ctx, filtered.pipeline.stream, 1200)]);
-      results.previousRNNoise = oldLevel;
-      results.monoRNNoise = newLevel;
-      check(newLevel.db - oldLevel.db > 4, 'Mono explícito precisa corrigir a perda de nível do grafo antigo com RNNoise');
+      const [oldLevel, newLevel] = await Promise.all([
+        measure(filtered.ctx, previous.stream, 1600), measure(filtered.ctx, filtered.pipeline.stream, 1600)
+      ]);
+      results.previousRNNoise = oldLevel; results.rnnoise = newLevel;
+      check(Math.abs(newLevel.db - oldLevel.db) < 0.5, 'RNNoise deve preservar o processamento e nível da 3.7');
+      check(newLevel.peak > 0.001, 'RNNoise precisa preservar a voz de referência');
     } finally { await previous.close(); }
-    console.log(JSON.stringify({ rnnoise: results.rnnoise }));
-    check(results.rnnoise.db > -45, 'RNNoise deve preservar a voz de referência');
-    const peer = await peerStream(filtered.pipeline.stream);
-    try {
-      await pause(800);
-      results.rnnoiseReceived = await measure(filtered.ctx, peer.stream, 1200);
-      const local = await measure(filtered.ctx, filtered.pipeline.stream, 1200);
-      check(Math.abs(results.rnnoiseReceived.db - local.db) < 3, 'RNNoise não pode perder mais 6 dB no envio mono');
-    } finally { peer.close(); }
     filtered.raw.getAudioTracks()[0].dispatchEvent(new Event('ended'));
-    check(filtered.pipeline.stream.getAudioTracks()[0].readyState === 'ended', 'Perder a captura precisa encerrar a saída');
+    check(filtered.pipeline.stream.getAudioTracks()[0].readyState === 'ended', 'Perder a captura deve encerrar a saída');
   } finally { await filtered.close(); }
-
-  const noisy = await fixture({ noise: true, useRnnoise: true, boost: true, level: -20 });
+  const noisy = await fixture({ noise: true, useRnnoise: true, level: -20 });
   try {
     results.noiseRaw = await measure(noisy.ctx, noisy.raw);
     results.noiseFiltered = await measure(noisy.ctx, noisy.pipeline.stream);
-    console.log(JSON.stringify({ noiseRaw: results.noiseRaw, noiseFiltered: results.noiseFiltered }));
-    check(results.noiseRaw.db - results.noiseFiltered.db > 15, 'RNNoise deve remover o ruído grave mesmo com reforço ligado');
+    check(results.noiseRaw.db - results.noiseFiltered.db > 15, 'RNNoise deve reduzir o ruído grave de referência');
   } finally { await noisy.close(); }
-  const strong = await fixture({ speech: true, noiseFilter: 'ia', boost: true, level: -38 });
-  try {
-    check(strong.pipeline.noiseFilter === 'ia', 'A IA forte precisa carregar, sem cair silenciosamente na IA leve');
-    results.strongAI = await measure(strong.ctx, strong.pipeline.stream, 800);
-    check(results.strongAI.db > -33 && results.strongAI.db < -20, 'A IA forte precisa preservar e reforçar a voz baixa');
-    const peer = await peerStream(strong.pipeline.stream);
-    try {
-      await pause(500);
-      results.strongAIReceived = await measure(strong.ctx, peer.stream, 800);
-      check(Math.abs(results.strongAIReceived.db - results.strongAI.db) < 3, 'A voz da IA forte precisa chegar ao receptor sem perder volume');
-    } finally { peer.close(); }
-    const originalFetch = window.fetch;
-    let fallback, fallbacks = 0;
-    try {
-      window.fetch = (url, init) => String(url).endsWith('/gtcrn.wasm')
-        ? Promise.resolve(new Response(new Uint8Array([0, 1, 2, 3]))) : originalFetch(url, init);
-      const { createMicrophonePipeline: createWithFailedModel } = await import('/microphone.js?modelo-invalido');
-      fallback = await createWithFailedModel(strong.raw.clone(), { noiseFilter: 'ia', onFallback: () => fallbacks++ });
-      check(fallback.noiseFilter === 'rnnoise' && fallbacks === 1, 'Falhar ao iniciar o modelo forte precisa avisar e carregar a IA leve');
-      await pause(700);
-      check((await measure(strong.ctx, fallback.stream, 800)).db > -45, 'O fallback não pode deixar uma faixa viva enviando silêncio');
-    } finally { window.fetch = originalFetch; fallback?.stop(); }
-  } finally { await strong.close(); }
-  results.noiseComparison = await runNoiseComparison();
-  console.log('Microfone: mono, reforço, ganho, picos, Opus, mute, IA forte/leve, teclas durante a fala e liberação passaram.');
+  console.log('Microfone: comparação com 3.7, ganho manual, Opus, mute, mixer, RNNoise e liberação passaram.');
   return results;
 }

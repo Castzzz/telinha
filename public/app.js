@@ -27,6 +27,9 @@ import { activityElapsed } from './game-activity.js';
 import { createMicrophonePipeline } from './microphone.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
+import { setupMusic } from './music.js';
+
+let musicUI = null;
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -567,11 +570,13 @@ socket.on('disconnect', (reason) => {
 });
 
 // Nome e cor vêm do nosso perfil; o servidor só sugere um aleatório antes do join
-socket.on('me', ({ id, sfu, admin }) => {
+socket.on('me', ({ id, sfu, admin, music }) => {
   appState.myId = id;
   // Sala com SFU (servidor na nuvem): transmissões passam pelo servidor, não P2P
   appState.sfuEnabled = Boolean(sfu);
   appState.serverHasAdmin = Boolean(admin);
+  appState.musicEnabled = Boolean(music);
+  musicUI?.syncChannel();
   renderAdminSettings();
   updateUserDockProfile();
 });
@@ -4638,14 +4643,6 @@ function setupHotkeys() {
 
 // Ganho do microfone (Configurações): muda na hora, sem reconectar ninguém
 function setupMicGain() {
-  const boost = $('#input-mic-voice-boost');
-  if (boost) {
-    boost.checked = prefs.micVoiceBoost !== false;
-    boost.addEventListener('change', () => {
-      savePrefs({ micVoiceBoost: boost.checked });
-      appState.micProcessor?.setBoost(boost.checked);
-    });
-  }
   const input = $('#input-mic-gain');
   const text = $('#mic-gain-text');
   if (!input) return;
@@ -4788,14 +4785,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.8.0';
+const WHATS_NEW_VERSION = '3.9.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -5511,6 +5508,7 @@ function placeGutter(grid, gutter, i) {
 
 // Cada controle aparece junto da ação que está disponível na sala.
 function updateStageControls() {
+  musicUI?.syncChannel();
   const inCall = Boolean(appState.currentChannelId);
   const watching = appState.activeStreams.size > 0;
   const watchingOthers = [...appState.activeStreams.values()].some((info) => !info.isLocal);
@@ -6206,11 +6204,11 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
 
 // -----------------------------------------------------------------------------
 // CANCELAMENTO DE RUÍDO DO MICROFONE
-// 'ia': GTCRN (separa voz e ruído, inclusive durante a fala); 'ia-leve': RNNoise
+// 'ia': RNNoise, como na 3.7
 // 'basico': o filtro do próprio Chromium · 'off': microfone cru
 // -----------------------------------------------------------------------------
 function noiseMode() {
-  return ['ia', 'ia-leve', 'basico', 'off'].includes(prefs.noiseSuppression) ? prefs.noiseSuppression : 'ia';
+  return ['ia', 'basico', 'off'].includes(prefs.noiseSuppression) ? prefs.noiseSuppression : 'ia';
 }
 
 // Ganho do microfone (Configurações): 0–300%, aplicado pelo próprio Telinha. Serve pra quem
@@ -6223,8 +6221,7 @@ function micGainValue() {
 // A mesma faixa processada alimenta o VAD, o P2P e o SFU.
 async function processMicrophone(raw, noiseFilter) {
   const pipeline = await createMicrophonePipeline(raw, {
-    noiseFilter, gain: micGainValue(), boost: prefs.micVoiceBoost !== false,
-    onFallback: () => showToast('A IA forte não carregou. Usando a IA leve nesta captura.', 'error'),
+    noiseFilter, gain: micGainValue(),
     onStop: () => { if (appState.micProcessor === pipeline) appState.micProcessor = null; }
   });
   appState.micProcessor = pipeline;
@@ -6237,9 +6234,9 @@ async function openMicrophone(deviceId) {
   const raw = await manager.acquireMicrophoneStream(deviceId ?? manager.selectedMicrophoneId, {
     noiseSuppression: mode === 'basico'
   });
-  if (mode === 'ia' || mode === 'ia-leve') {
+  if (mode === 'ia') {
     try {
-      return await processMicrophone(raw, mode === 'ia' ? 'ia' : 'rnnoise');
+      return await processMicrophone(raw, 'rnnoise');
     } catch (err) {
       console.warn('[Mic] IA indisponível, usando o filtro básico:', err);
       showToast('⚠️ Cancelamento de ruído com IA indisponível; usando o básico.', 'error');
@@ -7395,6 +7392,7 @@ function initApp() {
     window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }
   initAudioSystem();
+  musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options) });
   setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings });
   updateUserDockProfile();
   setupDockControls();

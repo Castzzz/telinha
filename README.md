@@ -208,7 +208,7 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–300%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
-| **Volume do seu microfone** | Desde a 3.8.0: ⚙️ → *Microfone* → **Reforçar vozes baixas** aumenta a voz em qualquer filtro e contém picos, sem alterar o volume do sistema. Comece com o microfone e os amigos em 100%. O controle manual de 0–300% continua disponível |
+| **Volume do seu microfone** | ⚙️ → *Microfone*: ajuste manual de 0–300%, aplicado na hora. Na 3.9.0, o processamento voltou ao da 3.7, com RNNoise opcional e sem reforço automático de volume |
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |
 | **Parou de ouvir alguém** | Clique na pessoa → *🔄 Reconectar a voz* (a conexão também se refaz sozinha se cair) |
@@ -225,14 +225,12 @@ O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
 
 ### 🧠 Cancelamento de ruído
 Em ⚙️ → *Cancelamento de ruído do microfone*:
-- **Forte, com IA** (padrão): usa um modelo mais forte para reduzir teclas e ruído também durante a fala;
-- **IA leve**: mantém o filtro anterior com menor uso de CPU;
+- **Com IA** (padrão): RNNoise, com o mesmo processamento da 3.7;
 - **Básico**: o filtro do navegador;
 - **Desligado**: som cru do microfone.
 
-Só afeta a sua voz, nunca o som da transmissão. Se a IA forte não carregar, o app avisa
-e tenta a IA leve; se as duas falharem, usa o básico. As mudanças estão na 3.8.0.
-O resultado com cada teclado/microfone precisa ser conferido no aparelho real.
+Só afeta a sua voz, nunca o som da transmissão. Se a IA não carregar, o app avisa e usa
+o básico. A 3.9.0 reverte a IA forte e o reforço automático adicionados na 3.8.
 
 ### ⌨️ Atalhos com o jogo aberto
 Os atalhos funcionam mesmo com o Teletela minimizado se forem `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita; a tecla continua indo pro jogo), uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.
@@ -323,6 +321,59 @@ A propriedade da sala usa `OWNER_KEY`, exclusiva e guardada em `/etc/telinha/tel
 
 Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 50 mil mensagens por canal), as imagens em `data/text/images/` (até 25 GB) e vídeos/arquivos em `data/text/files/` (até 5 GB). Passando dos limites de espaço, os arquivos mais antigos são apagados.
 
+### Testar o bot de música nas calls
+
+O bot já pode ser testado dentro dos canais, com fila, pausar/continuar, pular, remover
+pedidos e volume individual. O servidor toca uma única vez e transmite em Opus por WebRTC;
+ensurdecer silencia a música junto das vozes. Sair do último participante para o bot.
+
+Playlists públicas de YouTube/Spotify e álbuns Spotify podem ser carregados em páginas
+de até 50 faixas. Selecione quais adicionar, escolha **Embaralhar ao adicionar** ou use
+**Embaralhar fila**. **Repetir** permite repetir a faixa atual ou a fila inteira.
+No Spotify, a leitura pública pode mostrar apenas parte de listas grandes; listas privadas
+não são acessadas. Cada faixa é procurada por título e artista no YouTube.
+
+A primeira música começa por streaming, sem baixar e converter tudo antes. A próxima da
+fila é pré-carregada no formato original. O YouTube às vezes exige alguns segundos para
+liberar uma fonte nova, então a primeira faixa ainda pode demorar. O bot mantém um relógio
+próprio de 20 ms, inclusive durante a pausa, para evitar rajadas de áudio depois de atrasos.
+
+```bash
+npm run music:setup      # instala o extrator local
+npm run music:build      # compila a ponte WebRTC e o SFU de teste (precisa de Go)
+npm run music:call:sfu   # abra http://127.0.0.1:3999 em duas janelas
+```
+
+Entre no Geral e abra o botão de **fone de ouvido** na barra da call. Busque um link ou
+título e artista, confira a versão e clique em **Adicionar à fila**. A outra janela recebe
+o áudio ao entrar no canal. No celular, o bot também aparece nas opções da chamada.
+`npm run music:call` testa a distribuição WebRTC direta, sem SFU.
+
+Esses comandos usam dados temporários e servidores locais. No servidor normal, o recurso
+exige `TELINHA_MUSIC=1`. O deploy para Oracle instala as ferramentas e ativa o bot por
+padrão; `ENABLE_MUSIC=0 npm run deploy:oracle` permite desativá-lo. Desde a 3.9.0, o app
+mostra os controles quando o servidor informa que a música está disponível.
+
+### Laboratório inicial de fontes
+
+O laboratório de música roda separado da sala oficial, sem atualizar o app dos amigos:
+
+```bash
+npm run music:setup   # baixa yt-dlp para .cache/music-lab/, com verificação SHA-256
+npm run music:lab     # abra http://127.0.0.1:3998
+```
+
+Requer Python 3.10+, Node 22+ e FFmpeg no PC. Cole um link de YouTube, uma **faixa individual**
+do Spotify ou título e artista; confira a versão encontrada e clique em **Tocar para todos**.
+Abra o mesmo endereço em duas janelas e ative a escuta em cada uma. O servidor prepara o
+áudio uma vez e um único FFmpeg transmite para todos. Cada janela controla seu volume.
+Links Spotify identificam o título; o áudio vem da versão escolhida no YouTube.
+
+Esse laboratório HTTP continua disponível para testar fontes separadamente das calls.
+Ele não tem fila nem playlists. O buffer dos navegadores pode gerar alguns segundos de diferença entre
+ouvintes. Fechar com Ctrl+C limpa os áudios temporários. Detalhes, resultados e continuação
+em [docs/TESTE-BOT-MUSICA.md](docs/TESTE-BOT-MUSICA.md).
+
 ### Testar anexos e sons localmente
 
 Rode `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-anexos npm start`
@@ -338,7 +389,7 @@ no disco. Esse servidor local usa P2P; testar o repasse do SFU exige subir o SFU
 - `electron/main.cjs`: app desktop (hospedar, túnel, captura de tela, atualização, atalhos globais)
 - `electron/connect.html`: tela inicial
 - `native/win-audio/`: auxiliar do Windows que captura o som de um processo só
-- `public/vendor/noise-suppressor/`: GTCRN e RNNoise (cancelamento de ruído local)
+- `public/vendor/noise-suppressor/`: RNNoise (cancelamento de ruído local)
 
 Pelo navegador também funciona (`npm start` + `cloudflared tunnel --url http://localhost:8080`), mas transmitir o som do PC só funciona bem no app desktop ou no Chrome/Edge.
 </details>

@@ -14,6 +14,11 @@ NODE_VERSION="${NODE_VERSION:-v24.11.1}"
 CADDY_VERSION="${CADDY_VERSION:-2.10.2}"
 MEDIA_PORT=50000
 ACTIVATE_DUCKDNS="${ACTIVATE_DUCKDNS:-1}"
+ENABLE_MUSIC="${ENABLE_MUSIC:-1}"
+case "$ENABLE_MUSIC" in
+  0|1) ;;
+  *) echo "ENABLE_MUSIC precisa ser 0 ou 1." >&2; exit 1 ;;
+esac
 
 case "$(uname -m)" in
   x86_64) NODE_ARCH=x64; CADDY_ARCH=amd64 ;;
@@ -85,6 +90,23 @@ if ! /usr/local/bin/caddy version 2>/dev/null | grep -q "v$CADDY_VERSION"; then
   rm -rf "$tmp"
 fi
 
+if [ "$ENABLE_MUSIC" = 1 ]; then
+  log "Ferramentas do bot de música (antes de parar a sala)"
+  if ! command -v python3 >/dev/null || ! command -v ffmpeg >/dev/null; then
+    command -v apt-get >/dev/null || { echo "Instale Python 3.10+ e FFmpeg/libopus ou use ENABLE_MUSIC=0." >&2; exit 1; }
+    apt-get update -qq
+    DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=l apt-get install -y --no-install-recommends python3 ffmpeg ca-certificates
+  fi
+  python3 -c 'import sys; assert sys.version_info >= (3, 10), "O yt-dlp requer Python 3.10+"'
+  # Sem grep -q: com pipefail, fechar o pipe cedo pode derrubar o ffmpeg com SIGPIPE.
+  ffmpeg -hide_banner -encoders 2>/dev/null | grep 'libopus' >/dev/null
+  test -s "$STAGE/telinha-music-publisher"
+  test -s "$STAGE/yt-dlp"
+  install -m 755 "$STAGE/telinha-music-publisher" "$APP/bin/telinha-music-publisher"
+  install -m 755 "$STAGE/yt-dlp" "$APP/bin/yt-dlp"
+  "$APP/bin/yt-dlp" --version
+fi
+
 log "Aplicação"
 systemctl stop telinha-server telinha-sfu 2>/dev/null || true
 rm -rf "$APP/app.new" && mkdir -p "$APP/app.new"
@@ -146,6 +168,9 @@ Environment=PORT=8080
 Environment=NODE_ENV=production
 # Canais criados ficam aqui (fora de app/, que o deploy apaga e recria)
 Environment=TELINHA_DATA_DIR=$APP/data
+Environment=TELINHA_MUSIC=$ENABLE_MUSIC
+Environment=MUSIC_PUBLISHER=$APP/bin/telinha-music-publisher
+Environment=MUSIC_YTDLP=$APP/bin/yt-dlp
 ExecStart=$APP/node/bin/node $NODE_MEM_LIMIT server.js
 Restart=always
 RestartSec=2

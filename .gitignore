@@ -1,4 +1,5 @@
 node_modules/
+.cache/music-lab/
 dist/
 telinha-sfu
 # Compilado pelo npm run build:win-audio (vai dentro do instalador, não no git)

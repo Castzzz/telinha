@@ -1131,6 +1131,11 @@ io.use((socket, next) => {
 // Socket.IO Real-time Signaling
 // ----------------------------------------------------
 
+// Música central: habilitada pelo serviço da Oracle e opcional nas salas locais.
+const music = process.env.TELINHA_MUSIC === '1'
+  ? (await import('./music/integration.mjs')).installMusic({ io, channels, permissions, sfuSecret: SFU_SECRET,
+    sfuInternalUrl: process.env.SFU_INTERNAL_URL || 'http://127.0.0.1:8081' }) : null;
+
 io.on('connection', (socket) => {
   // Mede a ida e volta até este servidor, inclusive sem ninguém mais na call.
   socket.on('connection-ping', (callback) => safeCallback(callback)({ success: true }));
@@ -1193,7 +1198,7 @@ io.on('connection', (socket) => {
   const summary = getChannelsSummary(user);
   socket.emit('channels-list', summary);
   socket.emit('channels-summary', summary);
-  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(OWNER_KEY) });
+  socket.emit('me', { id: user.id, name: user.name, color: user.color, sfu: Boolean(SFU_SECRET), admin: Boolean(OWNER_KEY), music: Boolean(music) });
 
 
   // Clientes antigos continuam reconhecendo o dono por sua identidade, sem promover admins.
@@ -1687,6 +1692,14 @@ io.on('connection', (socket) => {
     const callback = safeCallback(maybeCallback);
     const payload = safeObject(rawPayload);
     if (!SFU_SECRET || !user.channelId || !permissions.visible(user, channels.get(user.channelId))) return callback({ ok: false });
+    if (payload.kind === 'music') {
+      const state = music?.state(user.channelId);
+      if (payload.role !== 'viewer' || !state || !['playing', 'paused'].includes(state.phase)) return callback({ ok: false });
+      const sala = `${user.channelId}__musica`;
+      const exp = String(Math.floor(Date.now() / 1000) + 60);
+      const signature = createHmac('sha256', SFU_SECRET).update(`${sala}|viewer|${exp}|${user.mediaId}`).digest('hex');
+      return callback({ ok: true, path: SFU_PATH, sala, role: 'viewer', exp, token: `${user.mediaId}.${signature}` });
+    }
     const ownerId = typeof payload.ownerId === 'string' ? payload.ownerId : '';
     const role = payload.role === 'host' ? 'host' : 'viewer';
     const owner = io.sockets.sockets.get(ownerId)?.data?.user;
@@ -2364,6 +2377,7 @@ function leaveCurrentChannel(socket) {
   if (channel) {
     channel.users.delete(socket.id);
     socket.leave(channelId);
+    music?.leave(channelId, socket.id);
 
     const leftPayload = {
       userId: socket.id,
@@ -2471,6 +2485,17 @@ const isDirectRun = Boolean(process.argv[1]) && (
 
 if (isDirectRun) {
   startServer(PORT, '0.0.0.0');
+  if (music) {
+    let closingMusic = false;
+    const stopMusicServer = async () => {
+      if (closingMusic) return;
+      closingMusic = true;
+      await music.close();
+      io.close();
+    };
+    process.once('SIGINT', stopMusicServer);
+    process.once('SIGTERM', stopMusicServer);
+  }
 }
 
-export { app, server, io, channels, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
+export { app, server, io, channels, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
