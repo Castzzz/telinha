@@ -5,7 +5,7 @@ import { resolveMusic } from './source.mjs';
 
 export function installMusic({ io, channels, permissions, sfuSecret = '', sfuInternalUrl = 'http://127.0.0.1:8081',
   resolve = resolveMusic, prepare, createTransport } = {}) {
-  const iceServers = process.env.MUSIC_ICE_SERVERS || '[{"urls":"stun:stun.l.google.com:19302"}]';
+  const iceServers = process.env.MUSIC_ICE_SERVERS || '[{"urls":["stun:stun.l.google.com:19302"]}]';
   const manager = new MusicManager({ prepare, mode: sfuSecret ? 'sfu' : 'direct', createTransport: createTransport || (channelId => {
     let sfuUrl = '';
     if (sfuSecret) {

@@ -183,3 +183,8 @@ Playlists e álbuns não devem ser tratados silenciosamente como uma única faix
 - Node e Caddy da VM serão preservados em v24.22.1 e 2.11.7. yt-dlp fixado em 2026.10.26.
 - APK atualizado para versionCode 6 / 3.9.0, build e lint passaram.
 - Pendentes nesta etapa: deploy, validar fonte real na Oracle, release e conferir artefatos.
+
+- Deploy concluído na Oracle com serviços ativos, FFmpeg 8.0.1/libopus e yt-dlp 2026.10.26.
+  Extração de faixa Spotify e publicação Opus no SFU funcionaram. Corrigido o ICE padrão:
+  Pion exige `urls` como lista; o teste local também pode receber essa configuração.
+  A escuta externa ainda está sendo conferida antes da publicação dos instaladores.

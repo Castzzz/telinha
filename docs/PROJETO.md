@@ -336,6 +336,9 @@ na Ubuntu antes de parar a sala. Baixa o yt-dlp oficial com SHA-256, versão fix
 `2026.10.26` (altere com `YTDLP_VERSION`), e instala em `/opt/telinha/bin/yt-dlp`.
 O serviço define `MUSIC_PUBLISHER`, `MUSIC_YTDLP` e `TELINHA_MUSIC=1`; não altera os
 segredos da VM. `ENABLE_MUSIC=0` desativa o recurso e dispensa as ferramentas no deploy.
+`MUSIC_ICE_SERVERS` usa o formato Pion: `urls` precisa ser uma lista, mesmo com um único
+STUN (`[{"urls":["stun:stun.l.google.com:19302"]}]`). O formato string aceito pelo navegador
+causava `invalid ICEServer` na ponte Go; a validação real na Oracle detectou e corrigiu isso.
 Salas hospedadas pelo app continuam com música desativada por padrão; as ferramentas
 nativas não vão dentro dos instaladores desktop.
 

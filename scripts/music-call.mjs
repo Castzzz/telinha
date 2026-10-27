@@ -42,7 +42,7 @@ export async function startMusicCall({ port = 3999, sfu = false } = {}) {
     process.env.TELINHA_DATA_DIR = data;
     process.env.OWNER_KEY = randomBytes(24).toString('hex');
     process.env.ADMIN_KEY = '';
-    process.env.MUSIC_ICE_SERVERS = '[]';
+    process.env.MUSIC_ICE_SERVERS ||= '[]';
     process.env.SFU_SECRET = '';
     if (sfu) {
       const sfuPort = await freePort();
