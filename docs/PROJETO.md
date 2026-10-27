@@ -985,3 +985,26 @@ assinatura da 3.7.0. Ainda falta escuta dos microfones/teclados e teste físico 
 Backups íntegros antes/depois: `~/Teletela-backups/teletela-dados-2026-10-26_17-23-58.tar.gz`
 e `~/Teletela-backups/teletela-dados-2026-10-26_17-37-35.tar.gz`. O segundo inclui a
 propriedade e a chave exclusiva de recuperação; o pedido privado de migração foi removido.
+
+### Publicação 3.9.0 concluída em 27/10/2026
+
+Tag [v3.9.0](https://github.com/Castzzz/telinha/releases/tag/v3.9.0), código `63d5d99`.
+Microfones restaurados ao processamento da 3.7; música compartilhada e playlists
+habilitadas na Oracle. SFU/Node/Caddy ativos; fontes extraídas como usuário telinha.
+Node v24.22.1 e Caddy 2.11.7 preservados, FFmpeg 8.0.1/libopus e yt-dlp 2026.10.26 instalados.
+
+Validação pública com faixa Spotify buscada no YouTube: dois ouvintes Electron receberam
+áudio da mesma sala SFU na Oracle, ~49,99 pacotes/s e ~0,15% de correção de ritmo.
+Corrigido o formato de `urls` ICE exigido pelo Pion. Canal temporário encerrado após o teste.
+
+Publicados os oito artefatos: Windows Setup/portátil, Linux AppImage/tar.gz, blockmap,
+`latest.yml`, `latest-linux.yml` e APK. SHA-256/tamanhos iguais ao GitHub; SHA-512 dos
+metadados de atualização conferido contra os instaladores. APK 3.9.0/versionCode 6 mantém
+a assinatura da 3.8.0. Assets de microfone/música nos pacotes equivalem aos arquivos testados.
+
+Testes: 62 do runner, 78 de permissões/perfil, 15 de música, integração m4, Go com race,
+áudio comparado ao grafo 3.7, controles/mute, celular/permissões na interface e bot pelo
+SFU com STUN. A qualidade nos aparelhos reais deve ser conferida pelos amigos.
+Backups antes e depois: `~/Teletela-backups/teletela-dados-2026-10-27_17-49-34.tar.gz` e
+`~/Teletela-backups/teletela-dados-2026-10-27_18-01-25.tar.gz`. Segredos preservados na VM,
+sons dos amigos fora do git. Resultado e histórico em [TESTE-BOT-MUSICA.md](TESTE-BOT-MUSICA.md).

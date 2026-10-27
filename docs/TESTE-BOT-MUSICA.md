@@ -1,8 +1,14 @@
-# Bot de música: teste local e continuação
+# Bot de música: implantação e continuação
 
 Pedido de 27/10/2026: testar links de YouTube e Spotify antes de integrar à sala oficial.
 O dono quer **uma reprodução central transmitida para todos**, como um bot do Discord.
 Não usar players independentes de YouTube/Spotify em cada cliente.
+
+**Estado final:** [3.9.0 publicada](https://github.com/Castzzz/telinha/releases/tag/v3.9.0),
+Oracle atualizada e música validada com dois ouvintes externos. Microfones revertidos ao
+processamento da 3.7. Instaladores Windows/Linux e APK Android enviados; os oito arquivos
+foram conferidos por SHA-256 e os metadados de atualização por SHA-512. As etapas abaixo
+guardam o histórico do teste local. Não há deploy/release pendente nesta sessão.
 
 ## Limites e autorização
 
@@ -204,3 +210,13 @@ Playlists e álbuns não devem ser tratados silenciosamente como uma única faix
   anterior ao disconnect (corrida já existente entre sockets).
 - Canal de teste temporário; nenhum chat enviado ou canal real alterado.
 - Código enviado ao GitHub. Publicação dos artefatos 3.9.0 em andamento.
+
+## Encerramento
+
+- Release 3.9.0 concluída; tag aponta a `63d5d99`, com código e documentação no GitHub.
+- Oito arquivos publicados e íntegros, `latest*.yml` na versão 3.9.0.
+- APK versionCode 6 com assinatura igual à 3.8; atualiza a instalação anterior.
+- Backup final: `~/Teletela-backups/teletela-dados-2026-10-27_18-01-25.tar.gz`.
+- Ferramentas temporárias de smoke test removidas da VM; canal de teste encerrado.
+- Próxima etapa é o uso pelos amigos: conferir microfones reais, latência inicial e links
+  específicos que falharem. A fila é volátil e playlists Spotify públicas podem ser parciais.
