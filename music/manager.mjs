@@ -6,6 +6,8 @@ import path from 'node:path';
 import { prepareStream, parseInput, bufferStream, warmStream } from './source.mjs';
 import { MusicTransport } from './transport.mjs';
 
+export const MAX_QUEUE_TRACKS = 150;
+
 export class MusicManager extends EventEmitter {
   constructor({ prepare = prepareStream, buffer = bufferStream, createTransport = () => new MusicTransport(), mode = 'direct', prefetch = true } = {}) {
     super();
@@ -13,7 +15,7 @@ export class MusicManager extends EventEmitter {
   }
 
   session(channelId) {
-    if (!this.sessions.has(channelId)) this.sessions.set(channelId, { channelId, phase: 'idle', queue: [], track: null, generation: null, error: null, repeat: 'off', prefetch: null });
+    if (!this.sessions.has(channelId)) this.sessions.set(channelId, { channelId, phase: 'idle', queue: [], track: null, generation: null, error: null, repeat: 'off', prefetch: null, failures: 0 });
     return this.sessions.get(channelId);
   }
 
@@ -33,8 +35,8 @@ export class MusicManager extends EventEmitter {
   enqueueMany(channelId, tracks, requester, { shuffle = false } = {}) {
     if (this.closed) throw new Error('O bot está encerrando.');
     const session = this.session(channelId);
-    if (!Array.isArray(tracks) || !tracks.length || tracks.length > 50) throw new Error('Selecione de 1 a 50 músicas.');
-    if (session.queue.length + tracks.length > 50) throw new Error(`A fila tem espaço para ${Math.max(0, 50 - session.queue.length)} músicas. Selecione menos faixas.`);
+    if (!Array.isArray(tracks) || !tracks.length || tracks.length > MAX_QUEUE_TRACKS) throw new Error(`Selecione de 1 a ${MAX_QUEUE_TRACKS} músicas.`);
+    if (session.queue.length + tracks.length > MAX_QUEUE_TRACKS) throw new Error(`A fila tem espaço para ${Math.max(0, MAX_QUEUE_TRACKS - session.queue.length)} músicas. Selecione menos faixas.`);
     if ([...this.sessions.values()].filter(item => item.operation).length >= 4 && !session.operation) throw new Error('O teste permite música em até quatro canais ao mesmo tempo.');
     const additions = tracks.map(track => {
       const source = parseInput(track.url);
@@ -47,6 +49,7 @@ export class MusicManager extends EventEmitter {
     if (shuffle) this.mix(additions);
     session.queue.push(...additions);
     session.error = null;
+    session.failures = 0;
     this.publish(session);
     this.advance(session);
     this.prefetch(session);
@@ -54,7 +57,7 @@ export class MusicManager extends EventEmitter {
   }
 
   advance(session) {
-    if (session.operation || session.draining || !session.queue.length || this.closed) return;
+    if (session.operation || session.draining || !session.queue.length || session.failures >= 3 || this.closed) return;
     if ([...this.sessions.values()].filter(item => item.operation).length >= 4) return;
     const operation = { abort: new AbortController(), transport: null, folder: null };
     session.operation = operation;
@@ -95,6 +98,7 @@ export class MusicManager extends EventEmitter {
         await transport.start(file);
         if (session.operation !== operation || operation.abort.signal.aborted) return;
         session.phase = 'playing';
+        session.failures = 0;
         const metadata = typeof file === 'object' ? file : prefetched?.stream;
         if (metadata && typeof metadata === 'object') Object.assign(session.track, { resolvedTitle: metadata.title, resolvedUrl: metadata.sourceUrl });
         this.publish(session);
@@ -193,8 +197,18 @@ export class MusicManager extends EventEmitter {
     }
     operation.abort.abort();
     session.operation = null;
-    Object.assign(session, { transport: null, phase: error ? 'error' : 'idle', track: null, generation: null,
-      error: error ? `Não deu para tocar: ${error.message}` : session.error });
+    let droppedQueue = false;
+    if (error) {
+      session.failures = (session.failures || 0) + 1;
+      if (session.failures >= 3 && session.queue.length) {
+        this.cancelPrefetch(session);
+        droppedQueue = true;
+      }
+    }
+    const message = error
+      ? (droppedQueue ? `Fila interrompida após 3 falhas seguidas: ${error.message}` : `Não deu para tocar: ${error.message}`)
+      : session.error;
+    Object.assign(session, { transport: null, phase: error ? 'error' : 'idle', track: null, generation: null, error: message });
     this.publish(session);
     const draining = this.dispose(operation);
     session.draining = draining;
@@ -208,6 +222,7 @@ export class MusicManager extends EventEmitter {
   stop(channelId, { keepQueue = false } = {}) {
     const session = this.session(channelId);
     session.error = null;
+    session.failures = 0;
     if (!keepQueue) { session.queue = []; this.cancelPrefetch(session); }
     const operation = session.operation;
     if (operation) this.finish(session, operation);
@@ -235,6 +250,22 @@ export class MusicManager extends EventEmitter {
     session.queue.splice(index, 1);
     this.prefetch(session);
     this.publish(session);
+    return this.state(channelId);
+  }
+
+  move(channelId, id, toIndex) {
+    const session = this.session(channelId);
+    const fromIndex = session.queue.findIndex(track => track.id === id);
+    if (fromIndex < 0) throw new Error('Essa faixa não está mais na fila.');
+    const rawTarget = Number(toIndex);
+    if (!Number.isFinite(rawTarget)) throw new Error('Posição inválida na fila.');
+    const target = Math.max(0, Math.min(session.queue.length - 1, Math.trunc(rawTarget)));
+    if (fromIndex !== target) {
+      const [track] = session.queue.splice(fromIndex, 1);
+      session.queue.splice(target, 0, track);
+      this.prefetch(session);
+      this.publish(session);
+    }
     return this.state(channelId);
   }
 

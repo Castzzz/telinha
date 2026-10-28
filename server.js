@@ -207,7 +207,7 @@ const DEFAULT_CHANNELS = [
 const channels = new Map();
 
 function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null, writeAccess = null, description = '' }) {
-  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, writeAccess, description, users: new Map(), messages: [] };
+  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, writeAccess, description, callStartedAt: null, users: new Map(), messages: [] };
 }
 
 for (const def of DEFAULT_CHANNELS) {
@@ -399,6 +399,7 @@ function textImageFileOf(msg) {
 }
 
 function removeTextImage(file) {
+  assetChannels.delete(`/api/text-image/${file}`);
   const i = textImages.findIndex((img) => img.file === file);
   if (i !== -1) {
     textImagesBytes -= textImages[i].size;
@@ -634,6 +635,7 @@ function prepareAttachment(payload) {
 }
 
 function removeTextAttachment(msg) {
+  if (msg?.attachment?.url) assetChannels.delete(msg.attachment.url);
   const match = typeof msg?.attachment?.url === 'string' && msg.attachment.url.match(/^\/api\/text-file\/([a-f0-9-]{36}\.(?:bin|mp4|webm))$/);
   if (match) textAttachments.remove(match[1]);
 }
@@ -705,7 +707,8 @@ function publicUser(u) {
     isDeafened: u.isDeafened,
     isSpeaking: u.isSpeaking,
     streamQuality: u.streamQuality,
-    joinedAt: u.joinedAt
+    joinedAt: u.joinedAt,
+    voiceJoinedAt: u.voiceJoinedAt || u.joinedAt
   };
 }
 
@@ -835,6 +838,7 @@ function getChannelsSummary(viewer = null) {
       isPrivate: Boolean(channel.access?.private),
       canManageAccess: permissions.has(viewer, 'manageChannels'),
       description: channel.description, canWrite: permissions.canWrite(viewer, channel),
+      callStartedAt: channel.users.size > 0 ? (channel.callStartedAt || null) : null,
       userCount: channel.users.size,
       activeStreams: sharers.length,
       sharers,
@@ -887,6 +891,42 @@ function refreshPermissions() {
   broadcastChannels();
   broadcastTextChannels();
 }
+
+function getPermissionContextSets() {
+  const activeIds = new Set();
+  for (const s of io.sockets.sockets.values()) {
+    if (s.data?.user?.accessId) activeIds.add(s.data.user.accessId);
+  }
+  const referencedIds = new Set();
+  for (const ch of [...channels.values(), ...textChannels.values()]) {
+    for (const id of ch.access?.members || []) referencedIds.add(id);
+    for (const id of ch.writeAccess?.members || []) referencedIds.add(id);
+  }
+  return { activeIds, referencedIds };
+}
+
+function cleanPermissionMembers(mode = 'dedup') {
+  const { activeIds, referencedIds } = getPermissionContextSets();
+  let channelsChanged = false;
+  const result = permissions.cleanMembers({
+    activeIds,
+    referencedIds,
+    mode,
+    onMerge(oldId, newId) {
+      for (const ch of [...channels.values(), ...textChannels.values()]) {
+        for (const field of ['access', 'writeAccess']) {
+          const list = ch[field]?.members;
+          if (!Array.isArray(list) || !list.includes(oldId)) continue;
+          ch[field].members = [...new Set(list.flatMap(id => id === oldId ? (newId ? [newId] : []) : [id]))];
+          channelsChanged = true;
+        }
+      }
+    }
+  });
+  if (channelsChanged) saveChannels();
+  return result;
+}
+try { cleanPermissionMembers('dedup'); } catch {}
 
 function isSameChannel(socket, targetId) {
   const targetSocket = io.sockets.sockets.get(targetId);
@@ -1258,6 +1298,11 @@ io.on('connection', (socket) => {
     }
     permissions.assign(payload.memberId, payload.roles);
   }));
+  socket.on('permissions-clean-members', permissionAction('manageRoles', payload => {
+    const mode = payload.mode === 'reset' ? 'reset' : 'dedup';
+    if (mode === 'reset' && !permissions.isOwner(user)) throw new Error('Só o dono pode resetar os códigos únicos.');
+    return cleanPermissionMembers(mode);
+  }));
   socket.on('channel-access', permissionAction('manageChannels', payload => {
     const channel = channels.get(payload.channelId);
     if (!channel || !permissions.visible(user, channel)) throw new Error('Esse canal não está disponível.');
@@ -1310,7 +1355,7 @@ io.on('connection', (socket) => {
   socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite pode fazer isso.' });
+    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
     resetMembers();
     // Quem está online agora continua sendo de confiança: ganha a chave nova
     for (const s of io.sockets.sockets.values()) sendMemberKey(s);
@@ -1318,7 +1363,7 @@ io.on('connection', (socket) => {
   }));
   socket.on('admin-set-room-password', safeHandler((rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
-    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite pode mudar a senha da sala.' });
+    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite mudar a senha da sala.' });
     const raw = safeObject(rawPayload).password;
     const password = typeof raw === 'string' ? raw.trim() : '';
     if (password && (password.length < 4 || password.length > 100)) return cb({ success: false, error: 'A senha precisa ter de 4 a 100 caracteres.' });
@@ -1576,6 +1621,9 @@ io.on('connection', (socket) => {
     }
 
     const channel = channels.get(cleanChannelId);
+    const now = Date.now();
+    if (channel.users.size === 0 || !channel.callStartedAt) channel.callStartedAt = now;
+    user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
     user.watching = [];
@@ -1590,6 +1638,7 @@ io.on('connection', (socket) => {
     socket.emit('channel-state', {
       channelId: cleanChannelId,
       channelName: channel.name,
+      callStartedAt: channel.callStartedAt,
       me: publicUser(user),
       users: getChannelUsersList(cleanChannelId),
       recentMessages: channel.messages.slice(-50),
@@ -2376,6 +2425,7 @@ function leaveCurrentChannel(socket) {
 
   if (channel) {
     channel.users.delete(socket.id);
+    if (channel.users.size === 0) channel.callStartedAt = null;
     socket.leave(channelId);
     music?.leave(channelId, socket.id);
 
@@ -2399,6 +2449,7 @@ function leaveCurrentChannel(socket) {
   }
 
   user.channelId = null;
+  user.voiceJoinedAt = null;
   user.isSharing = false;
   user.isCameraOn = false;
   user.extraScreens = [];

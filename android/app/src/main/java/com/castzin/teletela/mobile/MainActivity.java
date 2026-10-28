@@ -11,6 +11,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -22,6 +23,9 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Rational;
+import android.view.View;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
 import android.webkit.ValueCallback;
@@ -43,7 +47,9 @@ public class MainActivity extends Activity {
     private static final int MEDIA_PERMISSION = 10, NOTIFICATION_PERMISSION = 11, PICK_FILE = 12, BLUETOOTH_PERMISSION = 13;
     private WebView web;
     private FrameLayout root;
-    private boolean pipReady, pipUi;
+    private View customView;
+    private WebChromeClient.CustomViewCallback customViewCallback;
+    private boolean pipReady, pipUi, fullscreenUi;
     private PictureInPictureParams pipParams;
     private PermissionRequest pendingPermission;
     private ValueCallback<Uri[]> pendingFiles;
@@ -69,9 +75,9 @@ public class MainActivity extends Activity {
         setContentView(root);
         // Android 15 usa bordas a borda; mantém botões e teclado fora da interface.
         root.setOnApplyWindowInsetsListener((view, insets) -> {
-            if (pipUi) { view.setPadding(0, 0, 0, 0); return insets; }
+            if (pipUi || fullscreenUi) { view.setPadding(0, 0, 0, 0); return insets; }
             if (Build.VERSION.SDK_INT >= 30) {
-                android.graphics.Insets system = insets.getInsets(android.view.WindowInsets.Type.systemBars() | android.view.WindowInsets.Type.displayCutout() | android.view.WindowInsets.Type.ime());
+                android.graphics.Insets system = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
                 view.setPadding(system.left, system.top, system.right, system.bottom);
             } else {
                 view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
@@ -117,6 +123,17 @@ public class MainActivity extends Activity {
                 try { startActivityForResult(params.createIntent(), PICK_FILE); }
                 catch (android.content.ActivityNotFoundException err) { pendingFiles.onReceiveValue(null); pendingFiles = null; toast("Não consegui abrir seus arquivos."); }
                 return true;
+            }
+            @Override public void onShowCustomView(View view, CustomViewCallback callback) {
+                if (customView != null) { callback.onCustomViewHidden(); return; }
+                customView = view;
+                customViewCallback = callback;
+                customView.setBackgroundColor(Color.BLACK);
+                root.addView(customView, new FrameLayout.LayoutParams(-1, -1));
+                applyFullscreenUi(true);
+            }
+            @Override public void onHideCustomView() {
+                hideCustomFullscreenView();
             }
         });
         web.setDownloadListener((url, agent, disposition, mime, length) -> {
@@ -187,7 +204,41 @@ public class MainActivity extends Activity {
             pendingFiles = null;
         }
     }
+    private void hideCustomFullscreenView() {
+        if (customView != null) {
+            root.removeView(customView);
+            customView = null;
+        }
+        if (customViewCallback != null) {
+            customViewCallback.onCustomViewHidden();
+            customViewCallback = null;
+        }
+        applyFullscreenUi(false);
+    }
+
+    private void applyFullscreenUi(boolean enabled) {
+        fullscreenUi = enabled;
+        setRequestedOrientation(enabled ? ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE : ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        if (Build.VERSION.SDK_INT >= 30) {
+            WindowInsetsController controller = getWindow().getInsetsController();
+            if (controller != null) {
+                if (enabled) {
+                    controller.hide(WindowInsets.Type.systemBars());
+                    controller.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                } else {
+                    controller.show(WindowInsets.Type.systemBars());
+                }
+            }
+        }
+        root.requestApplyInsets();
+    }
+
     @Override public void onBackPressed() {
+        if (customView != null) {
+            hideCustomFullscreenView();
+            web.evaluateJavascript("window.teletelaExitFullscreen?.()", null);
+            return;
+        }
         web.evaluateJavascript("Boolean(window.teletelaMobileBack?.())", handled -> {
             if (!"true".equals(handled)) moveTaskToBack(true);
         });
@@ -261,6 +312,13 @@ public class MainActivity extends Activity {
     }
 
     private class MobileBridge {
+        @JavascriptInterface public void setFullscreen(boolean enabled) {
+            runOnUiThread(() -> {
+                if (!isLocal(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) return;
+                if (!enabled && customView != null) hideCustomFullscreenView();
+                else applyFullscreenUi(enabled);
+            });
+        }
         @JavascriptInterface public void setPipState(String json) {
             runOnUiThread(() -> {
                 if (!isLocal(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) return;

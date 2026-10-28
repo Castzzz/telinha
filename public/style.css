@@ -2487,6 +2487,28 @@ html.light-mode #dock-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.a
   opacity: 1;
 }
 
+.tile-fullscreen-btn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 4;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  font-size: 15px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.video-tile:hover .tile-fullscreen-btn,
+.tile-fullscreen-btn:focus-visible {
+  opacity: 1;
+}
+
 .tile-volume input {
   width: 90px;
   accent-color: var(--accent-brand);
@@ -2540,9 +2562,41 @@ html.light-mode #dock-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.a
 }
 
 .video-tile.idle .tile-badge,
-.video-tile.idle .tile-volume {
+.video-tile.idle .tile-volume,
+.video-tile.idle .tile-fullscreen-btn {
   opacity: 0;
   transition: opacity 0.3s ease;
+}
+
+body.stage-fullscreen:not(:has(:fullscreen)) #stage-section,
+body.stage-fullscreen:not(:has(:fullscreen)) #videos-grid {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  background: #000 !important;
+  z-index: 1500 !important;
+}
+
+body.stage-fullscreen:not(:has(:fullscreen)) #stage-controls-bar {
+  display: none !important;
+}
+
+body.stage-fullscreen:not(:has(:fullscreen)) #videos-grid:has(.stage-fullscreen-tile) > .video-tile:not(.stage-fullscreen-tile) {
+  display: none !important;
+}
+
+body.stage-fullscreen:not(:has(:fullscreen)) .video-tile.stage-fullscreen-tile {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100dvh !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  z-index: 1501 !important;
 }
 
 
@@ -4024,3 +4078,100 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
 #permission-device { overflow-wrap: anywhere; }
 #admin-login-row { flex-wrap: wrap; }
 .chat-channel-description { flex-shrink: 0; padding: 8px 16px; margin: 0; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; border-bottom: 1px solid var(--border-subtle); }
+
+/* Relógios de duração da call, tempo de cada pessoa e ícone compacto de jogo */
+.channel-call-timer {
+  font-size: 10.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--status-online, #57F287);
+  background: rgba(87, 242, 135, 0.12);
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.lounge-call-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--status-online, #57F287);
+  background: rgba(87, 242, 135, 0.14);
+  border: 1px solid rgba(87, 242, 135, 0.28);
+  padding: 2px 9px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
+.user-call-timer {
+  display: block;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  line-height: 1.25;
+}
+
+.lounge-user-card .user-call-timer {
+  font-size: 11.5px;
+  margin-top: -2px;
+}
+
+.game-activity-badge {
+  color: var(--status-online, #57F287) !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.game-activity-badge .icon-svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Zoom e arraste nas transmissões */
+.video-tile video {
+  transform-origin: center center;
+  touch-action: none;
+}
+
+.video-tile.is-zoomed video {
+  cursor: grab;
+}
+
+.video-tile.is-panning video {
+  cursor: grabbing;
+}
+
+.tile-zoom-reset {
+  position: absolute;
+  top: 10px;
+  right: 48px;
+  z-index: 6;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 150ms ease, background 150ms ease;
+}
+
+.video-tile:hover .tile-zoom-reset:not(.hidden),
+.video-tile.is-zoomed .tile-zoom-reset:not(.hidden) {
+  opacity: 1;
+}
+
+.video-tile.idle .tile-zoom-reset {
+  opacity: 0;
+}

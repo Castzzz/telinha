@@ -595,16 +595,26 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 3.9.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 4.0.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li><strong>Novo visual do bot de música e ondas ao vivo:</strong> cartão redesenhado na call e na barra lateral com círculo de frequência que reage à batida da música, botões rápidos de pausar e pular direto no cartão e fila ampliada para até 150 faixas.</li>
+          <li><strong>Reordenar fila de músicas:</strong> arraste qualquer música pelo ícone ⠿ ou use as setas ↑/↓ para mudar a ordem da fila na hora.</li>
+          <li><strong>Zoom nas transmissões:</strong> role o scroll do mouse (ou faça pinça com dois dedos no celular) para dar zoom de até 5x em qualquer transmissão e arraste para olhar os detalhes.</li>
+          <li><strong>Tempo de call e selo compacto de jogo:</strong> veja há quanto tempo a call está rolando no topo e o cronômetro de cada pessoa. Quem está jogando ganha um selo verde de controle 🎮 e os detalhes completos aparecem ao clicar no perfil.</li>
+          <li><strong>Seu cartão, emojis livres e melhorias no celular:</strong> clique no seu próprio perfil na call para ver seu cartão, mande várias reações seguidas sem fechar o painel, centralização dos participantes e tela cheia nas transmissões pelo celular.</li>
+        </ul>
+        <div id="whats-new-3-9-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 3.9.0</h4>
+        <ul class="whats-new-list">
           <li><strong>Música para a call inteira:</strong> abra o botão de fone de ouvido, cole um link do YouTube ou Spotify e escolha a versão. Todos no canal recebem a mesma reprodução.</li>
           <li><strong>Playlists e fila:</strong> selecione faixas de playlists públicas e álbuns, embaralhe a ordem e repita uma música ou a fila. Volume individual, pausa e pular ficam no painel.</li>
           <li><strong>Microfones como na 3.7:</strong> retirados a IA forte e o reforço automático da 3.8. O filtro RNNoise e o volume manual voltam ao comportamento anterior.</li>
         </ul>
+        </div>
         <div id="whats-new-3-8-0" class="whats-new-older hidden">
           <h4>E o que chegou na 3.8.0</h4>
         <ul class="whats-new-list">
@@ -1165,7 +1175,11 @@
                   <h4>Cargos de uma pessoa</h4>
                   <label for="permission-member-id">Pessoa / perfil</label><select id="permission-member-id" class="form-input"></select>
                   <div id="permission-member-roles" class="permission-list"></div>
-                  <button type="button" id="permission-member-save" class="btn-primary" disabled>Salvar cargos da pessoa</button>
+                  <div class="admin-row">
+                    <button type="button" id="permission-member-save" class="btn-primary" disabled>Salvar cargos da pessoa</button>
+                    <button type="button" id="btn-permissions-clean-dedup" class="btn-secondary" title="Mescla perfis repetidos com o mesmo nome e remove visitantes antigos">Limpar repetidos</button>
+                    <button type="button" id="btn-permissions-clean-reset" class="btn-secondary hidden" title="Remove códigos antigos fora da sala mantendo o dono e quem está online">Resetar códigos únicos</button>
+                  </div>
                 </div>
               </div>
               <div class="form-group permission-block">
@@ -1223,12 +1237,12 @@
         <span id="user-popover-activity"></span>
       </div>
     </div>
-    <label class="user-popover-label" for="user-popover-volume">Volume da voz (só pra você)</label>
-    <div class="user-popover-volume">
+    <label class="user-popover-label" id="user-popover-volume-label" for="user-popover-volume">Volume da voz (só pra você)</label>
+    <div class="user-popover-volume" id="user-popover-volume-row">
       <input type="range" id="user-popover-volume" min="0" max="200" step="5" value="100" />
       <span id="user-popover-volume-text">100%</span>
     </div>
-    <div class="user-popover-actions">
+    <div class="user-popover-actions" id="user-popover-actions">
       <button type="button" class="btn-secondary" id="user-popover-mute">Silenciar pra mim</button>
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
     </div>
@@ -1241,6 +1255,7 @@
       </div>
     </div>
     <div class="user-popover-menu user-popover-footer">
+      <button type="button" class="popover-menu-item hidden" id="user-popover-edit-self"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg> Editar meu perfil</button>
       <button type="button" class="popover-menu-item" id="user-popover-reconnect"
         title="Use se você parou de ouvir essa pessoa"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg> Reconectar a voz</button>
     </div>

@@ -167,7 +167,9 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 | Quero… | Como |
 |---|---|
 | **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, com as fotos de perfil e o recorte escolhido (iniciais para quem não tem foto). Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
-| **Mostrar o jogo que estou jogando** | No app para Windows e Linux, jogos reconhecidos aparecem abaixo do nome e no perfil, como **Jogando Counter-Strike 2 · há 23 min**. A atividade some ao fechar o jogo; a detecção é feita a cada 15 segundos. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável. No navegador dá para ver a atividade dos amigos |
+| **Mostrar o jogo que estou jogando** | No app para Windows e Linux, um ícone de controle verde (🎮) aparece ao lado de quem está jogando e o nome do jogo com o tempo ativo aparece ao clicar no perfil da pessoa (**Jogando Counter-Strike 2 · há 23 min**), enquanto embaixo do nome aparece o tempo da pessoa na call. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável |
+| **Dar zoom numa transmissão** | Role a roda do mouse sobre o vídeo (ou faça pinça com dois dedos no celular) para dar zoom de até 500%, e arraste para mover a imagem. Clique no botão de porcentagem (`150% ✕`) para voltar ao tamanho normal |
+| **Bot de música na call** | Adicione músicas ou playlists de até 150 faixas na fila, reordene arrastando (`⠿`) ou usando `↑`/`↓`, use os botões rápidos de pausar/pular direto no card do bot na call e acompanhe o visualizador circular reagindo ao som |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
@@ -329,8 +331,8 @@ pedidos e volume individual. O servidor toca uma única vez e transmite em Opus 
 ensurdecer silencia a música junto das vozes. Sair do último participante para o bot.
 
 Playlists públicas de YouTube/Spotify e álbuns Spotify podem ser carregados em páginas
-de até 50 faixas. Selecione quais adicionar, escolha **Embaralhar ao adicionar** ou use
-**Embaralhar fila**. **Repetir** permite repetir a faixa atual ou a fila inteira.
+de até 150 faixas. Selecione quais adicionar, escolha **Embaralhar ao adicionar**, use
+**Embaralhar fila** ou arraste as músicas na fila (`⠿` ou `↑`/`↓`) para mudar a ordem. **Repetir** permite repetir a faixa atual ou a fila inteira.
 No Spotify, a leitura pública pode mostrar apenas parte de listas grandes; listas privadas
 não são acessadas. Cada faixa é procurada por título e artista no YouTube.
 

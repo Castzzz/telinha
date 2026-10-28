@@ -122,6 +122,71 @@ export class PermissionStore {
     if (!this.data.members[id] || !Array.isArray(roles) || roles.length > 50 || roles.some(role => !this.data.roles.some(r => r.id === role))) throw new Error('Pessoa ou cargos inválidos.');
     this.change(() => { this.data.members[id].roles = [...new Set(roles)]; });
   }
+  pruneVisitor(id, activeIds = new Set(), referencedIds = new Set()) {
+    const member = this.data.members[id];
+    if (!member || id === this.data.ownerId || activeIds.has(id) || referencedIds.has(id)) return false;
+    if ((member.roles?.length || 0) === 0 && !member.credentialHash && (!member.name || member.name === 'Visitante')) {
+      this.change(() => { delete this.data.members[id]; });
+      return true;
+    }
+    return false;
+  }
+  cleanMembers({ activeIds = new Set(), referencedIds = new Set(), mode = 'dedup', onMerge = null } = {}) {
+    let removed = 0;
+    let merged = 0;
+    this.change(() => {
+      const score = (id, m) => (id === this.data.ownerId ? 1000 : 0)
+        + (activeIds.has(id) ? 100 : 0)
+        + (m.credentialHash ? 20 : 0)
+        + ((m.roles?.length || 0) > 0 ? 5 : 0);
+
+      // 1. Mescla cadastros repetidos (mesma credencial ou cadastros legados sem credencial com o mesmo nome)
+      const byName = new Map();
+      for (const [id, member] of Object.entries(this.data.members)) {
+        const key = (member.name || '').trim().toLowerCase();
+        if (!key || key === 'visitante') continue;
+        if (!byName.has(key)) byName.set(key, []);
+        byName.get(key).push([id, member]);
+      }
+      for (const group of byName.values()) {
+        if (group.length < 2) continue;
+        group.sort((a, b) => score(b[0], b[1]) - score(a[0], a[1]));
+        const [keepId, keepMember] = group[0];
+        for (let i = 1; i < group.length; i++) {
+          const [dupId, dupMember] = group[i];
+          if (dupId === this.data.ownerId || activeIds.has(dupId)) continue;
+          const sameCred = Boolean(keepMember.credentialHash && dupMember.credentialHash === keepMember.credentialHash);
+          const legacyDup = Boolean(keepMember.credentialHash && !dupMember.credentialHash);
+          if (sameCred) {
+            keepMember.roles = [...new Set([...(keepMember.roles || []), ...(dupMember.roles || [])])];
+            onMerge?.(dupId, keepId);
+            delete this.data.members[dupId];
+            merged++;
+          } else if (legacyDup) {
+            onMerge?.(dupId, keepId);
+            delete this.data.members[dupId];
+            merged++;
+          }
+        }
+      }
+
+      // 2. Remove visitantes sem credencial ou aplica reset mantendo dono e quem está online
+      for (const [id, member] of Object.entries(this.data.members)) {
+        if (id === this.data.ownerId || activeIds.has(id)) continue;
+        const hasRoles = (member.roles?.length || 0) > 0;
+        const isReferenced = referencedIds.has(id);
+        if (mode === 'reset') {
+          onMerge?.(id, null);
+          delete this.data.members[id];
+          removed++;
+        } else if (!hasRoles && !isReferenced && !member.credentialHash) {
+          delete this.data.members[id];
+          removed++;
+        }
+      }
+    });
+    return { removed, merged };
+  }
   snapshot() {
     return { roles: this.data.roles, ownerId: this.data.ownerId || null,
       members: Object.entries(this.data.members).map(([id, member]) => ({ id, name: member.name, roles: member.roles })) };

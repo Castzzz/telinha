@@ -202,6 +202,7 @@ Variáveis de ambiente do `server.js`:
 | `SFU_SECRET` | Liga o SFU e assina as senhas dele | vazio = sem SFU (P2P) |
 | `SFU_PATH` | Caminho do websocket do SFU atrás do Caddy (mandado pro cliente junto com a senha) | `/sfu/ws` |
 | `TELINHA_MUSIC` | Liga o bot experimental de música nos canais de voz | desligado; `1` liga |
+| `MUSIC_PROXY` | Proxy opcional (ex: `socks5://127.0.0.1:40000`) passado ao `yt-dlp` para contornar bloqueios de IP de datacenter no YouTube | vazio = conexão direta |
 
 Exemplo de servidor local completo pra testar admin e dados salvos:
 
@@ -256,7 +257,7 @@ isolado em portas livres, com segredo novo e ICE local. Nenhum dos comandos aces
 `MUSIC_CALL_PORT` troca a porta da sala. O SFU aceita `SFU_HOST` para limitar seu endereço
 HTTP de escuta; o padrão de produção continua igual. Os comandos de teste usam `127.0.0.1`.
 
-`music/manager.mjs` mantém uma fila em memória por canal (até 50 pedidos, até quatro canais
+`music/manager.mjs` mantém uma fila em memória por canal (até 150 pedidos, até quatro canais
 ativos), transmite uma faixa por vez, pré-carrega a próxima, descarta faixas que falham e avança após o fim. Parar
 limpa a fila; pular preserva os próximos pedidos. Sair da última pessoa cancela preparação,
 fecha as conexões do bot e limpa a fila. Faixas são apagadas após seus processos fecharem.
@@ -286,14 +287,14 @@ não significa fim da música: a ponte avisa quando tocou todos os pacotes receb
 Ao encerrar, aguardar o evento `exit` e destruir os pipes: esperar somente `close` pode
 travar se um stdout estiver pausado após o FFmpeg encerrar sua entrada.
 
-Playlists YouTube usam extração plana paginada (`offset` e até 50 itens), sem baixar todas
+Playlists YouTube usam extração plana paginada (`offset` e até 150 itens por página), sem baixar todas
 as músicas para listar. Vídeo com `list=` mantém a opção de tocar só o vídeo ou carregar
 a playlist explicitamente. Playlists/álbuns Spotify usam somente os dados públicos de
 `open.spotify.com/embed/...`; não usam cookies de usuário nem credenciais. O leitor extrai
 título/artista/URI de `__NEXT_DATA__`, ignora podcasts/arquivos locais e informa o limite
 da leitura pública (listas grandes podem vir incompletas). Não pressupor que esse HTML é
 uma API estável: falhas respondem com erro claro. Resolver as versões YouTube é adiado
-para a reprodução/pré-carregamento, sem fazer 50 buscas antes de aceitar a lista.
+para a reprodução/pré-carregamento, sem fazer 150 buscas antes de aceitar a lista. A fila aceita reordenação manual (`action: 'move'`) atualizando o pré-carregamento caso a primeira faixa mude.
 
 `music/integration.mjs` registra eventos Socket.IO somente com `TELINHA_MUSIC=1`. Todos
 derivam o canal da presença atual do socket; payloads não permitem escolher outro canal.
@@ -334,8 +335,14 @@ O deploy compila a ponte para a arquitetura da VM e instala em
 `/opt/telinha/bin/telinha-music-publisher`. Instala Python 3.10+ e FFmpeg/libopus via apt
 na Ubuntu antes de parar a sala. Baixa o yt-dlp oficial com SHA-256, versão fixada em
 `2026.10.26` (altere com `YTDLP_VERSION`), e instala em `/opt/telinha/bin/yt-dlp`.
-O serviço define `MUSIC_PUBLISHER`, `MUSIC_YTDLP` e `TELINHA_MUSIC=1`; não altera os
-segredos da VM. `ENABLE_MUSIC=0` desativa o recurso e dispensa as ferramentas no deploy.
+Para evitar o bloqueio de IP de nuvem (`Sign in to confirm you're not a bot`) do YouTube na Oracle,
+`install.sh` também instala `wireproxy` em `/opt/telinha/bin/wireproxy`, gera uma credencial
+Cloudflare WARP em `/opt/telinha/data/warp.conf` (uma vez, modo `0600`) e sobe o serviço
+`telinha-warp` (SOCKS5 em `127.0.0.1:40000`, em userspace, sem alterar rotas/interfaces da VM).
+O serviço define `MUSIC_PUBLISHER`, `MUSIC_YTDLP`, `MUSIC_PROXY=socks5://127.0.0.1:40000` e
+`TELINHA_MUSIC=1`; não altera os segredos da VM. `ENABLE_MUSIC=0` desativa o recurso e dispensa
+as ferramentas no deploy. Após 3 falhas seguidas na fila, `music/manager.mjs` interrompe e limpa
+o restante da fila para não tentar 50 faixas em cascata.
 `MUSIC_ICE_SERVERS` usa o formato Pion: `urls` precisa ser uma lista, mesmo com um único
 STUN (`[{"urls":["stun:stun.l.google.com:19302"]}]`). O formato string aceito pelo navegador
 causava `invalid ICEServer` na ponte Go; a validação real na Oracle detectou e corrigiu isso.
@@ -473,6 +480,7 @@ Serviços (systemd):
 |---|---|---|---|
 | `telinha-server` | `node server.js` | 8080 | 3 GB (`--max-old-space-size=2048`) |
 | `telinha-sfu` | `/opt/telinha/bin/telinha-sfu` | 8081 + mídia 50000 UDP/TCP | 2 GB |
+| `telinha-warp` | `/opt/telinha/bin/wireproxy -c /opt/telinha/data/warp.conf` (proxy SOCKS5 local pro `yt-dlp`) | `127.0.0.1:40000` | 64 MB |
 | `caddy` | HTTPS, `/sfu/*` → 8081, resto → 8080 | 80/443 | 150 MB |
 | `duckdns.timer` | atualiza o IP no DuckDNS | | |
 | `telinha-keepalive.timer` | a cada 2 h, gasta meio núcleo por 20 min (só CPU, prioridade mínima) pra VM não ser "recuperada" pela Oracle por ficar parada. Desliga com `sudo touch /etc/telinha/keepalive.off` | | 16 MB |

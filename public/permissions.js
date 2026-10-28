@@ -119,6 +119,15 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
   $('#permission-member-save').addEventListener('click', async () => {
     if (await request('member-roles', { memberId: $('#permission-member-id').value, roles: selected('#permission-member-roles') })) showToast('Cargos da pessoa salvos.', 'success');
   });
+  $('#btn-permissions-clean-dedup')?.addEventListener('click', async () => {
+    const result = await request('permissions-clean-members', { mode: 'dedup' });
+    if (result) showToast(`Lista limpa (${result.merged || 0} mesclados, ${result.removed || 0} removidos).`, 'success');
+  });
+  $('#btn-permissions-clean-reset')?.addEventListener('click', async () => {
+    if (!window.confirm('Resetar os códigos únicos de quem está offline? O seu perfil de dono e quem estiver online agora serão mantidos.')) return;
+    const result = await request('permissions-clean-members', { mode: 'reset' });
+    if (result) showToast(`Códigos únicos resetados (${result.removed || 0} antigos removidos).`, 'success');
+  });
   $('#permission-channel-save').addEventListener('click', async () => {
     if (editingChannel && await request('channel-access', { channelId: editingChannel, access: readAccess('channel-access') })) showToast('Visibilidade do canal salva.', 'success');
   });
@@ -141,6 +150,7 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
     $('#permission-management').classList.toggle('hidden', !payload.directory);
     $('#permission-role-management').classList.toggle('hidden', !hasPermission(state, 'manageRoles'));
     $('#owner-transfer').classList.toggle('hidden', !state.isOwner);
+    $('#btn-permissions-clean-reset')?.classList.toggle('hidden', !state.isOwner);
     $('#new-channel-access').classList.toggle('hidden', !hasPermission(state, 'manageChannels'));
     if (payload.directory) {
       const previous = directory;

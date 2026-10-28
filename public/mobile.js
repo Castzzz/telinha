@@ -100,6 +100,7 @@ export function syncMobileState(state) {
 }
 
 function back() {
+  if (window.teletelaExitFullscreen?.()) return true;
   if ($('#mobile-message-options')?.open) { $('#mobile-message-options').close(); return true; }
   const sheet = $('#mobile-call-options');
   if (sheet?.open) { sheet.close(); return true; }
@@ -158,7 +159,6 @@ export function setupMobileUI(options) {
     $('#btn-share-screen')?.classList.add('mobile-unsupported');
     $('#btn-lounge-start-share')?.classList.add('mobile-unsupported');
   }
-  if (!document.fullscreenEnabled) $('#btn-stage-fullscreen')?.classList.add('mobile-unsupported');
   if (!document.pictureInPictureEnabled) $('#btn-stage-pip')?.classList.add('mobile-unsupported');
   let largestHeight = window.innerHeight;
   let lastWidth = window.innerWidth;

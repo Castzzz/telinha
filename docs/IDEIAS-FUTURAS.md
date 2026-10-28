@@ -80,3 +80,20 @@ A detecção nativa no Windows ainda precisa ser conferida em um PC Windows.
   Identificar o jogo localmente e enviar ao servidor apenas a atividade para os demais.
 - Detalhes como mapa, placar e fila ficam para uma etapa posterior, pois dependem de
   integração específica com cada jogo.
+
+## 9. Miniplayer do bot de música durante transmissões
+
+- Quando alguém estiver assistindo a uma transmissão de tela ou câmera no palco principal
+  (`#video-stage`), exibir uma pílula flutuante discreta na barra superior ou canto do palco
+  com o nome da música atual, mini visualizador de áudio e botões rápidos de Pausar/Continuar (⏸/▶)
+  e Pular (⏭).
+- Assim dá para ver o que está tocando e pular faixas sem precisar sair da transmissão nem abrir
+  o modal completo de música.
+
+## 10. Modo Cinema com faixa de participantes durante transmissões
+
+- Quando uma transmissão estiver aberta no palco (`#video-stage`), mostrar uma tirinha horizontal
+  recolhível na parte inferior ou superior com as fotos dos amigos na call (acendendo a borda
+  verde quando falam), o indicador do bot de música e os balões de reação de emoji subindo por cima.
+- Permite acompanhar quem está falando e reagindo na call mesmo com a barra lateral recolhida ou
+  em tela cheia.

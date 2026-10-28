@@ -12,6 +12,7 @@ STAGE=/tmp/telinha-deploy
 APP=/opt/telinha
 NODE_VERSION="${NODE_VERSION:-v24.11.1}"
 CADDY_VERSION="${CADDY_VERSION:-2.10.2}"
+WIREPROXY_VERSION="${WIREPROXY_VERSION:-1.1.3}"
 MEDIA_PORT=50000
 ACTIVATE_DUCKDNS="${ACTIVATE_DUCKDNS:-1}"
 ENABLE_MUSIC="${ENABLE_MUSIC:-1}"
@@ -105,6 +106,61 @@ if [ "$ENABLE_MUSIC" = 1 ]; then
   install -m 755 "$STAGE/telinha-music-publisher" "$APP/bin/telinha-music-publisher"
   install -m 755 "$STAGE/yt-dlp" "$APP/bin/yt-dlp"
   "$APP/bin/yt-dlp" --version
+  if ! "$APP/bin/wireproxy" -v 2>/dev/null | grep -q "$WIREPROXY_VERSION"; then
+    tmp=$(mktemp -d)
+    file="wireproxy_linux_${CADDY_ARCH}.tar.gz"
+    base="https://github.com/whyvl/wireproxy/releases/download/v$WIREPROXY_VERSION"
+    curl -fsSL -o "$tmp/$file" "$base/$file"
+    curl -fsSL -o "$tmp/checksums.txt" "$base/checksums.txt"
+    (cd "$tmp" && grep " $file\$" checksums.txt | sha256sum -c -)
+    tar -xzf "$tmp/$file" -C "$tmp" wireproxy
+    install -m 755 "$tmp/wireproxy" "$APP/bin/wireproxy"
+    rm -rf "$tmp"
+  fi
+  if [ ! -s "$APP/data/warp.conf" ]; then
+    log "Registrando cliente WARP local (SOCKS5) para o YouTube na VM"
+    "$APP/node/bin/node" - "$APP/data/warp.conf" <<'EOF'
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const out = process.argv[2];
+const { privateKey, publicKey } = crypto.generateKeyPairSync('x25519');
+const priv = privateKey.export({ type: 'pkcs8', format: 'der' }).subarray(-32).toString('base64');
+const pub = publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64');
+fetch('https://api.cloudflareclient.com/v0a2158/reg', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json', 'User-Agent': 'okhttp/3.12.1' },
+  body: JSON.stringify({ key: pub, install_id: '', fcm_token: '', tos: new Date().toISOString(), model: 'PC', serial_number: crypto.randomUUID(), locale: 'en_US' }),
+}).then(async r => {
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  const d = await r.json();
+  const peer = d.config.peers[0];
+  const addr = d.config.interface.addresses;
+  const conf = [
+    '[Interface]',
+    'PrivateKey = ' + priv,
+    'Address = ' + addr.v4 + '/32',
+    ...(addr.v6 ? ['Address = ' + addr.v6 + '/128'] : []),
+    'DNS = 1.1.1.1',
+    'MTU = 1280',
+    '',
+    '[Peer]',
+    'PublicKey = ' + peer.public_key,
+    'Endpoint = ' + (peer.endpoint.v4 ? peer.endpoint.v4.replace(/:\d+$/, ':2408') : peer.endpoint.host),
+    'AllowedIPs = 0.0.0.0/0, ::/0',
+    'PersistentKeepalive = 25',
+    '',
+    '[Socks5]',
+    'BindAddress = 127.0.0.1:40000',
+    '',
+  ].join('\n');
+  fs.writeFileSync(out, conf, { mode: 0o600 });
+}).catch(err => {
+  console.error(err);
+  process.exit(1);
+});
+EOF
+    chmod 600 "$APP/data/warp.conf"
+  fi
 fi
 
 log "Aplicação"
@@ -171,10 +227,28 @@ Environment=TELINHA_DATA_DIR=$APP/data
 Environment=TELINHA_MUSIC=$ENABLE_MUSIC
 Environment=MUSIC_PUBLISHER=$APP/bin/telinha-music-publisher
 Environment=MUSIC_YTDLP=$APP/bin/yt-dlp
+Environment=MUSIC_PROXY=socks5://127.0.0.1:40000
 ExecStart=$APP/node/bin/node $NODE_MEM_LIMIT server.js
 Restart=always
 RestartSec=2
 MemoryMax=$APP_MEM_MAX
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > /etc/systemd/system/telinha-warp.service <<EOF
+[Unit]
+Description=Telinha - proxy SOCKS5 local (WARP) para o bot de música
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=telinha
+ExecStart=$APP/bin/wireproxy -c $APP/data/warp.conf
+Restart=always
+RestartSec=2
+MemoryMax=64M
 
 [Install]
 WantedBy=multi-user.target
@@ -319,6 +393,12 @@ esac
 
 log "Subindo tudo"
 systemctl daemon-reload
+if [ "$ENABLE_MUSIC" = 1 ]; then
+  systemctl enable -q --now telinha-warp
+  systemctl restart telinha-warp
+else
+  systemctl disable -q --now telinha-warp 2>/dev/null || true
+fi
 systemctl enable -q --now telinha-server telinha-sfu caddy
 if [ "$ACTIVATE_DUCKDNS" = 1 ] && [ -f /etc/telinha/duckdns.env ]; then
   systemctl enable -q --now duckdns.timer

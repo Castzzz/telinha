@@ -54,6 +54,22 @@ export function parseInput(value) {
   throw new Error('Este teste aceita links de YouTube, faixas Spotify ou busca por título e artista.');
 }
 
+export function formatToolError(raw, fallback) {
+  const clean = String(raw || '').replace(/\x1b\[[0-9;]*m/g, '').trim();
+  if (!clean) return fallback;
+  if (/confirm you['’]re not a bot/i.test(clean)) {
+    return 'O YouTube bloqueou temporariamente a leitura desta faixa no servidor.';
+  }
+  if (/Video unavailable|Private video|This video is private/i.test(clean)) {
+    return 'Este vídeo está indisponível ou privado no YouTube.';
+  }
+  const errorLine = clean.split(/\r?\n/).reverse().find(line => /^ERROR:/i.test(line));
+  if (errorLine) {
+    return errorLine.replace(/^ERROR:\s*(?:\[[^\]]+\]\s*[^:]+:\s*)?/i, '').replace(/\s*Use --cookies.*$/i, '').trim().slice(0, 300) || fallback;
+  }
+  return clean.slice(-600);
+}
+
 function run(command, args, timeout = 30000, signal) {
   return new Promise((resolve, reject) => {
     execFile(command, args, { timeout, signal, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
@@ -61,8 +77,7 @@ function run(command, args, timeout = 30000, signal) {
       if (signal?.aborted) return reject(new Error('Preparação cancelada.'));
       if (error.code === 'ENOENT') return reject(new Error(`Ferramenta ausente: ${command}. Rode npm run music:setup e confira Python e FFmpeg.`));
       if (error.killed) return reject(new Error('A plataforma demorou demais para responder. Tente outra faixa.'));
-      const detail = stderr.replace(/\x1b\[[0-9;]*m/g, '').trim().slice(-1800);
-      reject(new Error(detail || `A ferramenta ${command} falhou.`));
+      reject(new Error(formatToolError(stderr, `A ferramenta ${command} falhou.`)));
     });
   });
 }
@@ -70,9 +85,10 @@ function run(command, args, timeout = 30000, signal) {
 function ytdlpCommand(args) {
   // Dentro do Electron, execPath abre outro app, não um processo Node de console.
   const runtime = process.versions.electron ? 'node' : `node:${process.execPath}`;
+  const proxy = process.env.MUSIC_PROXY?.trim();
   const common = ['--ignore-config', '--no-plugin-dirs', '--no-colors', '--no-progress',
     '--socket-timeout', '12', '--retries', '1', '--extractor-retries', '1',
-    '--js-runtimes', runtime];
+    '--js-runtimes', runtime, ...(proxy ? ['--proxy', proxy] : [])];
   // Sem shell: links e buscas nunca viram comandos do sistema.
   if (process.env.MUSIC_YTDLP) return [process.env.MUSIC_YTDLP, [...common, ...args]];
   if (existsSync(cachedTool)) return ['python3', [cachedTool, ...common, ...args]];
@@ -173,11 +189,11 @@ export function spotifyPlaylistTracks(html) {
   return { title: entity.title || entity.name || 'Playlist do Spotify', tracks };
 }
 
-export async function loadPlaylist(input, { offset = 0, limit = 50 } = {}) {
+export async function loadPlaylist(input, { offset = 0, limit = 150 } = {}) {
   let source = parseInput(input);
   if (source.playlistUrl) source = parseInput(source.playlistUrl);
   if (!source.kind.endsWith('-playlist')) throw new Error('Cole o link de uma playlist do YouTube ou Spotify.');
-  if (!Number.isInteger(offset) || offset < 0 || offset > 10000 || !Number.isInteger(limit) || limit < 1 || limit > 50) throw new Error('Carregue de 1 a 50 faixas por página.');
+  if (!Number.isInteger(offset) || offset < 0 || offset > 10000 || !Number.isInteger(limit) || limit < 1 || limit > 150) throw new Error('Carregue de 1 a 150 faixas por página.');
   let title, tracks, more;
   if (source.kind === 'youtube-playlist') {
     const data = JSON.parse(await ytdlp(['--flat-playlist', '--ignore-errors', '--dump-single-json',
@@ -225,7 +241,7 @@ export async function prepareStream(input, directory, signal, track = {}) {
   if (!['youtube', 'spotify'].includes(source.kind)) throw new Error('Escolha uma faixa da busca ou da playlist.');
   let query = '';
   if (source.kind === 'spotify') query = track.query || `${track.title || (await metadata(source.url, 'spotify')).title} ${track.author || ''}`.trim();
-  const key = `${source.url}|${query}`;
+  const key = `${source.url}|${query}|${process.env.MUSIC_PROXY?.trim() || ''}`;
   const cached = streamCache.get(key);
   const withFile = async prepared => {
     const infoFile = path.join(directory, 'fonte.json');
@@ -243,7 +259,7 @@ export async function prepareStream(input, directory, signal, track = {}) {
         '-f', 'bestaudio[acodec=opus]/bestaudio/best', '--', query ? `ytsearch1:${query}` : source.url], 45000, lookup.abort.signal));
       const entry = data.entries ? data.entries.find(item => item?.url) : data;
       if (!entry || entry.is_live || !Number.isFinite(entry.duration) || entry.duration > 1200) throw new Error('Use uma faixa gravada de até 20 minutos.');
-      if (entry.filesize > 80 * 1024 * 1024) throw new Error('O áudio da faixa ultrapassa 80 MB.');
+      if ((entry.filesize || entry.filesize_approx) > 80 * 1024 * 1024) throw new Error('O áudio da faixa ultrapassa 80 MB.');
       const url = new URL(entry.url);
       if (url.protocol !== 'https:' || !(url.hostname === 'googlevideo.com' || url.hostname.endsWith('.googlevideo.com'))) throw new Error('O YouTube não retornou uma fonte de áudio compatível.');
       const prepared = { url: entry.url, headers: entry.http_headers || {}, title: entry.title, duration: entry.duration,

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { parseInput, loadPlaylist, spotifyPlaylistTracks, prepareStream } from '../music/source.mjs';
+import { parseInput, loadPlaylist, spotifyPlaylistTracks, prepareStream, formatToolError } from '../music/source.mjs';
 
 const id = '4cOdK2wGLETKBW3PvgPWqT';
 function spotifyHTML() {
@@ -73,4 +73,34 @@ console.log(JSON.stringify({id:'jNQXAC9IVRw',duration:19,title:'Teste',url:'http
   assert.ok(calls[0].includes('--skip-download'));
   assert.ok(!calls[0].includes('-x'), 'Não deve converter para MP3 antes de tocar.');
   await assert.rejects(prepareStream('https://youtube.com/watch?v=jNQXAC9IVRw', directory, AbortSignal.abort()), /cancelada/);
+});
+
+test('repassa MUSIC_PROXY ao yt-dlp e traduz bloqueios de IP do YouTube em mensagem amigável', async t => {
+  assert.match(formatToolError("WARNING: teste\nERROR: [youtube] id: Sign in to confirm you’re not a bot. Use --cookies-from-browser", 'Falha.'), /bloqueou temporariamente/);
+  assert.match(formatToolError('ERROR: [youtube] id: Video unavailable. This video is not available', 'Falha.'), /indisponível ou privado/);
+  assert.match(formatToolError('ERROR: [youtube] id: Private video', 'Falha.'), /privado/);
+
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'teletela-proxy-teste-'));
+  const oldYtdlp = process.env.MUSIC_YTDLP;
+  const oldProxy = process.env.MUSIC_PROXY;
+  t.after(async () => {
+    if (oldYtdlp === undefined) delete process.env.MUSIC_YTDLP; else process.env.MUSIC_YTDLP = oldYtdlp;
+    if (oldProxy === undefined) delete process.env.MUSIC_PROXY; else process.env.MUSIC_PROXY = oldProxy;
+    await rm(directory, { recursive: true, force: true });
+  });
+  const counter = path.join(directory, 'pedidos');
+  const script = path.join(directory, 'extrator-proxy.cjs');
+  await writeFile(script, `#!/usr/bin/env node
+require('node:fs').appendFileSync(${JSON.stringify(counter)}, JSON.stringify(process.argv.slice(2))+'\\n');
+console.log(JSON.stringify({id:'dQw4w9WgXcQ',duration:25,filesize_approx:1024,title:'Proxy Teste',url:'https://r1.googlevideo.com/audio?proxy=ok'}));
+`, { mode: 0o700 });
+  process.env.MUSIC_YTDLP = script;
+  process.env.MUSIC_PROXY = 'socks5://127.0.0.1:40000';
+  const result = await prepareStream('https://youtube.com/watch?v=dQw4w9WgXcQ', directory);
+  assert.equal(result.url, 'https://r1.googlevideo.com/audio?proxy=ok');
+  const calls = (await readFile(counter, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.equal(calls.length, 1);
+  const proxyIdx = calls[0].indexOf('--proxy');
+  assert.notEqual(proxyIdx, -1, 'Deve passar --proxy quando MUSIC_PROXY estiver configurado.');
+  assert.equal(calls[0][proxyIdx + 1], 'socks5://127.0.0.1:40000');
 });

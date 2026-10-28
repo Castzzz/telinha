@@ -281,6 +281,13 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
       assert.ok(!after.channels.some(ch => ch.id === channelId));
       assert.equal((await emit(after.socket, 'join-channel', { channelId })).success, false);
       assert.ok(!JSON.stringify(await fetch(base + '/api/channels').then(r => r.json())).includes(channelId));
+      const admin2 = await connect('Dono', owner.token);
+      assert.equal((await emit(after.socket, 'permissions-clean-members', { mode: 'reset' })).success, false);
+      const dedupRes = await emit(admin2.socket, 'permissions-clean-members', { mode: 'dedup' });
+      assert.equal(dedupRes.success, true);
+      const resetRes = await emit(admin2.socket, 'permissions-clean-members', { mode: 'reset' });
+      assert.equal(resetRes.success, true);
+      assert.equal(admin2.permissions.owner, true);
     });
   } finally { await stop(); revoked.close(); fs.rmSync(directory, { recursive: true, force: true }); }
 });

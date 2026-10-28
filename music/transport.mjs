@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { EventEmitter, once } from 'node:events';
 import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
-import { startMusicDownload } from './source.mjs';
+import { startMusicDownload, formatToolError } from './source.mjs';
 
 const binary = fileURLToPath(new URL('../.cache/music-lab/music-publisher', import.meta.url));
 
@@ -83,7 +83,7 @@ export class MusicTransport extends EventEmitter {
       download.stdout.pipe(ffmpeg.stdin);
       download.once('error', () => { if (!this.closed) this.emit('failed', new Error('Não foi possível iniciar a leitura do áudio.')); });
       download.once('close', code => {
-        if (code !== 0 && !this.closed) this.emit('failed', new Error(downloadError || 'O YouTube interrompeu a leitura do áudio.'));
+        if (code !== 0 && !this.closed) this.emit('failed', new Error(formatToolError(downloadError, 'O YouTube interrompeu a leitura do áudio.')));
       });
     }
     await new Promise((accept, reject) => {

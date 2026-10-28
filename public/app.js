@@ -627,6 +627,7 @@ const handleChannelsSummary = (channelsList) => {
       canManageAccess: Boolean(ch.canManageAccess),
       canWrite: ch.canWrite !== false,
       description: ch.description || '',
+      callStartedAt: ch.callStartedAt || null,
       userCount: ch.userCount ?? userMap.size,
       activeStreams: ch.activeStreams ?? 0,
       users: userMap
@@ -644,7 +645,7 @@ const handleChannelsSummary = (channelsList) => {
 // rodava tudo duas vezes: avisos repetidos e ofertas de vídeo criadas em dobro.
 socket.on('channels-list', handleChannelsSummary);
 
-socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages, soundSeed }) => {
+socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, recentMessages, soundSeed }) => {
   const attempt = pendingChannelJoin?.channelId === channelId ? pendingChannelJoin : null;
   if (attempt) {
     activeChannelPassword = attempt.password;
@@ -676,6 +677,7 @@ socket.on('channel-state', ({ channelId, channelName, me, users, recentMessages,
     appState.channels.set(channelId, ch);
   }
 
+  if (callStartedAt) ch.callStartedAt = callStartedAt;
   ch.users.clear();
   if (Array.isArray(users)) {
     users.forEach((u) => ch.users.set(u.id, u));
@@ -1357,6 +1359,7 @@ function renderChannelsTree() {
     row.innerHTML = `
       <span class="channel-speaker-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : icon}</span>
       <span class="channel-name">${escapeHtml(ch.name)}${ch.isPrivate ? ' <span class="badge-role">Restrito</span>' : ''}</span>
+      ${userCount > 0 && ch.callStartedAt ? `<span class="channel-call-timer" data-call-timer="${Number(ch.callStartedAt)}" title="Tempo ativo da call">${formatCallClock(ch.callStartedAt)}</span>` : ''}
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
         : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
@@ -1434,14 +1437,15 @@ function renderChannelsTree() {
           ${ownershipBadge(u)}
           ${(u.roles || []).filter(role => role.id === u.displayRoleId).map(role => `<span class="badge-role">${escapeHtml(role.name)}</span>`).join('')}
           ${isMe ? '<span class="badge-self">(Você)</span>' : ''}
-        </span>${userActivityHtml(u)}</span>
+        </span>${userCallTimerHtml(u)}</span>
         <div class="user-indicators">
+          ${userGameBadgeHtml(u)}
           ${liveBadgesHtml(u, { compact: true })}
           ${muteIndicatorsHtml(u)}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon local-muted" title="Silenciado por você">${SPEAKER_OFF_SVG}</span>` : ''}
         </div>
       `;
-      userLi.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
+      userLi.title = isMe ? 'Ver seu perfil' : 'Ver perfil e ajustar volume';
       if (collapsed) userLi.title = `${u.name}${isMe ? ' (você)' : ''} · ${userLi.title}`;
       // Admin arrasta a pessoa pra outra call, igual no Discord
       if (hasPermission(appState, 'moveMembers')) {
@@ -1455,8 +1459,7 @@ function renderChannelsTree() {
         userLi.addEventListener('dragend', () => userLi.classList.remove('dragging'));
       }
       userLi.addEventListener('click', (e) => {
-        if (isMe) openProfileSettings();
-        else openUserPopover(u.id, e);
+        openUserPopover(u.id, e);
       });
 
       // "AO VIVO": entra na transmissão (e no canal, se for outro)
@@ -1477,6 +1480,7 @@ function renderChannelsTree() {
     treeContainer.appendChild(li);
   });
   renderStreamViewers();
+  musicUI?.renderBot();
 }
 
 function updateTopBar() {
@@ -1583,7 +1587,14 @@ function updateVoiceLounge() {
 
   const title = $('#lounge-channel-title');
   if (title) {
-    title.textContent = appState.currentChannelId ? `Canal de Voz: ${name}` : 'Escolha um canal para começar';
+    if (appState.currentChannelId) {
+      const timerBadge = ch?.callStartedAt
+        ? ` <span class="lounge-call-timer" data-call-timer="${Number(ch.callStartedAt)}" title="Tempo ativo desta call">⏱ ${formatCallClock(ch.callStartedAt)}</span>`
+        : '';
+      title.innerHTML = `Canal de Voz: ${escapeHtml(name)}${timerBadge}`;
+    } else {
+      title.textContent = 'Escolha um canal para começar';
+    }
   }
 
   const iconEl = $('#lounge-channel-icon');
@@ -1615,17 +1626,17 @@ function updateVoiceLounge() {
           <span class="speaking-halo"></span>
         </div>
         <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${ownershipBadge(u)}${isMe ? ' (Você)' : ''}</span>
-        ${userActivityHtml(u)}
+        ${userCallTimerHtml(u)}
         <div class="user-indicators">
+          ${userGameBadgeHtml(u)}
           ${liveBadgesHtml(u)}
           ${muteIndicatorsHtml(u)}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">${SPEAKER_OFF_SVG}</span>` : ''}
         </div>
       `;
-      card.title = isMe ? 'Editar seu perfil' : 'Ver perfil e ajustar volume';
+      card.title = isMe ? 'Ver seu perfil' : 'Ver perfil e ajustar volume';
       card.addEventListener('click', (e) => {
-        if (isMe) openProfileSettings();
-        else openUserPopover(u.id, e);
+        openUserPopover(u.id, e);
       });
       card.querySelectorAll('.badge-live-stream').forEach((liveBadge) => {
         liveBadge.addEventListener('click', (e) => {
@@ -1636,6 +1647,7 @@ function updateVoiceLounge() {
       loungeUsersGrid.appendChild(card);
     });
   }
+  musicUI?.renderBot();
 
   // Palco x sala de espera: pelo que eu estou assistindo de verdade (o mesmo critério do
   // updateStageLayout). Contar só quem tem tela ligada escondia a câmera sozinha: piscava e sumia.
@@ -3134,6 +3146,7 @@ function addSystemChatMessage(text, channelId = appState.currentChannelId) {
 function spawnFloatingReaction(userName, emoji) {
   const container = $('#reactions-layer');
   if (!container) return;
+  while (container.childElementCount >= 40) container.firstElementChild?.remove();
 
   const reaction = document.createElement('div');
   reaction.className = 'floating-reaction';
@@ -3335,7 +3348,7 @@ function countReactionUse(emoji) {
     }
   }
   savePrefs(changed ? { emojiUsage: usage, quickReactions: bar } : { emojiUsage: usage });
-  if (changed) renderQuickReactions();
+  if (changed && $('#reaction-quick-popover')?.classList.contains('hidden') !== false) renderQuickReactions();
 }
 
 // Hover mostra só sete atalhos; a lista completa continua sendo carregada sob demanda.
@@ -3351,15 +3364,16 @@ function setupEmojiPicker(onPick) {
   const close = () => {
     ++request;
     cancelClose();
+    const hadQuick = !quick.classList.contains('hidden');
     quick.classList.add('hidden');
     popover.classList.add('hidden');
     btn.setAttribute('aria-expanded', 'false');
+    if (hadQuick) renderQuickReactions();
   };
   closeCallReactions = close;
   const choose = (emoji) => {
-    close();
+    cancelClose();
     onPick(emoji);
-    btn.focus();
   };
   const load = () => loading ??= Promise.all([
     import('./vendor/emoji-picker/picker.js'),
@@ -3617,7 +3631,7 @@ function setupModals() {
     if (appState.focusedStreamUserId) setStreamVolume(appState.focusedStreamUserId, pct);
   });
 
-  $('#btn-stage-fullscreen')?.addEventListener('click', toggleStageFullscreen);
+  $('#btn-stage-fullscreen')?.addEventListener('click', () => toggleStageFullscreen());
   $('#btn-stage-pip')?.addEventListener('click', toggleStagePip);
   $('#btn-stage-stop-watching')?.addEventListener('click', () => {
     // Mosaico: para todas; uma aberta: só ela (a sua própria transmissão fica)
@@ -3698,23 +3712,69 @@ function setupModals() {
 // -----------------------------------------------------------------------------
 // 8a. TELA CHEIA DA TRANSMISSÃO (botão da barra de baixo, tecla F, duplo clique)
 // -----------------------------------------------------------------------------
-function toggleStageFullscreen() {
-  if (document.fullscreenElement) {
-    document.exitFullscreen().catch(() => {});
+function isStageFullscreen() {
+  return Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('stage-fullscreen'));
+}
+
+function exitStageFullscreen() {
+  document.body.classList.remove('stage-fullscreen');
+  document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (document.webkitFullscreenElement) document.webkitExitFullscreen?.();
+  screen.orientation?.unlock?.();
+  window.TeletelaAndroid?.setFullscreen?.(false);
+}
+
+window.teletelaExitFullscreen = () => {
+  if (!isStageFullscreen()) return false;
+  exitStageFullscreen();
+  return true;
+};
+
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+    document.body.classList.remove('stage-fullscreen');
+    document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
+    screen.orientation?.unlock?.();
+    window.TeletelaAndroid?.setFullscreen?.(false);
+  }
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.body.classList.contains('stage-fullscreen') && !document.fullscreenElement) {
+    exitStageFullscreen();
+  }
+});
+
+function toggleStageFullscreen(customTarget = null) {
+  if (isStageFullscreen()) {
+    exitStageFullscreen();
     return;
   }
+  const fallbackId = appState.activeStreams.has(appState.expandedStreamUserId)
+    ? appState.expandedStreamUserId
+    : appState.activeStreams.has(appState.focusedStreamUserId)
+      ? appState.focusedStreamUserId
+      : appState.activeStreams.keys().next().value;
   // Mosaico: todas as telas juntas; uma aberta: só ela
-  const target = isMosaicView()
+  const target = (customTarget instanceof HTMLElement ? customTarget : null) || (isMosaicView()
     ? $('#videos-grid')
-    : document.getElementById(`video-tile-${appState.focusedStreamUserId}`);
+    : document.getElementById(`video-tile-${fallbackId}`));
   if (!target || !appState.activeStreams.size) {
     showToast('Nenhuma transmissão pra colocar em tela cheia.');
     return;
   }
-  target.requestFullscreen().catch((err) => {
-    console.warn('[Stage] Tela cheia recusada:', err);
-    showToast('❌ Não consegui abrir em tela cheia.', 'error');
-  });
+  document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
+  if (target.classList.contains('video-tile')) target.classList.add('stage-fullscreen-tile');
+  document.body.classList.add('stage-fullscreen');
+  window.TeletelaAndroid?.setFullscreen?.(true);
+  screen.orientation?.lock?.('landscape').catch(() => {});
+  const req = target.requestFullscreen || target.webkitRequestFullscreen;
+  if (typeof req === 'function') {
+    Promise.resolve(req.call(target)).catch(() => {
+      // Sem Fullscreen API nativa: mantém o modo de tela cheia em CSS (stage-fullscreen)
+    });
+  }
 }
 
 // Janela flutuante (picture-in-picture): a transmissão aberta continua visível por cima
@@ -3771,6 +3831,28 @@ let publishedGameActivity;
 let gamePollTimer;
 let gamePollRun = 0;
 
+function formatCallClock(startedAt, now = Date.now()) {
+  const start = Number(startedAt);
+  if (!Number.isFinite(start) || start <= 0) return '00:00';
+  const totalSec = Math.max(0, Math.floor((now - start) / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const mm = String(m).padStart(2, '0');
+  const ss = String(s).padStart(2, '0');
+  return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+function userCallTimerHtml(user) {
+  const start = Number(user?.voiceJoinedAt || user?.joinedAt || Date.now());
+  return `<span class="user-call-timer" data-call-timer="${start}" title="Tempo na call">${formatCallClock(start)}</span>`;
+}
+
+function userGameBadgeHtml(user) {
+  const activity = user.id === appState.myId ? localGameActivity : user.activity;
+  return `<span class="indicator-icon game-activity-badge${activity ? '' : ' hidden'}" data-activity-badge-user="${escapeHtml(user.id)}" title="Jogando — clique para ver no perfil">${GAME_SVG}</span>`;
+}
+
 function activityContent(activity) {
   if (!activity) return '';
   return `${GAME_SVG}<span class="activity-game-name"><span class="activity-game-prefix">Jogando </span>${escapeHtml(activity.name)}</span><span class="activity-time" data-activity-start="${Number(activity.startedAt)}">· ${activityElapsed(activity.startedAt)}</span>`;
@@ -3787,6 +3869,10 @@ function renderUserActivity(userId, activity) {
     el.classList.toggle('hidden', !activity);
     el.innerHTML = activityContent(activity);
     el.title = activity ? `Jogando ${activity.name}` : '';
+  }
+  for (const el of $$('[data-activity-badge-user]')) {
+    if (el.dataset.activityBadgeUser !== userId) continue;
+    el.classList.toggle('hidden', !activity);
   }
 }
 
@@ -3880,6 +3966,14 @@ function setupGameActivity() {
   setInterval(() => {
     for (const el of $$('[data-activity-start]')) el.textContent = `· ${activityElapsed(Number(el.dataset.activityStart))}`;
   }, 15000);
+  setInterval(() => {
+    if (document.hidden) return;
+    const now = Date.now();
+    for (const el of $$('[data-call-timer]')) {
+      const prefix = el.classList.contains('lounge-call-timer') ? '⏱ ' : '';
+      el.textContent = `${prefix}${formatCallClock(Number(el.dataset.callTimer), now)}`;
+    }
+  }, 1000);
 }
 
 function volumeKey(u) {
@@ -3920,24 +4014,32 @@ function openUserPopover(userId, anchorEvent) {
   const pop = $('#user-popover');
   if (!u || !pop) return;
   popoverUserId = userId;
+  const isMe = userId === appState.myId;
+  const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
 
   const avatar = $('#user-popover-avatar');
-  avatar.style.backgroundColor = safeColor(u.color);
-  avatar.innerHTML = avatarInnerHtml(u);
-  $('#user-popover-name').textContent = u.name;
-  applyNameStyle($('#user-popover-name'), u);
-  applyFrame(avatar, u);
+  avatar.style.backgroundColor = safeColor(shown.color);
+  avatar.innerHTML = avatarInnerHtml(isMe ? { ...u, name: shown.name } : u);
+  $('#user-popover-name').textContent = shown.name;
+  applyNameStyle($('#user-popover-name'), shown);
+  applyFrame(avatar, shown);
   const banner = $('#user-popover-banner');
-  renderBanner(banner, u);
-  $('#user-popover-bio').textContent = u.bio || '';
+  renderBanner(banner, shown);
+  $('#user-popover-bio').textContent = shown.bio || '';
   $('#user-popover-roles').innerHTML = roleBadges(u);
   $('#user-popover-activity').innerHTML = userActivityHtml(u);
-  renderUserPopoverVolume();
-  $('#user-popover-kick')?.classList.toggle('hidden', !hasPermission(appState, 'kickMembers') || !u.channelId);
+  pop.setAttribute('aria-label', isMe ? 'Seu perfil' : 'Perfil do amigo');
+  $('#user-popover-volume-label')?.classList.toggle('hidden', isMe);
+  $('#user-popover-volume-row')?.classList.toggle('hidden', isMe);
+  $('#user-popover-actions')?.classList.toggle('hidden', isMe);
+  $('#user-popover-reconnect')?.classList.toggle('hidden', isMe);
+  $('#user-popover-edit-self')?.classList.toggle('hidden', !isMe);
+  if (!isMe) renderUserPopoverVolume();
+  $('#user-popover-kick')?.classList.toggle('hidden', isMe || !hasPermission(appState, 'kickMembers') || !u.channelId);
   const adminRow = $('#user-popover-admin');
-  adminRow?.classList.toggle('hidden', !['kickMembers', 'muteMembers', 'deafenMembers'].some(p => hasPermission(appState, p)));
-  $('#user-popover-server-mute')?.classList.toggle('hidden', !hasPermission(appState, 'muteMembers'));
-  $('#user-popover-server-deafen')?.classList.toggle('hidden', !hasPermission(appState, 'deafenMembers'));
+  adminRow?.classList.toggle('hidden', isMe || !['kickMembers', 'muteMembers', 'deafenMembers'].some(p => hasPermission(appState, p)));
+  $('#user-popover-server-mute')?.classList.toggle('hidden', isMe || !hasPermission(appState, 'muteMembers'));
+  $('#user-popover-server-deafen')?.classList.toggle('hidden', isMe || !hasPermission(appState, 'deafenMembers'));
   const muteAll = $('#user-popover-server-mute');
   if (muteAll) muteAll.innerHTML = u.serverMuted ? `${MIC_ON_SVG} Desmutar pra todos` : `${MIC_OFF_SVG} Mutar pra todos`;
   const deafAll = $('#user-popover-server-deafen');
@@ -4058,6 +4160,10 @@ function setupUserPopover() {
     reconnectVoice(popoverUserId);
     showToast('🔄 Reconectando a voz...');
     closeUserPopover();
+  });
+
+  $('#user-popover-edit-self')?.addEventListener('click', () => {
+    openProfileSettings();
   });
 
   document.addEventListener('mousedown', (e) => {
@@ -4785,14 +4891,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '3.9.0';
+const WHATS_NEW_VERSION = '4.0.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -5232,10 +5338,151 @@ function setupTileIdleCursor(tile) {
   };
   tile.addEventListener('mousemove', wake);
   tile.addEventListener('mouseenter', wake);
+  tile.addEventListener('pointerdown', wake);
   tile.addEventListener('mouseleave', () => {
     clearTimeout(timer);
     tile.classList.remove('idle');
   });
+}
+
+// Zoom (1x a 5x) e arraste (pan) na transmissão (roda do mouse no PC e pinça/toque no celular)
+function setupTileZoomPan(tile, video, zoomResetBtn) {
+  let scale = 1;
+  let panX = 0;
+  let panY = 0;
+  let suppressClickUntil = 0;
+  const pointers = new Map();
+  let lastPinchDist = 0;
+  let lastPinchMid = null;
+  let dragMoved = 0;
+
+  const clampPan = () => {
+    const rect = tile.getBoundingClientRect();
+    const maxX = Math.max(0, (rect.width * (scale - 1)) / 2);
+    const maxY = Math.max(0, (rect.height * (scale - 1)) / 2);
+    panX = Math.max(-maxX, Math.min(maxX, panX));
+    panY = Math.max(-maxY, Math.min(maxY, panY));
+  };
+
+  const applyTransform = () => {
+    if (scale <= 1.01) {
+      scale = 1;
+      panX = 0;
+      panY = 0;
+      video.style.transform = '';
+      tile.classList.remove('is-zoomed', 'is-panning');
+      zoomResetBtn?.classList.add('hidden');
+    } else {
+      clampPan();
+      video.style.transform = `translate3d(${panX.toFixed(1)}px, ${panY.toFixed(1)}px, 0) scale(${scale.toFixed(3)})`;
+      tile.classList.add('is-zoomed');
+      if (zoomResetBtn) {
+        zoomResetBtn.textContent = `${Math.round(scale * 100)}% ✕`;
+        zoomResetBtn.classList.remove('hidden');
+      }
+    }
+  };
+
+  const zoomAt = (nextScale, clientX, clientY) => {
+    const clamped = Math.max(1, Math.min(5, nextScale));
+    const rect = tile.getBoundingClientRect();
+    const cx = clientX - (rect.left + rect.width / 2);
+    const cy = clientY - (rect.top + rect.height / 2);
+    const ratio = clamped / scale;
+    panX = cx - (cx - panX) * ratio;
+    panY = cy - (cy - panY) * ratio;
+    scale = clamped;
+    applyTransform();
+  };
+
+  const resetZoom = () => {
+    scale = 1;
+    panX = 0;
+    panY = 0;
+    applyTransform();
+  };
+
+  zoomResetBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    resetZoom();
+  });
+
+  tile.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = Math.exp(-e.deltaY * 0.0018);
+    zoomAt(scale * factor, e.clientX, e.clientY);
+  }, { passive: false });
+
+  video.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    dragMoved = 0;
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      lastPinchDist = Math.hypot(b.x - a.x, b.y - a.y);
+      lastPinchMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    }
+    if (scale > 1.01 || pointers.size === 2) {
+      try { video.setPointerCapture(e.pointerId); } catch {}
+    }
+  });
+
+  video.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse' && (e.buttons & 1) === 0) {
+      pointers.delete(e.pointerId);
+      tile.classList.remove('is-panning');
+      return;
+    }
+    const prev = pointers.get(e.pointerId);
+    if (!prev) return;
+    const dx = e.clientX - prev.x;
+    const dy = e.clientY - prev.y;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      const dist = Math.hypot(b.x - a.x, b.y - a.y);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      if (lastPinchDist > 8 && dist > 8) {
+        if (lastPinchMid) {
+          panX += mid.x - lastPinchMid.x;
+          panY += mid.y - lastPinchMid.y;
+        }
+        zoomAt(scale * (dist / lastPinchDist), mid.x, mid.y);
+        suppressClickUntil = Date.now() + 350;
+      }
+      lastPinchDist = dist;
+      lastPinchMid = mid;
+      return;
+    }
+
+    if (pointers.size === 1 && scale > 1.01) {
+      dragMoved += Math.hypot(dx, dy);
+      if (dragMoved > 4) {
+        tile.classList.add('is-panning');
+        suppressClickUntil = Date.now() + 350;
+      }
+      panX += dx;
+      panY += dy;
+      applyTransform();
+    }
+  });
+
+  const endPointer = (e) => {
+    pointers.delete(e.pointerId);
+    if (pointers.size < 2) {
+      lastPinchDist = 0;
+      lastPinchMid = null;
+    }
+    if (pointers.size === 0) tile.classList.remove('is-panning');
+  };
+  video.addEventListener('pointerup', endPointer);
+  video.addEventListener('pointercancel', endPointer);
+
+  return {
+    wasGesture: () => Date.now() < suppressClickUntil,
+    resetZoom
+  };
 }
 
 function registerScreenStream(userId, userName, stream, isLocal) {
@@ -5268,25 +5515,43 @@ function registerScreenStream(userId, userName, stream, isLocal) {
       unmuteBtn.classList.add('hidden');
     });
 
+    const zoomResetBtn = document.createElement('button');
+    zoomResetBtn.type = 'button';
+    zoomResetBtn.className = 'tile-btn tile-zoom-reset hidden';
+    zoomResetBtn.title = 'Resetar zoom (100%)';
+    zoomResetBtn.setAttribute('aria-label', 'Resetar zoom da transmissão');
+    zoomResetBtn.textContent = '100% ✕';
+    ['click', 'dblclick', 'pointerdown'].forEach((evt) => zoomResetBtn.addEventListener(evt, (e) => e.stopPropagation()));
+
+    const fsBtn = document.createElement('button');
+    fsBtn.type = 'button';
+    fsBtn.className = 'tile-btn tile-fullscreen-btn';
+    fsBtn.title = 'Tela cheia (F)';
+    fsBtn.setAttribute('aria-label', 'Alternar tela cheia');
+    fsBtn.textContent = '⛶';
+    ['click', 'dblclick', 'pointerdown'].forEach((evt) => fsBtn.addEventListener(evt, (e) => e.stopPropagation()));
+    fsBtn.addEventListener('click', () => toggleStageFullscreen(tile));
+
+    const zoomPan = setupTileZoomPan(tile, video, zoomResetBtn);
+
     // Clique: abre só essa transmissão / volta pro mosaico. Duplo clique: tela cheia.
     // O clique espera um instante pra não disparar junto com o duplo clique.
     let clickTimer = null;
     video.addEventListener('click', () => {
+      if (zoomPan.wasGesture()) return;
       clearTimeout(clickTimer);
       clickTimer = setTimeout(() => toggleExpandedStream(userId), 250);
     });
     video.addEventListener('dblclick', () => {
       clearTimeout(clickTimer);
-      if (!document.fullscreenElement) {
-        tile.requestFullscreen().catch(() => {});
-      } else {
-        document.exitFullscreen().catch(() => {});
-      }
+      toggleStageFullscreen(tile);
     });
 
     tile.appendChild(badge);
     tile.appendChild(video);
     tile.appendChild(unmuteBtn);
+    tile.appendChild(zoomResetBtn);
+    tile.appendChild(fsBtn);
     setupTileIdleCursor(tile);
 
     if (!isLocal) {
@@ -5347,6 +5612,9 @@ function removeScreenStream(userId) {
   const tile = document.getElementById(`video-tile-${userId}`);
   if (document.pictureInPictureElement && tile?.contains(document.pictureInPictureElement)) {
     document.exitPictureInPicture().catch(() => {});
+  }
+  if (tile?.classList.contains('stage-fullscreen-tile') || !appState.activeStreams.size) {
+    exitStageFullscreen();
   }
   if (tile) tile.remove();
 

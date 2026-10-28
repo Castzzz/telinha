@@ -91,8 +91,10 @@ html.android-pip .android-pip-tile video { width: 100% !important; height: 100% 
   [data-look="novo"] body[data-mobile-view="sala"] .stage-section { display: flex !important; }
   .voice-lounge { padding: 0; min-height: 0; overflow-y: auto; }
   .lounge-header { display: none; }
-  .lounge-users-grid { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; gap: 16px; padding: 24px 20px; margin: auto 0; }
+  .lounge-users-grid { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: center; justify-items: center; gap: 16px; padding: 24px 20px; margin: auto 0; }
   [data-look="novo"] .lounge-user-card { width: 100%; min-height: 156px; padding: 20px 8px; background: var(--bg-secondary); border-radius: 22px; box-shadow: none; gap: 12px; }
+  .lounge-users-grid > .lounge-user-card:last-child:nth-child(odd) { grid-column: 1 / -1; justify-self: center; width: min(100%, calc(50% - 8px)); }
+  .lounge-users-grid > .lounge-user-card:only-child { width: min(100%, 210px); }
   [data-look="novo"] .lounge-user-card:hover { transform: none; }
   [data-look="novo"] .lounge-user-card .user-avatar-wrap, [data-look="novo"] .lounge-user-card .user-avatar { width: 76px; height: 76px; }
   .lounge-user-name { max-width: 100%; font-size: 14px; overflow-wrap: anywhere; }
@@ -119,6 +121,10 @@ html.android-pip .android-pip-tile video { width: 100% !important; height: 100% 
   .videos-grid.mosaic-grid { grid-template-columns: minmax(0, 1fr) !important; grid-template-rows: none !important; grid-auto-rows: minmax(180px, 1fr); overflow-y: auto; }
   .mosaic-gutter { display: none; }
   .tile-bottom-hud { opacity: 1; padding: 8px; }
+  .video-tile:not(.idle) .tile-fullscreen-btn, .video-tile:not(.idle) .tile-badge { opacity: 1; }
+  .tile-fullscreen-btn { width: 38px; height: 38px; font-size: 18px; }
+  body.stage-fullscreen .mobile-header, body.stage-fullscreen .mobile-call-controls, body.stage-fullscreen .mobile-nav, body.stage-fullscreen .mobile-callbar { display: none !important; }
+  body.stage-fullscreen [data-look="novo"] .app-layout { margin-top: 0 !important; height: 100dvh !important; }
   .stage-controls-bar { padding: 8px 16px; gap: 8px; }
 
   /* Conversa sem painéis laterais: cabeçalho único e campo próximo do teclado. */
@@ -208,5 +214,7 @@ html.android-pip .android-pip-tile video { width: 100% !important; height: 100% 
   .mobile-call-controls { padding: 8px 18px; }
   .mobile-action-icon { width: 46px; height: 46px; }
   .lounge-users-grid { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); padding: 12px 20px; }
+  .lounge-users-grid > .lounge-user-card:last-child:nth-child(odd) { grid-column: auto; width: 100%; }
+  .lounge-users-grid > .lounge-user-card:only-child { grid-column: 1 / -1; justify-self: center; width: min(100%, 210px); }
   [data-look="novo"] .lounge-user-card { min-height: 130px; padding: 12px; }
 }

@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { MusicManager } from './manager.mjs';
+import { MusicManager, MAX_QUEUE_TRACKS } from './manager.mjs';
 import { MusicTransport } from './transport.mjs';
 import { resolveMusic } from './source.mjs';
 
@@ -57,7 +57,7 @@ export function installMusic({ io, channels, permissions, sfuSecret = '', sfuInt
       warm?.abort();
       playlist = null;
       try {
-        const result = await manager.resolve(payload.input, payload.refinement, { offset: payload.offset ?? 0, limit: payload.limit ?? 50 });
+        const result = await manager.resolve(payload.input, payload.refinement, { offset: payload.offset ?? 0, limit: payload.limit ?? 150 });
         if (context(socket, true).channel.id !== channel.id) throw new Error('O canal mudou durante a busca. Busque novamente.');
         playlist = result.playlist || null;
         choices = new Map([...(result.candidates || []), ...(playlist?.tracks || [])].map(track => [track.id, track]));
@@ -77,6 +77,7 @@ export function installMusic({ io, channels, permissions, sfuSecret = '', sfuInt
       else if (payload.action === 'skip') state = manager.stop(channel.id, { keepQueue: true });
       else if (payload.action === 'pause' || payload.action === 'resume') state = manager.pause(channel.id, payload.action === 'pause');
       else if (payload.action === 'remove' && typeof payload.id === 'string') state = manager.remove(channel.id, payload.id);
+      else if (payload.action === 'move' && typeof payload.id === 'string') state = manager.move(channel.id, payload.id, payload.toIndex);
       else if (payload.action === 'shuffle') state = manager.shuffle(channel.id);
       else if (payload.action === 'repeat') state = manager.repeat(channel.id, payload.mode);
       else throw new Error('Esse controle de música não existe.');
@@ -91,7 +92,7 @@ export function installMusic({ io, channels, permissions, sfuSecret = '', sfuInt
     handle('music-enqueue-playlist', (payload, { channel, user }) => {
       if (!playlist || choicesChannel !== channel.id) throw new Error('Carregue a playlist neste canal antes de adicionar.');
       const ids = payload.ids;
-      if (!Array.isArray(ids) || !ids.length || ids.length > 50 || new Set(ids).size !== ids.length) throw new Error('Selecione de 1 a 50 faixas da playlist.');
+      if (!Array.isArray(ids) || !ids.length || ids.length > MAX_QUEUE_TRACKS || new Set(ids).size !== ids.length) throw new Error(`Selecione de 1 a ${MAX_QUEUE_TRACKS} faixas da playlist.`);
       const tracks = ids.map(id => choices.get(id));
       if (tracks.some(track => !track)) throw new Error('Uma faixa não está na página carregada. Carregue a playlist novamente.');
       return { state: manager.enqueueMany(channel.id, tracks, user, { shuffle: payload.shuffle === true }), added: tracks.length };

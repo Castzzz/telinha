@@ -91,7 +91,7 @@ test('playlist entra inteira ou não entra; repetição só ocorre no fim natura
   manager.enqueueMany('geral', [track, { ...track, title: 'Segunda' }, { ...track, title: 'Terceira' }], requester);
   await until(() => manager.state('geral').phase === 'playing');
   const before = manager.state('geral').queue.length;
-  assert.throws(() => manager.enqueueMany('geral', Array(50).fill(track), requester), /espaço/);
+  assert.throws(() => manager.enqueueMany('geral', Array(150).fill(track), requester), /espaço/);
   assert.equal(manager.state('geral').queue.length, before);
   manager.repeat('geral', 'one');
   transports[0].emit('ended');
@@ -147,6 +147,24 @@ test('pular não fica esperando o download de pré-carregamento terminar', async
   assert.equal(cancelled, true);
 });
 
+test('interrompe a fila após 3 falhas seguidas em vez de falhar em cascata nas 50 faixas', async t => {
+  let attempts = 0;
+  const manager = new MusicManager({
+    prepare: async () => {
+      attempts++;
+      throw new Error('O YouTube bloqueou a extração deste áudio no servidor.');
+    },
+    createTransport: () => new FakeTransport(),
+  });
+  t.after(() => manager.close());
+  const many = Array.from({ length: 10 }, (_, idx) => ({ ...track, id: `jNQXAC9IVR${idx}`, title: `Faixa ${idx + 1}` }));
+  manager.enqueueMany('geral', many, requester);
+  await until(() => manager.state('geral').phase === 'error' && manager.sessions.get('geral').failures === 3 && !manager.sessions.get('geral').draining);
+  assert.equal(manager.state('geral').queue.length, 7, 'Preserva o restante da fila sem tentar as próximas faixas em cascata.');
+  assert.match(manager.state('geral').error, /Fila interrompida após 3 falhas seguidas/);
+  assert.equal(attempts, 3, `Esperava parar logo após 3 falhas, mas tentou ${attempts} vezes.`);
+});
+
 test('eventos reais exigem presença, respeitam acesso e encerram canal vazio', { timeout: 15000 }, async t => {
   process.env.TELINHA_MUSIC = '1';
   process.env.SFU_SECRET = '';
@@ -194,6 +212,12 @@ test('eventos reais exigem presença, respeitam acesso e encerram canal vazio', 
   const added = await emit(friend, 'music-enqueue-playlist', { ids: ['lista-1', 'lista-2'], shuffle: true });
   assert.equal(added.added, 2);
   await until(() => backend.music.state('geral').phase === 'playing');
+  await emit(friend, 'music-enqueue-playlist', { ids: ['lista-1', 'lista-2'], shuffle: false });
+  const beforeMove = backend.music.state('geral').queue.map(item => item.id);
+  assert.ok(beforeMove.length >= 2);
+  const movedState = await emit(friend, 'music-control', { action: 'move', id: beforeMove[1], toIndex: 0 });
+  assert.equal(movedState.success, true);
+  assert.equal(movedState.state.queue[0].id, beforeMove[1]);
   assert.equal((await emit(friend, 'music-control', { action: 'repeat', mode: 'all' })).state.repeat, 'all');
   assert.equal((await emit(friend, 'music-control', { action: 'repeat', mode: 'inexistente' })).success, false);
   await emit(owner, 'leave-channel');
