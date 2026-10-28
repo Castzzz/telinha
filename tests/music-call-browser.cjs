@@ -73,14 +73,14 @@ app.whenReady().then(async () => {
   let preparations = 0;
   if (!real) {
     const tone = path.join(profile, 'tom.mp3');
-    await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=40', '-y', tone]);
+    await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=120', '-y', tone]);
     call.backend.music.prepare = async (_url, folder) => {
       preparations++;
       const file = path.join(folder, 'faixa.mp3');
       await fs.copyFile(tone, file);
       return file;
     };
-    const candidate = { id: 'jNQXAC9IVRw', url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', title: 'Tom de teste 440 Hz', author: 'Teste local', duration: 40 };
+    const candidate = { id: 'jNQXAC9IVRw', url: 'https://www.youtube.com/watch?v=jNQXAC9IVRw', title: 'Tom de teste 440 Hz', author: 'Teste local', duration: 120 };
     call.backend.music.resolve = async input => input.includes('/playlist?')
       ? { source: { title: 'Playlist de teste', url: input }, notice: 'Playlist local para conferir seleção e fila.', candidates: [],
         playlist: { title: 'Playlist de teste', tracks: [0, 1, 2].map(index => ({ ...candidate, id: `playlist-${index}`, title: `Tom ${index + 1}` })), nextOffset: null } }
@@ -225,6 +225,8 @@ app.whenReady().then(async () => {
     await fs.writeFile(`/tmp/teletela-painel-musica-${theme}.png`, (await first.webContents.capturePage()).toPNG());
   }
   await evaluate(first, `document.querySelector('[data-close-modal=modal-music]').click()`);
+  await require('./stage-chat-checks.cjs')(first);
+  if (!await hasAudio(first) || !await hasAudio(second)) throw new Error('A navegação do chat interrompeu a música.');
   await first.webContents.executeJavaScript(`document.querySelector('#videos-grid').requestFullscreen()`, true);
   await until(() => evaluate(first, `document.fullscreenElement?.contains(document.querySelector('#music-stage-miniplayer')) && document.fullscreenElement?.contains(document.querySelector('#stage-cinema-bar'))`), 'Controles não acompanharam a tela cheia nativa.');
   await evaluate(first, `document.querySelector('.stage-cinema-participant[data-user-id]').click()`);
@@ -243,13 +245,38 @@ app.whenReady().then(async () => {
   const outside = await open('cinema');
   if (await evaluate(outside, "Boolean(document.querySelector('#music-remote-audio'))")) throw new Error('Outro canal recebeu a música do Geral.');
   if (!real) {
+    const resolve = call.backend.music.resolve;
+    let releaseSearch, searchStarted = false;
+    const gate = new Promise(done => { releaseSearch = done; });
+    call.backend.music.resolve = async input => {
+      if (input === 'busca lenta') { searchStarted = true; await gate; }
+      return resolve(input);
+    };
+    const generation = call.backend.music.state('geral').generation;
+    await evaluate(first, "document.querySelector('#music-input').value='busca lenta';document.querySelector('#music-form').requestSubmit()");
+    await until(() => searchStarted, 'A busca em trânsito não começou.');
+    await evaluate(first, "document.querySelector('#music-clear-search').click()");
+    releaseSearch();await pause(2100); // A busca do servidor tem intervalo mínimo de dois segundos.
+    if (await evaluate(first, "Boolean(document.querySelector('#music-results > *'))")) throw new Error('Resposta atrasada repôs os resultados limpos.');
+    await evaluate(first, "document.querySelector('#music-input').value='outra busca';document.querySelector('#music-form').requestSubmit()");
+    await until(() => evaluate(first, "Boolean(document.querySelector('#music-results button'))"), 'A busca não voltou a funcionar.');
+    await evaluate(first, "document.querySelector('#music-input').value='   ';document.querySelector('#music-form').requestSubmit()");
+    if (await evaluate(first, "Boolean(document.querySelector('#music-results > *'))")) throw new Error('Busca vazia não limpou resultados.');
+    if (call.backend.music.state('geral').generation !== generation || !await hasAudio(first)) throw new Error('Limpar busca interrompeu a música.');
+    call.backend.music.resolve = resolve;
+    console.log('Limpeza da busca, inclusive resposta atrasada, preservou a reprodução.');
+    await pause(2100);
+  }
+  if (!real) {
     await evaluate(first, "document.querySelector('#music-input').value = 'https://www.youtube.com/playlist?list=PLteste123456'; document.querySelector('#music-form').requestSubmit()");
     await until(() => evaluate(first, "document.querySelectorAll('[data-music-track]').length === 3"), 'A playlist não mostrou as faixas.');
     await evaluate(first, "document.querySelectorAll('[data-music-track]')[2].click(); document.querySelector('#music-playlist-shuffle').checked = true; document.querySelector('#music-add-playlist').click()");
     await until(() => call.backend.music.state('geral').queue.length === 2, 'A seleção da playlist não entrou na fila.');
-    await evaluate(first, "document.querySelector('#music-repeat').value = 'all'; document.querySelector('#music-repeat').dispatchEvent(new Event('change'))");
+    await evaluate(first, "document.querySelector('#music-clear-search').click()");
+    if (call.backend.music.state('geral').queue.length !== 2) throw new Error('Limpar a busca apagou a fila.');
+    await evaluate(first, "document.querySelector('[data-music-repeat=all]').click()");
     await until(() => call.backend.music.state('geral').repeat === 'all', 'Repetir fila não foi aplicado.');
-    await evaluate(first, "document.querySelector('#music-shuffle').click(); document.querySelector('#music-repeat').value = 'off'; document.querySelector('#music-repeat').dispatchEvent(new Event('change'))");
+    await evaluate(first, "document.querySelector('#music-shuffle').click(); document.querySelector('[data-music-repeat=off]').click()");
     await evaluate(first, "document.querySelector('#music-queue button').click()");
     await until(() => call.backend.music.state('geral').queue.length === 1, 'Remover não alterou a fila.');
     await evaluate(first, "document.querySelector('.music-mini-skip').click()");

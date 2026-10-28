@@ -1155,7 +1155,7 @@ ul {
   align-items: center;
   justify-content: space-between;
   padding: 0 16px;
-  z-index: 20;
+  z-index: 40;
 }
 
 .stage-controls-left {
@@ -1942,7 +1942,7 @@ ul {
   display: none;
 }
 
-/* Canal de texto em tela cheia (sem transmissão aberta) */
+/* Canal de texto central, com a transmissão reduzida quando houver. */
 .app-layout.text-full .stage-section {
   display: none;
 }
@@ -2582,7 +2582,16 @@ body.stage-fullscreen:not(:has(:fullscreen)) #videos-grid {
 }
 
 body.stage-fullscreen:not(:has(:fullscreen)) #stage-controls-bar {
-  display: none !important;
+  display: grid !important;
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 1520;
+}
+:fullscreen #stage-controls-bar {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 1520;
+  width: 100%;
 }
 
 body.stage-fullscreen:not(:has(:fullscreen)) #videos-grid:has(.stage-fullscreen-tile) > .video-tile:not(.stage-fullscreen-tile) {

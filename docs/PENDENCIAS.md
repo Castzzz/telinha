@@ -5,40 +5,51 @@ Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
 ## Próxima retomada: ajustes após testar cinema, música e chat (28/10/2026)
 
-**Só anotar por enquanto**, a pedido do dono, para implementar quando o limite voltar.
-Continuar na branch `melhoria/cinema-dados-contas-e-privacidade`. Estes itens ainda não
-foram implementados. Referências: quatro capturas enviadas na conversa de 28/10/2026.
+**Retomados com autorização do dono em 28/10/2026.** Implementados para teste na branch
+`melhoria/cinema-dados-contas-e-privacidade`, sem release/deploy. Referências: quatro
+capturas enviadas na conversa de 28/10/2026.
 
-- [ ] **Tirar o texto com o nome de quem está falando.** O dono não gostou de aparecer
+- [x] **Tirar o texto com o nome de quem está falando.** O dono não gostou de aparecer
   “Cast falando” / “Neves falando” no cabeçalho de Participantes. Remover essa indicação
   textual; preservar a indicação visual de fala nos avatares.
-- [ ] **Ocultar automaticamente a faixa recolhida de Participantes.** Quando a pessoa
+- [x] **Ocultar automaticamente a faixa recolhida de Participantes.** Quando a pessoa
   recolher a faixa, depois de um tempo sem interação o cabeçalho também deve sumir.
   Reaparecer ao passar/mover o mouse sobre a transmissão. Definir o tempo no ajuste e
   manter uma forma de acessar por teclado e toque. O pedido de ocultação é para a faixa
   recolhida, sem decidir agora que a faixa expandida também deve desaparecer.
-- [ ] **Corrigir participantes cobrindo as reações.** Relato: a camada de Participantes
+- [x] **Corrigir participantes cobrindo as reações.** Relato: a camada de Participantes
   permanece por cima, os emojis ficam atrás e não dá para clicar. Reproduzir com a
   transmissão aberta e verificar sobreposição, camadas e áreas que capturam cliques,
   incluindo faixa recolhida, expandida e tela cheia. O seletor de reações precisa continuar
   visível e clicável.
-- [ ] **Refinar o visual de Repetir e Seu volume no bot de música.** A segunda captura
+- [x] **Refinar o visual de Repetir e Seu volume no bot de música.** A segunda captura
   destaca o seletor “Repetir → Desligado” e a barra de volume. O dono ainda não gostou do
   design dessa região; integrar melhor esses controles ao visual do Teletela. O layout
   final fica para a retomada.
-- [ ] **Permitir limpar os resultados da busca de músicas.** Depois de buscar e adicionar
+- [x] **Permitir limpar os resultados da busca de músicas.** Depois de buscar e adicionar
   uma música, permitir retirar a lista de resultados. Pode ser um botão de limpar ou
   buscar novamente com o campo vazio; o dono aceita esse caminho sem exigir uma opção
   de configuração. Definir o gesto final na implementação e revisar a validação do campo
   vazio. Limpar os resultados deve preservar a música tocando e a fila.
-- [ ] **Corrigir o redimensionamento do chat lateral.** Na quarta captura, com uma
+- [x] **Corrigir o redimensionamento do chat lateral.** Na quarta captura, com uma
   transmissão aberta e um canal de texto selecionado, não dá para arrastar a divisória
   para aumentar/diminuir o chat. Reproduzir e corrigir a interação.
-- [ ] **Canais de texto no centro, com transmissão reduzida.** Ao clicar em um canal de
+- [x] **Canais de texto no centro, com transmissão reduzida.** Ao clicar em um canal de
   texto principal, a conversa deve ocupar a área central, como no Discord, em vez de
   ficar limitada à lateral. Se estiver assistindo a uma transmissão, ela deve continuar
   em tamanho reduzido. Definir posição e layout depois, preservando vídeo e áudio durante
   a troca. Esse pedido de chat central é para os canais de texto, distintos do chat da call.
+
+Resultado desta retomada:
+- Cabeçalho sem nomes de quem fala; a borda do avatar mantém a indicação.
+- Faixa recolhida some após 3 segundos sem interação; mouse, toque e teclado a revelam.
+- Barra de ações acima dos participantes; controles e reações acompanham a tela cheia.
+- Repetição por botões e volume com trilha nas cores do tema.
+- **Limpar busca** e busca vazia removem resultados, inclusive respostas atrasadas,
+  preservando a reprodução e a fila.
+- Alça do chat da call ampliada, com arraste por mouse/toque e ajuste pelas setas.
+- Canais de texto ocupam o centro, com vídeo contínuo na prévia inferior direita e botão
+  **Voltar à transmissão**. No celular a prévia some enquanto o teclado estiver aberto.
 
 ## Trabalho de 28/10/2026
 

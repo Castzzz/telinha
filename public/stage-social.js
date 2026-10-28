@@ -54,6 +54,28 @@ export function setupStageSocial(deps = {}) {
 
   let collapsed = Boolean(prefs.stageCinemaCollapsed);
   let musicState = null;
+  let idleTimer = null;
+  let stageVisible = false;
+
+  function revealParticipants() {
+    clearTimeout(idleTimer);
+    const bar = document.getElementById('stage-cinema-bar');
+    if (!bar) return;
+    bar.classList.remove('is-idle');
+    if (!collapsed || !stageVisible) return;
+    idleTimer = setTimeout(() => {
+      // O foco de teclado e o mouse sobre a faixa mantêm o controle acessível.
+      if (bar.matches(':hover') || bar.querySelector(':focus-visible')) {
+        revealParticipants();
+        return;
+      }
+      bar.classList.add('is-idle');
+    }, 3000);
+  }
+
+  function onStageInteraction(event) {
+    if (event.type === 'keydown' || event.target?.closest?.('#stage-section, :fullscreen')) revealParticipants();
+  }
 
   function resolveStageContainer() {
     let stage = deps.stageElement || deps.container || document.getElementById('video-stage');
@@ -193,7 +215,6 @@ export function setupStageSocial(deps = {}) {
             <span class="stage-cinema-toggle-icon">${USERS_ICON_SVG}</span>
             <span class="stage-cinema-toggle-label">Participantes</span>
             <span id="stage-cinema-count" class="stage-cinema-count">0</span>
-            <span id="stage-cinema-speaking-pill" class="stage-cinema-speaking-pill hidden"></span>
             <span id="stage-cinema-chevron" class="stage-cinema-chevron">${CHEVRON_DOWN_SVG}</span>
           </button>
         </div>
@@ -237,7 +258,6 @@ export function setupStageSocial(deps = {}) {
     const toggleBtn = bar.querySelector('#stage-cinema-toggle');
     const chevron = bar.querySelector('#stage-cinema-chevron');
     const strip = bar.querySelector('#stage-cinema-strip');
-    const speakingPill = bar.querySelector('#stage-cinema-speaking-pill');
 
     if (toggleBtn) {
       toggleBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
@@ -248,19 +268,6 @@ export function setupStageSocial(deps = {}) {
     }
     if (strip) {
       strip.classList.toggle('hidden', collapsed);
-    }
-    if (speakingPill) {
-      const speakers = (users || []).filter((u) => isUserSpeaking(u, st));
-      if (speakers.length > 0) {
-        const label = speakers.length === 1
-          ? `${speakers[0].name || 'Alguém'} falando`
-          : `${speakers.length} falando`;
-        speakingPill.textContent = label;
-        speakingPill.classList.remove('hidden');
-      } else {
-        speakingPill.textContent = '';
-        speakingPill.classList.add('hidden');
-      }
     }
   }
 
@@ -425,7 +432,10 @@ export function setupStageSocial(deps = {}) {
     const shouldShow = watching && (users.length > 0 || botVisible);
 
     bar.classList.toggle('hidden', !shouldShow);
-    if (!shouldShow) return;
+    const becameVisible = shouldShow && !stageVisible;
+    stageVisible = shouldShow;
+    if (!shouldShow) { clearTimeout(idleTimer); return; }
+    if (becameVisible) revealParticipants();
 
     syncControlsOffset(bar);
 
@@ -566,6 +576,7 @@ export function setupStageSocial(deps = {}) {
     const bar = document.getElementById('stage-cinema-bar');
     const st = getState();
     syncCollapsedUI(bar, channelUsers(st), st);
+    revealParticipants();
     return collapsed;
   }
 
@@ -589,6 +600,7 @@ export function setupStageSocial(deps = {}) {
     update();
   };
 
+  for (const type of ['pointermove', 'pointerdown', 'keydown', 'focusin']) document.addEventListener(type, onStageInteraction, true);
   window.addEventListener('teletela:music-state', onMusicStateEvent);
   document.addEventListener('fullscreenchange', onFullscreenChange);
 
@@ -597,6 +609,8 @@ export function setupStageSocial(deps = {}) {
   update();
 
   function destroy() {
+    clearTimeout(idleTimer);
+    for (const type of ['pointermove', 'pointerdown', 'keydown', 'focusin']) document.removeEventListener(type, onStageInteraction, true);
     window.removeEventListener('teletela:music-state', onMusicStateEvent);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.getElementById('stage-cinema-bar')?.remove();

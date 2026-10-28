@@ -17,6 +17,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   let revision = 0;
   let channelRevision = 0;
   let searchBusy = false;
+  let searchRevision = 0;
   let playlist = null;
   let playlistInput = '';
   let playlistAdding = false;
@@ -604,6 +605,10 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
       $('#music-repeat').disabled = !canWrite;
       $('#music-repeat').value = state?.repeat || 'off';
     }
+    document.querySelectorAll('[data-music-repeat]').forEach(button => {
+      button.disabled = !canWrite;
+      button.setAttribute('aria-pressed', String(button.dataset.musicRepeat === (state?.repeat || 'off')));
+    });
     if ($('#music-shuffle')) $('#music-shuffle').disabled = !canWrite || (state?.queue?.length || 0) < 2;
     updateSelection();
     const queue = state?.queue || [];
@@ -762,12 +767,20 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   $('#music-stop')?.addEventListener('click', () => action('stop'));
   $('#music-shuffle')?.addEventListener('click', () => action('shuffle'));
   $('#music-repeat')?.addEventListener('change', event => action('repeat', undefined, event.target.value));
+  document.querySelectorAll('[data-music-repeat]').forEach(button => {
+    button.addEventListener('click', () => action('repeat', undefined, button.dataset.musicRepeat));
+  });
+  function renderVolume() {
+    $('#music-volume')?.style.setProperty('--music-volume-fill', `${volume / 2}%`);
+    if ($('#music-volume-value')) $('#music-volume-value').textContent = `${volume}%`;
+  }
+  renderVolume();
   if ($('#music-volume')) $('#music-volume').value = volume;
   if ($('#music-volume-value')) $('#music-volume-value').textContent = `${volume}%`;
   $('#music-volume')?.addEventListener('input', event => {
     volume = Number(event.target.value);
     appState.mixerManager?.setUserVolume(MIXER_ID, volume);
-    if ($('#music-volume-value')) $('#music-volume-value').textContent = `${volume}%`;
+    renderVolume();
   });
   $('#music-volume')?.addEventListener('change', () => savePrefs({ musicVolume: volume }));
   function updateSelection() {
@@ -798,7 +811,24 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     finally { playlistAdding = false; updateSelection(); }
   });
   $('#music-next-page')?.addEventListener('click', () => { if (playlist?.nextOffset != null) searchMusic(playlist.nextOffset, playlistInput); });
+  function clearSearch() {
+    // Invalida respostas em trânsito sem reiniciar a música ou mexer na fila.
+    searchRevision++;
+    searchBusy = false;
+    playlist = null;
+    playlistInput = '';
+    for (const id of ['music-input', 'music-refinement']) if ($('#' + id)) $('#' + id).value = '';
+    $('#music-results')?.replaceChildren();
+    $('#music-results-heading')?.classList.add('hidden');
+    $('#music-playlist-tools')?.classList.add('hidden');
+    notify('');
+    render();
+  }
+  $('#music-clear-search')?.addEventListener('click', clearSearch);
   async function searchMusic(offset = 0, override = '') {
+    const input = (override || $('#music-input')?.value || '').trim();
+    if (!input) { clearSearch(); return; }
+    const expectedSearch = ++searchRevision;
     const expectedChannel = channelId;
     const expectedRevision = channelRevision;
     searchBusy = true;
@@ -807,11 +837,10 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     $('#music-results-heading')?.classList.add('hidden');
     $('#music-playlist-tools')?.classList.add('hidden');
     playlist = null;
-    const input = override || $('#music-input')?.value || '';
     notify('Procurando músicas…');
     try {
       const { result } = await request('music-search', { input, refinement: $('#music-refinement')?.value || '', offset, limit: MAX_QUEUE_TRACKS }, 65000);
-      if (channelId !== expectedChannel || channelRevision !== expectedRevision) return;
+      if (channelId !== expectedChannel || channelRevision !== expectedRevision || searchRevision !== expectedSearch) return;
       notify(`${result.source.title}. ${result.notice}${result.searchError ? ` ${result.searchError}` : ''}`, Boolean(result.searchError));
       playlist = result.playlist || null;
       if (playlist) {
@@ -874,8 +903,8 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
         });
         $('#music-results')?.append(load);
       }
-    } catch (error) { if (channelId === expectedChannel && channelRevision === expectedRevision) notify(error.message, true); }
-    finally { if (channelRevision === expectedRevision) { searchBusy = false; render(); } }
+    } catch (error) { if (channelId === expectedChannel && channelRevision === expectedRevision && searchRevision === expectedSearch) notify(error.message, true); }
+    finally { if (channelRevision === expectedRevision && searchRevision === expectedSearch) { searchBusy = false; render(); } }
   }
   const onStageOrFullscreenChange = () => {
     syncModalParent();

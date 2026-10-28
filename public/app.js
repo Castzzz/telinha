@@ -2972,9 +2972,9 @@ function renderTextChannels() {
   renderServerHome();
 }
 
-// Canal de texto aberto ocupa a tela toda, a não ser que você esteja assistindo alguém
+// O canal de texto ocupa o centro; a transmissão continua no mesmo vídeo, reduzida.
 function updateTextLayout() {
-  const watching = [...appState.activeStreams.values()].some((info) => !info.isLocal);
+  const watching = appState.activeStreams.size > 0;
   const available = Boolean(appState.currentChannelId || appState.textView);
   const drawer = $('#chat-drawer');
   const toggle = $('#btn-toggle-chat');
@@ -2983,7 +2983,9 @@ function updateTextLayout() {
   const chatOpen = available && !drawer?.classList.contains('collapsed');
   toggle?.classList.toggle('active', chatOpen);
   toggle?.setAttribute('aria-expanded', String(chatOpen));
-  $('#app-layout')?.classList.toggle('text-full', Boolean(appState.textView) && chatOpen && !watching);
+  const central = Boolean(appState.textView) && chatOpen;
+  $('#app-layout')?.classList.toggle('text-full', central);
+  $('#app-layout')?.classList.toggle('text-with-stream', central && watching);
 }
 
 // Balão do canal de voz: abre o chat da call no canto
@@ -3082,6 +3084,7 @@ function renderTextChat() {
 
 function setupTextChannels() {
   $('#btn-chat-back-voice')?.addEventListener('click', closeTextView);
+  $('#btn-return-to-stream')?.addEventListener('click', () => { closeTextView(); setMobileView('sala'); });
   // Perto do topo: busca as mensagens mais antigas
   $('#chat-messages')?.addEventListener('scroll', (e) => {
     const id = appState.textView;
@@ -3759,7 +3762,22 @@ window.teletelaExitFullscreen = () => {
   return true;
 };
 
+let stageControlsHome = null;
+let stageControlsElement = null;
 document.addEventListener('fullscreenchange', () => {
+  // O alvo pode sair do DOM ao parar de assistir; conserva a referência à barra.
+  const controls = stageControlsElement ||= $('#stage-controls-bar');
+  const target = document.fullscreenElement;
+  if (controls) {
+    if (!stageControlsHome) {
+      stageControlsHome = document.createComment('Lugar da barra da transmissão');
+      controls.before(stageControlsHome);
+      // A roda sobre os controles não deve dar zoom no vídeo em tela cheia.
+      controls.addEventListener('wheel', event => event.stopPropagation());
+    }
+    if (target && (target.id === 'videos-grid' || target.classList.contains('video-tile'))) target.appendChild(controls);
+    else stageControlsHome.after(controls);
+  }
   for (const id of ['user-popover', 'modal-user-profile', 'modal-settings', 'image-viewer']) mountStageOverlay(document.getElementById(id));
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     document.body.classList.remove('stage-fullscreen');
@@ -3793,6 +3811,7 @@ function toggleStageFullscreen(customTarget = null) {
     showToast('Nenhuma transmissão pra colocar em tela cheia.');
     return;
   }
+  if (appState.textView) { closeTextView(); setMobileView('sala'); }
   document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
   if (target.classList.contains('video-tile')) target.classList.add('stage-fullscreen-tile');
   document.body.classList.add('stage-fullscreen');
@@ -5014,12 +5033,15 @@ function setupPanelResize(sidebar, handle, { min, max, prefKey, edge }) {
     const onMove = (ev) => apply(startWidth + dir * (ev.clientX - startX));
     const onUp = () => {
       handle.removeEventListener('pointermove', onMove);
+      for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.removeEventListener(type, onUp);
+      window.removeEventListener('blur', onUp);
+      if (handle.hasPointerCapture(e.pointerId)) handle.releasePointerCapture(e.pointerId);
       document.body.classList.remove('resizing-sidebar');
       save();
     };
     handle.addEventListener('pointermove', onMove);
-    handle.addEventListener('pointerup', onUp, { once: true });
-    handle.addEventListener('pointercancel', onUp, { once: true });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(type, onUp);
+    window.addEventListener('blur', onUp);
   });
   handle.addEventListener('dblclick', () => { apply(null); save(); });
   handle.addEventListener('keydown', (e) => {

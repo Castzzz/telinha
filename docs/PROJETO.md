@@ -1075,3 +1075,32 @@ O painel do bot separa reprodução, busca, resultados e fila; controles são os
 Dados prontos rolam ao clicar e exibem o total em destaque, com histórico geral da sala.
 Testar a interface desta branch contra servidor anterior não habilita os handlers novos:
 para os dados funcionarem na sala oficial são necessários release do cliente e deploy do Node.
+
+### Retomada do cinema, música e chat em 28/10/2026
+
+A faixa recolhida de participantes some após 3 segundos sem interação no palco. Eventos
+de ponteiro, toque e teclado a revelam; hover e foco visível mantêm o controle acessível.
+Os snapshots de música e de fala não reiniciam esse tempo. A fala fica na borda dos avatares.
+
+A barra de ações fica acima do overlay de participantes. Na tela cheia nativa, o mesmo
+`#stage-controls-bar` acompanha o alvo (`.video-tile` ou `#videos-grid`) e volta ao marcador
+original ao sair, preservando os listeners. Guarda-se também uma referência à barra
+para recuperá-la caso o vídeo em tela cheia seja removido ao parar de assistir.
+Isso mantém o seletor de reações clicável;
+no fallback CSS a barra permanece fixa embaixo. Não subir a camada de participantes acima
+da barra: popovers filhos não conseguem escapar do contexto de empilhamento do pai.
+
+`updateTextLayout()` usa `text-full` para canais de texto abertos e `text-with-stream`
+quando existe transmissão. A prévia é o próprio `#stage-section` reduzido por CSS: nenhum
+vídeo, MediaStream, captura ou conexão é recriado ao mudar a conversa. O chat da call usa
+a lateral e conserva a largura salva; o canal independente ocupa o centro. No celular,
+a prévia fica acima do chat e abaixo da barra da call, escondendo-se com o teclado aberto.
+
+A limpeza da busca de música incrementa uma revisão própria para ignorar respostas em
+trânsito. Não reutilizar a revisão de áudio/canal: limpar resultados não deve reiniciar
+a escuta. Botão **Limpar busca** e envio de campo vazio compartilham esse caminho.
+
+Validação: `npm test`, suítes m1/m2/m3, `npm run test:mobile` e
+`npm run test:music:call`. O último testa alvos de clique e arraste reais, faixa recolhida,
+reações em tela cheia, chat central em PC/celular, continuidade do vídeo e do áudio,
+limpeza de resposta atrasada e preservação da fila. APK de teste atualizado localmente.

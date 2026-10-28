@@ -182,7 +182,8 @@ a pedido do dono em 28/10/2026. Ainda não publicado.
 
 ## 16. Ajustes após testar cinema, música e chat
 
-**Anotados em 28/10/2026 para fazer mais tarde, quando o limite voltar.**
+**Implementados para teste em 28/10/2026**, após autorização para retomar, na branch
+`melhoria/cinema-dados-contas-e-privacidade`. Sem release/deploy.
 Lista detalhada e andamento em [PENDENCIAS.md](PENDENCIAS.md#próxima-retomada-ajustes-após-testar-cinema-música-e-chat-28102026).
 
 - Remover o texto com o nome de quem está falando no cabeçalho de Participantes.
@@ -194,4 +195,5 @@ Lista detalhada e andamento em [PENDENCIAS.md](PENDENCIAS.md#próxima-retomada-a
   vazio, preservando a reprodução e a fila.
 - Corrigir a divisória do chat lateral que não permite aumentar/diminuir sua largura.
 - Abrir canais de texto na área central, com a transmissão em tamanho reduzido, como no
-  Discord. Distinguir esses canais do chat da call; posição e layout ficam para definir.
+  Discord. Prévia no canto inferior direito com botão para voltar à transmissão; o chat
+  da call continua lateral e redimensionável.

@@ -393,7 +393,7 @@ async function runStageAndMusicTests(baseUrl) {
   assert.equal(stageResult.preservedAvatarDom, true, 'Alternar fala não deve recriar o DOM do avatar');
   assert.equal(stageResult.popoverOpenedForAlice, true, 'Clicar no participante deve acionar openUserPopover');
   assert.equal(stageResult.collapsedState, true, 'Botão da faixa cinema deve recolher e salvar preferência');
-  assert.match(stageResult.speakingPillText, /Alice falando/);
+  assert.equal(stageResult.speakingPillText, undefined, 'A fala fica só na borda do avatar');
   assert.equal(stageResult.expandedAgain, true, 'Botão da faixa cinema deve expandir novamente');
   assert.equal(stageResult.reacted, true);
   assert.equal(stageResult.floatingReactionCount, 1);

@@ -176,7 +176,8 @@ sendo a 4.0.0; estes recursos entram num próximo lançamento, incluindo o APK.
 | **Mostrar o jogo que estou jogando** | No app para Windows e Linux, um ícone de controle verde (🎮) aparece ao lado de quem está jogando e o nome do jogo com o tempo ativo aparece ao clicar no perfil da pessoa (**Jogando Counter-Strike 2 · há 23 min**), enquanto embaixo do nome aparece o tempo da pessoa na call. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável |
 | **Dar zoom numa transmissão** | Role a roda do mouse sobre o vídeo (ou faça pinça com dois dedos no celular) para dar zoom de até 500%, e arraste para mover a imagem. Clique no botão de porcentagem (`150% ✕`) para voltar ao tamanho normal |
 | **Usar o miniplayer** | Ao assistir uma tela ou câmera, acompanhe a faixa atual e use pausar/continuar e pular no palco. O título abre a fila completa |
-| **Modo Cinema** | Faixa horizontal recolhível no palco, com fotos, nomes, áudio e transmissão separados. O contador inclui pessoas; a música aparece ao lado. Funciona em tela cheia |
+| **Modo Cinema** | Faixa horizontal recolhível no palco, com fotos, nomes, áudio e transmissão separados. O contador inclui pessoas; a música aparece ao lado. A fala aparece na borda do avatar. Recolhida, a faixa some após 3 segundos e reaparece com mouse, toque ou teclado. Reações funcionam também em tela cheia |
+| **Conversar enquanto assiste** | Clique num canal de texto para abrir a conversa no centro; a transmissão continua numa prévia no canto inferior direito. **Voltar à transmissão** aumenta o vídeo. O chat da call fica na lateral: arraste a borda esquerda para mudar a largura (ou use as setas com a alça em foco) |
 | **Rolar dados para RPG** | Botão **Dados** no início ou ícone de dado na call e no chat; no celular, no cabeçalho. Escolha d4 a d100 ou digite `1d15` / `2d6+3`. Clique em um dado pronto para rolar na hora e ver o resultado em destaque. O servidor compartilha um único histórico das últimas 30 rolagens, com nome, dado, resultado e horário, independente do canal |
 | **Usar o mesmo perfil em outro aparelho** | ⚙️ → **Conta** (celular: **Você → Conta**). Crie uma conta opcional com usuário e senha e guarde o código de recuperação. Entre no outro PC ou Android para recuperar perfil, cargos e acessos. A sessão fica salva por até 30 dias; sair encerra a sessão daquele aparelho |
 | **Bot de música na call** | Adicione músicas ou playlists de até 150 faixas na fila, reordene arrastando (`⠿`) ou usando `↑`/`↓`, use os botões rápidos de pausar/pular direto no card do bot na call e acompanhe o visualizador circular reagindo ao som |
@@ -352,7 +353,9 @@ ensurdecer silencia a música junto das vozes. Sair do último participante para
 
 Playlists públicas de YouTube/Spotify e álbuns Spotify podem ser carregados em páginas
 de até 150 faixas. Selecione quais adicionar, escolha **Embaralhar ao adicionar**, use
-**Embaralhar fila** ou arraste as músicas na fila (`⠿` ou `↑`/`↓`) para mudar a ordem. **Repetir** permite repetir a faixa atual ou a fila inteira.
+**Embaralhar fila** ou arraste as músicas na fila (`⠿` ou `↑`/`↓`) para mudar a ordem. **Repetir** tem botões para desligar, repetir uma faixa ou a fila inteira. O controle
+**Seu volume** muda só o que você ouve. Use **Limpar busca** ou faça uma busca vazia
+para tirar os resultados sem interromper a música nem apagar a fila.
 No Spotify, a leitura pública pode mostrar apenas parte de listas grandes; listas privadas
 não são acessadas. Cada faixa é procurada por título e artista no YouTube.
 

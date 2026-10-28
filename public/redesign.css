@@ -487,3 +487,25 @@
 .channel-row:hover .channel-settings-btn,
 .channel-row:focus-within .channel-settings-btn,
 .channel-item.channel-active > .channel-row .channel-settings-btn { visibility: visible; }
+
+/* A alça fica inteira dentro do chat, inclusive no visual que corta as bordas. */
+#chat-resizer { left: 0; width: 10px; z-index: 60; touch-action: none; }
+#chat-resizer::after { content: ''; position: absolute; left: 3px; top: 45%; height: 40px; width: 3px; border-radius: 3px; background: var(--border-medium); }
+#chat-resizer:hover::after, #chat-resizer:focus-visible::after { background: var(--accent-brand); }
+.app-layout { position: relative; }
+.stream-preview-toolbar { display: none; }
+.app-layout.text-full.text-with-stream #stage-section {
+  display: flex; position: absolute; right: 20px; bottom: 92px;
+  width: min(360px, 32vw); height: 234px; min-height: 0; flex: none;
+  z-index: 160; border: 1px solid var(--border-medium); border-radius: var(--radius-lg);
+  box-shadow: 0 8px 28px rgba(0,0,0,.4); background: var(--bg-secondary);
+}
+.text-with-stream .stream-preview-toolbar { display: flex; align-items: center; justify-content: space-between; flex: 0 0 38px; gap: 8px; padding: 4px 8px; color: var(--text-muted); font-size: 11px; }
+.stream-preview-toolbar button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; font-size: 11px; }
+.stream-preview-toolbar .icon-svg { width: 14px; height: 14px; }
+.text-with-stream #videos-grid { min-height: 0; flex: 1; padding: 0; gap: 2px; }
+.text-with-stream #stage-controls-bar, .text-with-stream #video-stage,
+.text-with-stream #voice-lounge, .text-with-stream .video-tile-overlay,
+.text-with-stream .tile-badge, .text-with-stream .tile-volume,
+.text-with-stream .tile-btn { display: none; }
+.text-with-stream #chat-messages { padding-bottom: 246px; }

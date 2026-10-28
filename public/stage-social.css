@@ -15,7 +15,6 @@ body.stage-fullscreen .stage-cinema-bar, :fullscreen .stage-cinema-bar { bottom:
 .stage-cinema-toggle-icon, .stage-cinema-chevron { display: inline-flex; color: var(--text-muted); }
 .stage-cinema-toggle-icon .icon-svg, .stage-cinema-chevron .icon-svg { width: 14px; height: 14px; }
 .stage-cinema-count { min-width: 18px; font-size: 11px; color: var(--text-muted); }
-.stage-cinema-speaking-pill { font-size: 11px; color: var(--accent-green); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .stage-cinema-strip {
   display: flex; gap: 6px; align-items: center; padding: 6px; border-radius: 16px;
   border: 1px solid var(--border-medium); background: var(--bg-floating); box-shadow: var(--panel-shadow);
@@ -179,3 +178,11 @@ html.android-pip .stage-cinema-reactions {
 }
 
 .stage-cinema-strip::-webkit-scrollbar { display: none; }
+
+/* Recolhida, a faixa só reaparece com interação; o Tab continua alcançando o botão. */
+.stage-cinema-bar { transition: opacity 180ms ease; }
+.stage-cinema-bar.is-idle { opacity: 0; pointer-events: none; }
+.stage-cinema-bar:has(:focus-visible) { opacity: 1; pointer-events: auto; }
+body.stage-fullscreen .stage-cinema-bar.has-stage-controls,
+:fullscreen .stage-cinema-bar.has-stage-controls { bottom: 76px; }
+@media (prefers-reduced-motion: reduce) { .stage-cinema-bar { transition: none; } }
