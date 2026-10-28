@@ -7,10 +7,10 @@ for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) e
 cargos sem conta e canais invisíveis na 3.7.0. Contas/amigos e reforço de voz estão
 preservados em `teste/contas-amigos-e-canais-com-senha` (commit `08b262e`).
 
-**Implementado para teste (28/10/2026):** branch `melhoria/cinema-dados-contas-e-privacidade`:
-miniplayer, modo cinema, privacidade inclusive para o dono, dados de RPG, ícones,
-launcher e contas opcionais. O APK continua acompanhando as atualizações; múltiplos
-servidores ficam para depois. Este trabalho ainda não tem versão publicada.
+**Versão 4.1.0 (28/10/2026):** miniplayer, modo cinema, privacidade inclusive para o dono,
+dados de RPG, início/ícones renovados, chat central e contas opcionais. O APK acompanha
+a atualização e permite alternar câmera frontal/traseira. Magic fica na branch separada
+`experimento/magic-no-teletela`; múltiplos servidores ficam para depois.
 
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,

@@ -165,9 +165,9 @@ A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo 
 
 ---
 
-Nesta branch de testes, miniplayer, cinema, dados de RPG, conta opcional, privacidade
-inclusive para o dono e launcher novo estão implementados. A versão publicada continua
-sendo a 4.0.0; estes recursos entram num próximo lançamento, incluindo o APK.
+A versão **4.1.0** traz miniplayer, cinema, dados de RPG, conta opcional, privacidade
+inclusive para o dono, início/ícones renovados, chat central com transmissão reduzida e
+troca de câmera frontal/traseira no Android. O APK acompanha essa atualização.
 
 ## 🎮 Como usar
 
