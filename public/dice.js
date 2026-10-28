@@ -9,74 +9,102 @@ const DIE_SHAPES = {
   100: '<rect x="2" y="3" width="13" height="13" rx="2"/><path d="M9 16v3a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-5M6 7h.01M11 12h.01M17 12h.01M17 17h.01"/>'
 };
 const svg = paths => `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-export function setupDice({ socket, appState, showToast, escapeHtml }) {
+export function setupDice({ socket, showToast, escapeHtml }) {
   const buttons = ['#stage-controls-bar .stage-controls-right', '#chat-drawer .chat-header'].map(selector => {
     const parent = document.querySelector(selector);
     if (!parent) return null;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'btn-control-icon dice-trigger';
-    button.title = 'Rolar dados e conferir histórico'; button.setAttribute('aria-label', button.title);
+    button.title = 'Dados e histórico do servidor'; button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-controls', 'modal-dice'); button.innerHTML = svg(DIE_PATH);
     parent.prepend(button); return button;
   }).filter(Boolean);
+  const news = document.querySelector('#btn-home-whats-new');
+  if (news) {
+    const actions = document.createElement('div'); actions.className = 'home-header-actions';
+    news.parentElement.append(actions); actions.append(news);
+    const homeButton = document.createElement('button'); homeButton.id = 'btn-home-dice';
+    homeButton.type = 'button'; homeButton.className = 'home-news-button';
+    homeButton.innerHTML = `${svg(DIE_PATH)}<span>Dados</span>`;
+    homeButton.setAttribute('aria-controls', 'modal-dice'); actions.prepend(homeButton); buttons.push(homeButton);
+  }
   const mobileButton = document.createElement('button');
   mobileButton.id = 'btn-mobile-dice'; mobileButton.type = 'button';
   mobileButton.className = 'mobile-icon-button mobile-only dice-trigger';
-  mobileButton.title = 'Rolar dados e conferir histórico'; mobileButton.setAttribute('aria-label', mobileButton.title);
+  mobileButton.setAttribute('aria-label', 'Dados e histórico do servidor');
   mobileButton.setAttribute('aria-controls', 'modal-dice'); mobileButton.innerHTML = svg(DIE_PATH);
   document.querySelector('#mobile-header')?.append(mobileButton); buttons.push(mobileButton);
   const modal = document.createElement('div');
   modal.id = 'modal-dice'; modal.className = 'modal-backdrop hidden';
   modal.innerHTML = `<section class="modal-card dice-modal" role="dialog" aria-modal="true" aria-labelledby="dice-title" tabindex="-1">
-    <div class="modal-header"><h2 id="dice-title">Rolar dados</h2><button type="button" class="btn-icon-close" id="dice-close" data-close-modal="modal-dice" aria-label="Fechar dados">✕</button></div>
-    <p id="dice-channel" class="dice-hint"></p><div class="dice-presets">${[4, 6, 8, 10, 12, 20, 100].map(sides => `<button type="button" class="btn-secondary" data-die="1d${sides}">${svg(DIE_SHAPES[sides])}<span>d${sides}</span></button>`).join('')}</div>
-    <form id="dice-form" class="dice-form"><label for="dice-notation">Rolagem personalizada</label><div><input id="dice-notation" class="form-input" value="1d20" maxlength="24" placeholder="1d15 ou 2d6+3" autocomplete="off" required><button class="btn-primary" type="submit">Rolar</button></div></form>
+    <div class="modal-header"><div><span class="dice-eyebrow">PARA A SALA TODA</span><h2 id="dice-title">Rolar dados</h2></div><button type="button" class="btn-icon-close" id="dice-close" data-close-modal="modal-dice" aria-label="Fechar dados">✕</button></div>
+    <p class="dice-hint">Escolha um dado para rolar. Todo mundo no servidor pode conferir o resultado.</p>
+    <div class="dice-presets">${[4, 6, 8, 10, 12, 20, 100].map(sides => `<button type="button" class="btn-secondary" data-die="1d${sides}" aria-label="Rolar um d${sides}">${svg(DIE_SHAPES[sides])}<span>d${sides}</span></button>`).join('')}</div>
+    <div id="dice-result" class="dice-result" role="status" aria-live="polite"><span id="dice-result-kind">Seu resultado</span><strong id="dice-result-value">—</strong><small id="dice-result-detail">Um clique no dado e a sorte está lançada.</small></div>
+    <form id="dice-form" class="dice-form"><label for="dice-notation">Ou personalize a rolagem</label><div><input id="dice-notation" class="form-input" value="1d20" maxlength="24" placeholder="1d15 ou 2d6+3" autocomplete="off" required><button class="btn-primary" type="submit">Rolar</button></div></form>
     <p id="dice-status" class="dice-hint" role="status" aria-live="polite"></p>
-    <h3>Últimas 30 rolagens</h3><p class="dice-hint">Histórico compartilhado deste canal, com horário e cada resultado.</p><ol id="dice-history" class="dice-history"></ol>
+    <div class="dice-history-heading"><h3>Histórico do servidor</h3><button type="button" id="dice-refresh" class="btn-secondary" aria-label="Atualizar histórico">Atualizar</button></div><p class="dice-hint">Últimas 30 rolagens de todos os canais, com nome, dado e resultado.</p><ol id="dice-history" class="dice-history"></ol>
   </section>`;
   document.body.append(modal);
   const $ = selector => modal.querySelector(selector);
-  let target = null, history = [], generation = 0, busy = false, opener;
-  const current = () => appState.textView ? { type: 'text', channelId: appState.textView } : appState.currentChannelId ? { type: 'voice', channelId: appState.currentChannelId } : null;
-  const equal = (a, b) => a?.type === b?.type && a?.channelId === b?.channelId;
-  const channel = () => (target?.type === 'text' ? appState.textChannels : appState.channels)?.get(target?.channelId);
-  const close = () => { generation++; target = null; history = []; modal.classList.add('hidden'); if (opener?.isConnected) opener.focus(); };
-  const render = () => {
-    const ch = channel();
-    $('#dice-channel').textContent = ch ? `#${ch.name}` : '';
-    $('#dice-history').innerHTML = history.slice().reverse().map(roll => `<li><div><strong>${escapeHtml(roll.userName)}</strong><time datetime="${new Date(roll.timestamp).toISOString()}">${new Date(roll.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></div><p><span>${escapeHtml(roll.notation)}</span><b>${roll.total}</b></p><small>${roll.values.join(' + ')}${roll.modifier ? ` ${roll.modifier > 0 ? '+' : '−'} ${Math.abs(roll.modifier)}` : ''}</small></li>`).join('') || '<li class="dice-hint">Nenhuma rolagem por aqui ainda.</li>';
-    for (const button of modal.querySelectorAll('[data-die], button[type="submit"]')) button.disabled = busy || !socket.connected || ch?.canWrite === false;
+  let history = [], generation = 0, busy = false, opener, supported = null;
+  const visible = () => !modal.classList.contains('hidden');
+  const unavailable = 'Os dados ainda não estão disponíveis nesta sala. O servidor precisa receber a atualização.';
+  const merge = rolls => {
+    history = [...new Map([...history, ...rolls].map(roll => [roll.id, roll])).values()].sort((a, b) => a.timestamp - b.timestamp).slice(-30);
   };
-  const request = (event, payload) => socket.timeout(7000).emitWithAck(event, payload);
-  const open = async event => {
-    const selected = current();
-    if (!selected) return showToast('Entre numa call ou abra um canal de texto para rolar dados.');
-    opener = event.currentTarget; target = selected; history = []; const run = ++generation;
-    document.querySelector('#mobile-call-options')?.close();
-    modal.classList.remove('hidden'); $('#dice-status').textContent = 'Carregando histórico…'; render(); $('#dice-notation').focus();
+  const close = () => { generation++; modal.classList.add('hidden'); if (opener?.isConnected) opener.focus(); };
+  const breakdown = roll => `${roll.values.join(' + ')}${roll.modifier ? ` ${roll.modifier > 0 ? '+' : '−'} ${Math.abs(roll.modifier)}` : ''}`;
+  const render = () => {
+    $('#dice-history').innerHTML = history.slice().reverse().map(roll => `<li><div><strong>${escapeHtml(roll.userName)}</strong><time datetime="${new Date(roll.timestamp).toISOString()}">${new Date(roll.timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time></div><p><span>${escapeHtml(roll.notation)}</span><b>${roll.total}</b></p>${roll.values.length > 1 || roll.modifier ? `<small>${breakdown(roll)}</small>` : ''}</li>`).join('') || '<li class="dice-empty">As próximas rolagens da sala vão aparecer aqui.</li>';
+    for (const button of modal.querySelectorAll('[data-die], button[type="submit"]')) button.disabled = busy || !socket.connected || supported !== true;
+    $('#dice-refresh').disabled = !socket.connected || supported !== true;
+  };
+  const request = async (event, payload = {}) => {
+    if (!socket.connected) throw new Error('Espere a conexão voltar para usar os dados.');
+    if (supported !== true) throw new Error(unavailable);
+    let result;
+    try { result = await socket.timeout(7000).emitWithAck(event, payload); }
+    catch { throw new Error('O servidor demorou para responder. Confira o histórico antes de rolar de novo.'); }
+    if (!result?.success) throw new Error(result?.error || 'Não deu para concluir. Tente de novo.');
+    if (result.scope !== 'server') throw new Error(unavailable);
+    return result;
+  };
+  const load = async () => {
+    const run = generation;
+    $('#dice-status').textContent = supported === false ? unavailable : supported === null ? 'Verificando os dados da sala…' : 'Carregando histórico…';
+    render();
+    if (supported !== true) return;
     try {
-      const response = await request('dice-history', selected);
+      const response = await request('dice-history');
       if (run !== generation) return;
-      if (!response.success) throw new Error(response.error);
-      // Uma rolagem pode chegar enquanto o histórico é carregado.
-      history = [...new Map([...response.rolls, ...history].map(roll => [roll.id, roll])).values()].sort((a, b) => a.timestamp - b.timestamp).slice(-30);
-      $('#dice-status').textContent = ''; render();
-    } catch (err) { if (run === generation) $('#dice-status').textContent = err.message || 'O servidor não respondeu. Tente de novo.'; }
+      merge(response.rolls); $('#dice-status').textContent = ''; render();
+    } catch (err) { if (run === generation) $('#dice-status').textContent = err.message; }
+  };
+  const open = event => {
+    opener = event.currentTarget; generation++;
+    document.querySelector('#mobile-call-options')?.close();
+    modal.classList.remove('hidden'); load(); $('#dice-notation').focus();
   };
   async function roll(notation) {
-    if (busy || !target) return;
-    busy = true; const run = generation, selected = { ...target }; render();
+    if (busy || !visible()) return;
+    busy = true; const run = generation;
+    for (const button of modal.querySelectorAll('[data-die]')) button.classList.toggle('is-selected', button.dataset.die === notation);
+    $('#dice-result').classList.add('is-rolling'); $('#dice-status').textContent = 'Rolando…'; render();
     try {
-      const result = await request('dice-roll', { ...selected, notation });
+      const result = await request('dice-roll', { notation });
       if (run !== generation) return;
-      if (!result.success) throw new Error(result.error);
-      if (!history.some(item => item.id === result.roll.id)) history = [...history, result.roll].slice(-30);
-      $('#dice-status').textContent = `${result.roll.notation}: ${result.roll.total}`;
-    } catch (err) { if (run === generation) $('#dice-status').textContent = err.message || 'Não deu para rolar. Tente de novo.'; }
-    finally { busy = false; render(); }
+      merge([result.roll]);
+      $('#dice-result-kind').textContent = `${result.roll.userName} · ${result.roll.notation}`;
+      $('#dice-result-value').textContent = result.roll.total;
+      $('#dice-result-detail').textContent = result.roll.values.length > 1 || result.roll.modifier ? breakdown(result.roll) : `1 dado de ${result.roll.sides} lados`;
+      $('#dice-status').textContent = '';
+    } catch (err) { if (run === generation) $('#dice-status').textContent = err.message; }
+    finally { busy = false; $('#dice-result').classList.remove('is-rolling'); render(); }
   }
   for (const button of buttons) button.addEventListener('click', open);
   $('#dice-close').addEventListener('click', close);
+  $('#dice-refresh').addEventListener('click', load);
   modal.addEventListener('click', event => { if (event.target === modal) close(); });
   modal.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.stopPropagation(); close(); }
@@ -90,16 +118,16 @@ export function setupDice({ socket, appState, showToast, escapeHtml }) {
   $('#dice-form').addEventListener('submit', event => { event.preventDefault(); roll($('#dice-notation').value); });
   for (const button of modal.querySelectorAll('[data-die]')) button.addEventListener('click', () => { $('#dice-notation').value = button.dataset.die; roll(button.dataset.die); });
   socket.on('dice-rolled', payload => {
-    if (equal(target, payload)) {
-      if (!history.some(item => item.id === payload.roll.id)) history = [...history, payload.roll].slice(-30);
-      render();
-    } else if (equal(current(), payload)) showToast(`${payload.roll.userName} rolou ${payload.roll.notation}: ${payload.roll.total}`);
+    if (payload?.scope !== 'server') return;
+    merge([payload.roll]);
+    if (visible()) render(); else showToast(`${payload.roll.userName} rolou ${payload.roll.notation}: ${payload.roll.total}`);
   });
-  socket.on('disconnect', close);
-  const sync = () => {
-    for (const button of buttons) button.classList.toggle('hidden', !current());
-    if (target && (!equal(target, current()) || !channel())) close();
-    else if (target) render();
-  };
-  return { sync };
+  socket.on('room-info', info => {
+    const previous = supported; supported = info?.diceVersion === 2;
+    if (visible() && previous !== supported) load();
+    render();
+  });
+  socket.on('connect', () => { supported = null; render(); });
+  socket.on('disconnect', () => { supported = null; close(); });
+  return { sync: render };
 }

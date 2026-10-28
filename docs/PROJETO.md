@@ -531,7 +531,7 @@ trocar: apague a linha `OWNER_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
 | `accounts.json` | contas opcionais, accessId original, perfil completo, scrypt e hashes dos códigos/tokens; arquivo atômico 0600, falha fechada se ilegível |
-| `dice.json` | últimas 30 rolagens por canal de voz/texto; autor, horário, dados individuais, modificador e total; arquivo atômico 0600 |
+| `dice.json` | últimas 30 rolagens gerais do servidor (formato v2); autor, horário, dados individuais, modificador e total; arquivo atômico 0600 |
 | `permissions.json` | segredo HMAC, dono (`ownerId`), cargos, nomes, vínculos e hash das chaves públicas; acesso 0600 |
 | `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
 | `chat-files/` | vídeos e arquivos da call (20 MB por envio, até 1 GB; **apagados a cada reinício**) |
@@ -874,9 +874,14 @@ de ruído, e 11 inicialização (`initApp`).
   Continua sendo controle de acesso do aplicativo: o operador da VM tem acesso aos arquivos.
 - Rolagens `NdM` com modificador opcional: 1–100 dados, 2–10.000 lados e modificador até 10.000.
   `crypto.randomInt` sorteia no servidor, que persiste antes de anunciar. Limites: 500 ms e
-  20 pedidos/minuto por identidade, inclusive entre canais/reconexões. Histórico acessível só
-  a quem vê o texto ou está na call; escrita respeita `canWrite`. Excluir o canal remove o
-  histórico. Arquivo sem pasta persistente dura só até reiniciar.
+  20 pedidos/minuto por identidade, inclusive entre canais/reconexões. Histórico geral
+  acessível a todos conectados, sem depender de canal ou call. `dice-history` e `dice-roll`
+  retornam `scope: server`; `dice-rolled` é anunciado para toda a sala, sem IDs/nomes de
+  canais. O nome vem do usuário validado no servidor. Excluir um canal não apaga rolagens.
+  O formato v1 por canal é copiado para `dice.json.por-canal-v1` (0600) antes de iniciar um
+  histórico geral vazio, evitando publicar registros privados antigos. Sem pasta persistente,
+  dura só até reiniciar. `room-info.diceVersion: 2` anuncia suporte; a interface bloqueia a
+  rolagem e explica a atualização necessária em servidores antigos, sem inventar resultados.
 - Novos módulos Node precisam entrar em `build.files` e no staging de `deploy/oracle/deploy.sh`.
   O APK usa todos os arquivos de `public/`; incrementar `versionCode` junto da próxima release
   e manter assinatura, ID e nome do artefato existentes.
@@ -1060,3 +1065,13 @@ SFU com STUN. A qualidade nos aparelhos reais deve ser conferida pelos amigos.
 Backups antes e depois: `~/Teletela-backups/teletela-dados-2026-10-27_17-49-34.tar.gz` e
 `~/Teletela-backups/teletela-dados-2026-10-27_18-01-25.tar.gz`. Segredos preservados na VM,
 sons dos amigos fora do git. Resultado e histórico em [TESTE-BOT-MUSICA.md](TESTE-BOT-MUSICA.md).
+
+### Ajustes do cinema, música e dados após a conferência de 28/10/2026
+
+A faixa do cinema usa itens horizontais com avatar, nome e indicadores de áudio/transmissão
+em regiões separadas. A música fica ao lado e não entra no contador de pessoas. Avatares
+continuam preservados ao mudar apenas a fala; tela cheia, temas e modo leve permanecem.
+O painel do bot separa reprodução, busca, resultados e fila; controles são os mesmos.
+Dados prontos rolam ao clicar e exibem o total em destaque, com histórico geral da sala.
+Testar a interface desta branch contra servidor anterior não habilita os handlers novos:
+para os dados funcionarem na sala oficial são necessários release do cliente e deploy do Node.

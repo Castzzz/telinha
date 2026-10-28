@@ -130,7 +130,7 @@ visibilidade e quem pode enviar no chat. O envio pode ser liberado por pessoa ou
 na call essa regra afeta o chat, preservando o microfone. Canais invisíveis só aparecem
 para quem tem acesso, **inclusive o dono do servidor**. O dono não pode alterar um canal
 que não vê nem atribuir cargos para contornar esse acesso. A revogação também bloqueia
-histórico, rolagens e anexos; em voz, retira da call. A senha de entrada continua obrigatória inclusive para o dono. O Geral fica público.
+histórico e anexos; em voz, retira da call. A senha de entrada continua obrigatória inclusive para o dono. O Geral fica público.
 
 Os cargos aparecem ao clicar na pessoa. Em **Configurações → Perfil → Cargo ao lado do
 nome**, cada pessoa pode escolher um cargo para exibir junto ao nome; por padrão ficam
@@ -176,8 +176,8 @@ sendo a 4.0.0; estes recursos entram num próximo lançamento, incluindo o APK.
 | **Mostrar o jogo que estou jogando** | No app para Windows e Linux, um ícone de controle verde (🎮) aparece ao lado de quem está jogando e o nome do jogo com o tempo ativo aparece ao clicar no perfil da pessoa (**Jogando Counter-Strike 2 · há 23 min**), enquanto embaixo do nome aparece o tempo da pessoa na call. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável |
 | **Dar zoom numa transmissão** | Role a roda do mouse sobre o vídeo (ou faça pinça com dois dedos no celular) para dar zoom de até 500%, e arraste para mover a imagem. Clique no botão de porcentagem (`150% ✕`) para voltar ao tamanho normal |
 | **Usar o miniplayer** | Ao assistir uma tela ou câmera, acompanhe a faixa atual e use pausar/continuar e pular no palco. O título abre a fila completa |
-| **Modo Cinema** | A faixa recolhível no palco mostra os participantes, quem está falando, o bot e reações, inclusive em tela cheia |
-| **Rolar dados para RPG** | Botão de dado na call ou no chat; no celular, no cabeçalho. Escolha d4 a d100 ou digite `1d15` / `2d6+3`. O canal compartilha as últimas 30 rolagens com horário, autor, resultado de cada dado e total |
+| **Modo Cinema** | Faixa horizontal recolhível no palco, com fotos, nomes, áudio e transmissão separados. O contador inclui pessoas; a música aparece ao lado. Funciona em tela cheia |
+| **Rolar dados para RPG** | Botão **Dados** no início ou ícone de dado na call e no chat; no celular, no cabeçalho. Escolha d4 a d100 ou digite `1d15` / `2d6+3`. Clique em um dado pronto para rolar na hora e ver o resultado em destaque. O servidor compartilha um único histórico das últimas 30 rolagens, com nome, dado, resultado e horário, independente do canal |
 | **Usar o mesmo perfil em outro aparelho** | ⚙️ → **Conta** (celular: **Você → Conta**). Crie uma conta opcional com usuário e senha e guarde o código de recuperação. Entre no outro PC ou Android para recuperar perfil, cargos e acessos. A sessão fica salva por até 30 dias; sair encerra a sessão daquele aparelho |
 | **Bot de música na call** | Adicione músicas ou playlists de até 150 faixas na fila, reordene arrastando (`⠿`) ou usando `↑`/`↓`, use os botões rápidos de pausar/pular direto no card do bot na call e acompanhe o visualizador circular reagindo ao som |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
@@ -335,8 +335,10 @@ A propriedade da sala usa `OWNER_KEY`, exclusiva e guardada em `/etc/telinha/tel
 Os canais criados ficam em `/opt/telinha/data/channels.json` na VM (sala hospedada no PC: na pasta de dados do app). O histórico dos canais de texto fica em `data/text/<canal>.jsonl` (até 50 mil mensagens por canal), as imagens em `data/text/images/` (até 25 GB) e vídeos/arquivos em `data/text/files/` (até 5 GB). Passando dos limites de espaço, os arquivos mais antigos são apagados.
 
 As contas opcionais ficam em `data/accounts.json`, com senha derivada por scrypt, código de
-recuperação e tokens de sessão guardados como hashes. O histórico curto dos dados fica em
-`data/dice.json`. Ambos entram no backup da sala. Contas precisam de `TELINHA_DATA_DIR`;
+recuperação e tokens de sessão guardados como hashes. O histórico geral das últimas 30 rolagens fica em
+`data/dice.json`, compartilhado com todos no servidor. Rolagens novas não guardam o canal
+de origem. O histórico anterior por canal é preservado em `dice.json.por-canal-v1` e não
+é publicado na sala. Ambos entram no backup da sala. Contas precisam de `TELINHA_DATA_DIR`;
 sem pasta persistente, o app continua funcionando com perfil sem conta. Criar uma conta
 preserva o acesso atual; entrar usa o usuário único, sem mudar o apelido mostrado aos amigos.
 Recuperar a conta troca o código e encerra as sessões anteriores. Depois de vincular uma conta,

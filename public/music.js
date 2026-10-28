@@ -594,7 +594,9 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     if ($('#music-search-button')) $('#music-search-button').disabled = !canWrite || searchBusy;
     if ($('#music-pause')) {
       $('#music-pause').disabled = !canWrite || !['playing', 'paused'].includes(state?.phase);
-      $('#music-pause').textContent = state?.phase === 'paused' ? 'Continuar' : 'Pausar';
+      const label = state?.phase === 'paused' ? 'Continuar' : 'Pausar';
+      $('#music-pause').innerHTML = `${state?.phase === 'paused' ? PLAY_ICON_SVG : PAUSE_ICON_SVG}<span>${label}</span>`;
+      $('#music-pause').setAttribute('aria-label', `${label} música`);
     }
     if ($('#music-skip')) $('#music-skip').disabled = !canWrite || (!state?.track && !state?.queue?.length);
     if ($('#music-stop')) $('#music-stop').disabled = !canWrite || (!state?.track && !state?.queue?.length);
@@ -605,6 +607,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     if ($('#music-shuffle')) $('#music-shuffle').disabled = !canWrite || (state?.queue?.length || 0) < 2;
     updateSelection();
     const queue = state?.queue || [];
+    $('#music-queue-empty')?.classList.toggle('hidden', queue.length > 0);
     if ($('#music-queue-title')) $('#music-queue-title').textContent = `Próximas músicas (${queue.length}/${MAX_QUEUE_TRACKS})`;
     $('#music-queue')?.replaceChildren();
     queue.forEach((track, index) => {
@@ -707,6 +710,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     $('#modal-music')?.classList.add('hidden');
     syncModalParent();
     $('#music-results')?.replaceChildren();
+    $('#music-results-heading')?.classList.add('hidden');
     $('#music-playlist-tools')?.classList.add('hidden');
     notify('Cole uma música ou playlist do YouTube/Spotify, ou escreva título e artista.');
     render();
@@ -800,6 +804,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     searchBusy = true;
     if ($('#music-search-button')) $('#music-search-button').disabled = true;
     $('#music-results')?.replaceChildren();
+    $('#music-results-heading')?.classList.add('hidden');
     $('#music-playlist-tools')?.classList.add('hidden');
     playlist = null;
     const input = override || $('#music-input')?.value || '';
@@ -815,10 +820,17 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
         if ($('#music-playlist-name')) $('#music-playlist-name').textContent = `${playlist.title} · ${playlist.tracks.length} faixas nesta página`;
         $('#music-next-page')?.classList.toggle('hidden', playlist.nextOffset == null);
       }
-      for (const track of playlist?.tracks || result.candidates) {
+      const tracks = playlist?.tracks || result.candidates || [];
+      $('#music-results-heading')?.classList.toggle('hidden', !tracks.length);
+      if ($('#music-results-count')) $('#music-results-count').textContent = `${tracks.length} ${tracks.length === 1 ? 'opção' : 'opções'}`;
+      let resultIndex = 0;
+      for (const track of tracks) {
         const row = document.createElement('article');
         row.className = 'music-result';
+        const number = document.createElement('span');
+        number.className = 'music-result-number'; number.textContent = String(++resultIndex).padStart(2, '0');
         const info = document.createElement('div');
+        info.className = 'music-result-info';
         const title = document.createElement('strong');
         title.textContent = track.title;
         const description = document.createElement('small');
@@ -826,7 +838,9 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
         const add = document.createElement('button');
         add.type = 'button';
         add.className = 'btn-primary';
-        add.textContent = 'Adicionar à fila';
+        add.textContent = 'Adicionar';
+        add.title = `Adicionar ${track.title} à fila`;
+        add.setAttribute('aria-label', add.title);
         add.addEventListener('click', async () => {
           add.disabled = true;
           try { await request('music-enqueue', { id: track.id }); showToast('Música adicionada à fila.'); }
@@ -846,6 +860,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
           label.append(select, info);
           row.append(label, add);
         } else row.append(info, add);
+        row.prepend(number);
         $('#music-results')?.append(row);
       }
       if (result.source.playlistUrl) {

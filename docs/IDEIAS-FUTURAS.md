@@ -137,8 +137,9 @@ a pedido do dono em 28/10/2026. Ainda não publicado.
 - Abaixo das opções prontas, permitir informar uma rolagem personalizada, por exemplo
   `1d15` (um dado de 15 lados).
 - Seletor disponível na call e nos canais de texto, com resultados compartilhados pelo servidor.
-- Manter as últimas **30 rolagens por canal**, com horário, autor e resultados individuais,
-  salvas no servidor para conferir durante um RPG. Suportar modificadores, como `2d6+3`.
+- Manter as últimas **30 rolagens do servidor inteiro**, com horário, autor e resultados individuais,
+  salvas para conferir durante um RPG, com nome, dado e resultado.
+- Um clique no dado pronto rola automaticamente e mostra o total em destaque. Suportar modificadores, como `2d6+3`.
 
 ## 13. Trocar os ícones do bot de música e do soundboard
 

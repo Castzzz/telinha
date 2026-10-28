@@ -45,6 +45,9 @@ app.whenReady().then(async () => {
   const firstSocket = await serverUser(first), accessId = firstSocket.data.user.accessId;
   await js(first, `document.querySelector('#input-admin-key').value='dono-local-interface';document.querySelector('#btn-admin-login').click();void 0`);
   await until(first, 'appState.isOwner');
+  await click(first, '#btn-home-dice');
+  await until(first, 'document.querySelector("#dice-status").textContent === ""');
+  await click(first, '#dice-close');
   await click(first, '#btn-open-settings'); await click(first, '[data-settings-tab="conta"]');
   await click(first, '[data-account-mode="register"]');
   await js(first, `document.querySelector('#account-user').value='aventureiro';document.querySelector('#account-password').value='senha-local-123';document.querySelector('#account-confirm').value='senha-local-123';document.querySelector('#account-form').requestSubmit();void 0`);
@@ -76,11 +79,27 @@ app.whenReady().then(async () => {
   await click(first, '[data-die="1d20"]');
   await until(first, 'document.querySelectorAll("#dice-history li b").length === 1');
   const result = await js(first, 'document.querySelector("#dice-history li b").textContent');
+  await until(first, 'document.querySelector("#dice-result-value").textContent === document.querySelector("#dice-history li b").textContent');
+  await js(second, `document.querySelector('#btn-header-add-channel').click();document.querySelector('#input-channel-name').value='Cinema';document.querySelector('#form-create-channel').requestSubmit();void 0`);
+  await until(second, 'appState.currentChannelId === "cinema"');
   await click(second, '#stage-controls-bar .dice-trigger');
   await until(second, 'document.querySelectorAll("#dice-history li b").length === 1');
   if (await js(second, 'document.querySelector("#dice-history li b").textContent') !== result) throw new Error('Os aparelhos receberam resultados diferentes.');
+  (await serverUser(first)).emit('room-info', { hasPassword: true });
+  await until(first, 'document.querySelector("#dice-status").textContent.includes("servidor precisa receber a atualização")');
+  if (!await js(first, '[...document.querySelectorAll("[data-die]")].every(b=>b.disabled)')) throw new Error('Servidor antigo deixou dados ativos.');
+  (await serverUser(first)).emit('room-info', { diceVersion: 2 });
+  await until(first, 'document.querySelector("#dice-status").textContent === ""');
+  for (const sides of [4,6,8,10,12,20,100]) {
+    await pause(520);
+    await click(first, `[data-die="1d${sides}"]`);
+    await until(first, `document.querySelector('#dice-result-kind').textContent.endsWith(' · 1d${sides}') && !document.querySelector('#dice-result').classList.contains('is-rolling')`);
+    const total = Number(await js(first, 'document.querySelector("#dice-result-value").textContent'));
+    if (total < 1 || total > sides) throw new Error('Dado fora dos limites: d'+sides);
+  }
   for (const theme of ['escuro', 'preto', 'claro']) {
     await js(first, `document.documentElement.dataset.theme=${JSON.stringify(theme)};void 0`);
+    await pause(150);
     await fs.promises.writeFile(path.join('/tmp', `teletela-dados-${theme}.png`), (await first.webContents.capturePage()).toPNG());
   }
   await click(second, '#dice-close');

@@ -1205,9 +1205,7 @@ server.on('close', () => clearInterval(accountExpiryTimer));
 installAccountHttp({ app, store: accounts, limit: accountLimit, onRevoke: revokeAccountSockets });
 
 const dice = new DiceStore(DATA_DIR);
-const pruneDice = () => dice.prune(new Set([...channels.keys()].map(id => `voice:${id}`).concat([...textChannels.keys()].map(id => `text:${id}`))));
-pruneDice();
-const setupDiceSocket = installDice({ io, store: dice, permissions, channels, textChannels });
+const setupDiceSocket = installDice({ io, store: dice });
 
 // Quem não tem a senha nem chega a entrar (a senha de admin também abre a porta)
 io.use((socket, next) => {
@@ -1438,7 +1436,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, accounts: accounts.available, assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
@@ -1460,7 +1458,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     io.emit('room-password-changed', { password, by: user.name });
-    io.emit('room-info', { hasPassword: Boolean(password), connectionPing: true });
+    io.emit('room-info', { hasPassword: Boolean(password), connectionPing: true, diceVersion: 2 });
     cb({ success: true });
   }));
 
@@ -1553,7 +1551,6 @@ io.on('connection', (socket) => {
       if (member) leaveCurrentChannel(member);
     }
     channels.delete(channel.id);
-    pruneDice();
     saveChannels();
     broadcastChannels();
     cb({ success: true });
@@ -2285,7 +2282,6 @@ io.on('connection', (socket) => {
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
     if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     textChannels.delete(ch.id);
-    pruneDice();
     deleteTextChannelData(ch);
     saveChannels();
     emitText(ch, 'text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });

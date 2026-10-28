@@ -571,17 +571,17 @@
 
   <div id="modal-music" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="music-title">
     <div class="modal-card music-modal">
-      <div class="modal-header"><h3 id="music-title">Música do canal</h3><button type="button" class="modal-close-btn" data-close-modal="modal-music" aria-label="Fechar música">✕</button></div>
+      <div class="modal-header music-heading"><div class="music-heading-copy"><span class="music-heading-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><div><span class="music-eyebrow">SUA CALL, SUA TRILHA</span><h3 id="music-title">Música do canal</h3></div></div><button type="button" class="modal-close-btn" data-close-modal="modal-music" aria-label="Fechar música">✕</button></div>
       <div class="modal-body music-body">
         <section class="music-current" aria-label="Tocando agora">
-          <strong id="music-now">Nenhuma música tocando</strong><p id="music-phase" role="status" aria-live="polite"></p>
-          <div class="music-controls"><button type="button" id="music-pause" class="btn-secondary">Pausar</button><button type="button" id="music-skip" class="btn-secondary">Pular</button><button type="button" id="music-stop" class="btn-secondary">Parar e limpar fila</button></div>
-          <div class="music-controls"><label class="music-repeat" for="music-repeat">Repetir <select id="music-repeat"><option value="off">Desligado</option><option value="one">Esta faixa</option><option value="all">Fila inteira</option></select></label><button type="button" id="music-shuffle" class="btn-secondary">Embaralhar fila</button></div>
+          <div class="music-current-heading"><span class="music-current-art" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><div class="music-current-copy"><span class="music-eyebrow">TOCANDO AGORA</span><strong id="music-now">Nenhuma música tocando</strong><p id="music-phase" role="status" aria-live="polite"></p></div></div>
+          <div class="music-controls music-playback-actions"><button type="button" id="music-pause" class="btn-secondary">Pausar</button><button type="button" id="music-skip" class="btn-secondary">Pular</button><button type="button" id="music-stop" class="btn-secondary">Parar e limpar fila</button></div>
+          <div class="music-controls music-mode-controls"><label class="music-repeat" for="music-repeat">Repetir <select id="music-repeat"><option value="off">Desligado</option><option value="one">Esta faixa</option><option value="all">Fila inteira</option></select></label><button type="button" id="music-shuffle" class="btn-secondary">Embaralhar fila</button></div>
           <label class="music-volume" for="music-volume">Seu volume <input type="range" id="music-volume" min="0" max="200" value="50"><output id="music-volume-value" for="music-volume">50%</output></label>
         </section>
         <form id="music-form" class="music-form">
-          <label for="music-input">Música ou playlist do YouTube/Spotify, ou título e artista</label>
-          <div class="music-search-row"><input id="music-input" class="form-input" maxlength="500" placeholder="Cole um link ou escreva uma música" required><button type="submit" id="music-search-button" class="btn-primary">Buscar</button></div>
+          <label for="music-input">Encontre a próxima música</label>
+          <div class="music-search-row"><input id="music-input" class="form-input" maxlength="500" placeholder="Nome da música, artista ou link do YouTube/Spotify" required><button type="submit" id="music-search-button" class="btn-primary">Buscar</button></div>
           <details><summary>Ajustar a busca do Spotify</summary><label for="music-refinement">Título e artista (opcional)</label><input id="music-refinement" class="form-input" maxlength="300" placeholder="Título e artista para encontrar a versão certa"></details>
           <p id="music-search-status" role="status" aria-live="polite"></p>
         </form>
@@ -590,9 +590,9 @@
           <div class="music-playlist-options"><label><input type="checkbox" id="music-select-all" checked> Selecionar todas</label><label><input type="checkbox" id="music-playlist-shuffle"> Embaralhar ao adicionar</label></div>
           <div class="music-controls"><button type="button" id="music-add-playlist" class="btn-primary">Adicionar selecionadas</button><button type="button" id="music-next-page" class="btn-secondary hidden">Próxima página</button></div>
         </section>
-        <div id="music-results" aria-label="Versões encontradas"></div>
-        <h4 id="music-queue-title" class="music-queue-title">Próximas músicas (0)</h4><ol id="music-queue" class="music-queue"></ol>
-        <p class="music-help">O bot transmite uma única reprodução para a call. O seu volume é individual e ensurdecer silencia a música. Playlists carregam até 50 faixas por página; selecione quais adicionar. Faixas do Spotify procuram versões no YouTube. Listas privadas não são acessadas.</p>
+        <div id="music-results-heading" class="music-results-heading hidden"><h4>Resultados da busca</h4><span id="music-results-count"></span></div><div id="music-results" aria-label="Versões encontradas"></div>
+        <div class="music-queue-heading"><h4 id="music-queue-title" class="music-queue-title">Próximas músicas (0)</h4></div><ol id="music-queue" class="music-queue"></ol><p id="music-queue-empty" class="music-empty">Escolha uma música para continuar a trilha.</p>
+        <p class="music-help">Seu volume é individual. Pausar e pular mudam a música para toda a call.</p>
       </div>
     </div>
   </div>

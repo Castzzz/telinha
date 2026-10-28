@@ -5,6 +5,7 @@ const CHEVRON_UP_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" st
 const USERS_ICON_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
 const MIC_OFF_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/><path d="M3 3l18 18"/></svg>';
 const HEADPHONES_OFF_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/><path d="M3 3l18 18"/></svg>';
+const SCREEN_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>';
 const MUSIC_BOT_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
@@ -196,7 +197,7 @@ export function setupStageSocial(deps = {}) {
             <span id="stage-cinema-chevron" class="stage-cinema-chevron">${CHEVRON_DOWN_SVG}</span>
           </button>
         </div>
-        <div id="stage-cinema-strip" class="stage-cinema-strip" role="list"></div>
+        <div id="stage-cinema-strip" class="stage-cinema-strip" role="group" aria-label="Pessoas e música na call"></div>
       `;
       stage.appendChild(bar);
 
@@ -318,7 +319,7 @@ export function setupStageSocial(deps = {}) {
           badgesHtml += `<span class="stage-cinema-badge is-muted" title="${u.serverMuted ? 'Mutado pela moderação' : 'Microfone desligado'}">${MIC_OFF_SVG}</span>`;
         }
         if (live) {
-          badgesHtml += '<span class="stage-cinema-badge is-live" title="Transmitindo">AO VIVO</span>';
+          badgesHtml += `<span class="stage-cinema-badge is-live" title="Transmitindo">${SCREEN_SVG}</span>`;
         }
         badgesEl.innerHTML = badgesHtml;
       }
@@ -330,7 +331,7 @@ export function setupStageSocial(deps = {}) {
       const nameSig = `${displayName}:${u.nameColor || ''}:${u.nameColor2 || ''}:${isMe ? 1 : 0}`;
       if (nameEl.dataset.nameSig !== nameSig) {
         nameEl.dataset.nameSig = nameSig;
-        nameEl.innerHTML = `<span class="user-name-text"${getNameStyle(u)}>${escapeHtml(displayName)}</span>${isMe ? '<small class="stage-cinema-you">você</small>' : ''}`;
+        nameEl.innerHTML = `<span class="user-name-text"${getNameStyle(u)}>${escapeHtml(displayName)}</span><small class="stage-cinema-you">${isMe ? 'Você' : 'Na call'}</small>`;
       }
     }
   }
@@ -340,14 +341,13 @@ export function setupStageSocial(deps = {}) {
     el.type = 'button';
     el.className = 'stage-cinema-participant';
     el.dataset.userId = String(u.id);
-    el.setAttribute('role', 'listitem');
     el.innerHTML = `
       <div class="user-avatar-wrap stage-cinema-avatar-wrap">
         <div class="user-avatar stage-cinema-avatar"></div>
         <span class="speaking-halo"></span>
-        <div class="stage-cinema-badges"></div>
       </div>
       <span class="stage-cinema-name"></span>
+      <span class="stage-cinema-badges"></span>
     `;
     el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -378,14 +378,10 @@ export function setupStageSocial(deps = {}) {
       botEl.type = 'button';
       botEl.className = 'stage-cinema-participant stage-cinema-music-bot';
       botEl.dataset.stageMusicBot = 'true';
-      botEl.setAttribute('role', 'listitem');
       botEl.innerHTML = `
         <div class="user-avatar-wrap stage-cinema-avatar-wrap">
           <div class="user-avatar stage-cinema-avatar music-bot-avatar">${MUSIC_BOT_SVG}</div>
           <span class="speaking-halo"></span>
-          <div class="stage-cinema-badges">
-            <span class="stage-cinema-badge is-music">🎵</span>
-          </div>
         </div>
         <span class="stage-cinema-name">
           <span class="stage-cinema-bot-title"></span>
@@ -398,7 +394,7 @@ export function setupStageSocial(deps = {}) {
       });
     }
 
-    botEl.classList.toggle('is-speaking', isPlaying);
+    botEl.classList.remove('is-speaking');
     botEl.classList.toggle('is-playing', isPlaying);
     botEl.classList.toggle('is-paused', isPaused);
     botEl.title = `Bot de Música · ${title} (${status}) — clique para abrir`;
@@ -435,7 +431,7 @@ export function setupStageSocial(deps = {}) {
 
     const countEl = bar.querySelector('#stage-cinema-count');
     if (countEl) {
-      countEl.textContent = String(users.length + (botVisible ? 1 : 0));
+      countEl.textContent = String(users.length);
     }
 
     const strip = bar.querySelector('#stage-cinema-strip');

@@ -87,12 +87,23 @@ app.whenReady().then(async () => {
       : { source: { title: 'Tom de teste' }, notice: 'Fonte local para verificar o áudio nas calls.', candidates: [candidate] };
   }
   const open = async (channel = 'geral') => {
-    const win = new BrowserWindow({ width: 1180, height: 950, show: false, webPreferences: { offscreen: true, backgroundThrottling: false } });
+    const win = new BrowserWindow({ width: 1180, height: 950, show: false, webPreferences: { partition: `musica-${windows.length}`, offscreen: true, backgroundThrottling: false } });
     windows.push(win);
     win.webContents.setAudioMuted(true);
     win.webContents.on('console-message', event => { if (event.level === 'error') console.error('[Interface]', event.message); });
     await win.loadURL(call.url);
     await until(() => evaluate(win, 'Boolean(window.appState?.musicEnabled && appState.channels.has("geral"))'), 'A interface não conectou ao servidor de música.');
+    await evaluate(win, `(() => {
+      const saved=JSON.parse(localStorage.getItem('telinha_prefs')||'{}');
+      const canvas=document.createElement('canvas');canvas.width=80;canvas.height=80;
+      const ctx=canvas.getContext('2d');ctx.fillStyle='#42376c';ctx.fillRect(0,0,80,80);
+      ctx.fillStyle='#dca977';ctx.beginPath();ctx.arc(40,32,16,0,Math.PI*2);ctx.fill();
+      ctx.fillStyle='#b7b5ee';ctx.beginPath();ctx.ellipse(40,81,29,28,0,0,Math.PI*2);ctx.fill();
+      Object.assign(saved.profile,{name:${JSON.stringify(windows.length === 1 ? 'Cast' : 'Bia')},avatar:canvas.toDataURL()});
+      saved.seenWhatsNew='99';localStorage.setItem('telinha_prefs',JSON.stringify(saved));
+    })()`);
+    win.reload();
+    await until(() => evaluate(win, 'Boolean(window.appState?.musicEnabled && appState.channels.has("geral"))'), 'O perfil de teste não carregou.');
     await evaluate(win, `
       window.musicTestPeers = [];
       const NativePeer = window.RTCPeerConnection;
@@ -177,7 +188,7 @@ app.whenReady().then(async () => {
     const video=document.createElement('video');video.muted=true;video.autoplay=true;video.srcObject=stageFixtureStream;tile.append(video);
     document.querySelector('#videos-grid').append(tile);document.querySelector('#videos-grid').classList.remove('hidden');document.querySelector('#voice-lounge').classList.add('hidden');
     appState.activeStreams.set('stage-fixture',{stream:stageFixtureStream,userName:'Mesa de RPG',isLocal:true});
-    appState.focusedStreamUserId='stage-fixture';await video.play();
+    appState.focusedStreamUserId='stage-fixture';appState.channels.get('geral').users.get(appState.myId).isSharing=true;await video.play();
     document.documentElement.classList.remove('pause-in-background', 'light-mode');
     document.dispatchEvent(new Event('fullscreenchange'));
   })()`);
@@ -192,10 +203,28 @@ app.whenReady().then(async () => {
   if (!await evaluate(first, `document.querySelector('#stage-cinema-toggle').getAttribute('aria-expanded') === 'false'`)) throw new Error('Faixa não recolheu.');
   await evaluate(first, `document.querySelector('#stage-cinema-toggle').click();document.querySelector('#quick-reactions button').click()`);
   await until(() => evaluate(first, `document.querySelectorAll('#stage-cinema-reactions > *').length > 0`), 'Reação não apareceu no cinema.');
+  await evaluate(first, `window.designUsers=appState.channels.get('geral').users;appState.channels.get('geral').users=new Map([[appState.myId,designUsers.get(appState.myId)]]);document.dispatchEvent(new Event('fullscreenchange'));`);
+  await pause(150);
+  if (await evaluate(first, `document.querySelector('#stage-cinema-count').textContent`) !== '1') throw new Error('Bot entrou na contagem de pessoas.');
+  await fs.writeFile('/tmp/teletela-cinema-sozinho.png',(await first.webContents.capturePage()).toPNG());
+  await evaluate(first, `appState.channels.get('geral').users=designUsers;document.dispatchEvent(new Event('fullscreenchange'));`);
   for (const theme of ['escuro','preto','claro']) {
     await evaluate(first, `document.documentElement.dataset.theme='${theme}'`);
+    await pause(150);
     await fs.writeFile(`/tmp/teletela-cinema-${theme}.png`, (await first.webContents.capturePage()).toPNG());
   }
+  const badgesOverlap = await evaluate(first, `(() => {
+    const card=document.querySelector('.stage-cinema-participant.is-me');
+    const a=card.querySelector('.stage-cinema-avatar').getBoundingClientRect(),b=card.querySelector('.stage-cinema-badges').getBoundingClientRect();
+    return b.width>0 && a.left<b.right && b.left<a.right && a.top<b.bottom && b.top<a.bottom;
+  })()`);
+  if (badgesOverlap) throw new Error('Os indicadores invadiram a foto no cinema.');
+  await evaluate(first, `document.querySelector('.music-mini-title-btn').click()`);
+  for (const theme of ['escuro','preto','claro']) {
+    await evaluate(first, `document.documentElement.dataset.theme='${theme}'`); await pause(150);
+    await fs.writeFile(`/tmp/teletela-painel-musica-${theme}.png`, (await first.webContents.capturePage()).toPNG());
+  }
+  await evaluate(first, `document.querySelector('[data-close-modal=modal-music]').click()`);
   await first.webContents.executeJavaScript(`document.querySelector('#videos-grid').requestFullscreen()`, true);
   await until(() => evaluate(first, `document.fullscreenElement?.contains(document.querySelector('#music-stage-miniplayer')) && document.fullscreenElement?.contains(document.querySelector('#stage-cinema-bar'))`), 'Controles não acompanharam a tela cheia nativa.');
   await evaluate(first, `document.querySelector('.stage-cinema-participant[data-user-id]').click()`);
@@ -242,6 +271,7 @@ app.whenReady().then(async () => {
   }
   for (const theme of ['escuro', 'preto', 'claro']) {
     await evaluate(first, `document.documentElement.dataset.theme = '${theme}'`);
+    await pause(150);
     await fs.writeFile(`/tmp/teletela-musica-call-${suffix}-${theme}.png`, (await first.webContents.capturePage()).toPNG());
   }
   await evaluate(first, `document.querySelector('[data-close-modal=modal-music]').click()`);
