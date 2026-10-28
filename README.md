@@ -116,7 +116,8 @@ Mudanças da versão 3.8.0. A versão 3.7.0 usava o modelo anterior de admin por
 
 Em **Configurações → Servidor e cargos**, o proprietário usa uma chave exclusiva de propriedade
 para **Assumir propriedade** uma vez. Depois, o perfil é reconhecido ao reabrir o app.
-Há um único dono; ele pode transferir a propriedade a outro perfil. Quem perdeu o perfil
+O nome do dono aparece sem coroinha; a identificação de proprietário continua nos detalhes
+do perfil e nas configurações. Há um único dono; ele pode transferir a propriedade a outro perfil. Quem perdeu o perfil
 pode recuperar a propriedade com a chave exclusiva do servidor, que substitui o dono anterior. A antiga senha de admin não concede propriedade.
 
 O dono cria cargos e distribui os poderes de moderação, gerenciamento de canais, cargos,
@@ -184,6 +185,7 @@ sendo a 4.0.0; estes recursos entram num próximo lançamento, incluindo o APK.
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
 | **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
+| **Virar a câmera do celular** | Ligue **Câmera** na call e toque em **Virar** para alternar frontal/traseira. A ação também fica em **⋯ → Virar câmera**. O microfone continua ligado e os amigos continuam assistindo. Se a outra lente não abrir, o app tenta manter/recuperar a anterior |
 | **Transmitir minha tela** | Entre num canal de voz e use o botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Transmitir mais de uma tela** | Já transmitindo, clique de novo no 🖥️ → *Transmitir outra tela* (até 3 ao mesmo tempo). As extras vão só com imagem; o som vai na tela 1. O mesmo menu para cada uma |
 | **Mudar o volume de um amigo** | Clique no nome dele → barra de volume (0–200%) ou **Silenciar pra mim**. Só muda pra você, e fica salvo |
@@ -212,7 +214,7 @@ sendo a 4.0.0; estes recursos entram num próximo lançamento, incluindo o APK.
 | **Cargo: mover pessoas de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Cargo: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até a moderação desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
-| **Dono 👑 e cargos** | ⚙️ → *Servidor e cargos*. O dono assume a propriedade e delega moderação e administração pelos cargos |
+| **Dono e cargos** | ⚙️ → *Servidor e cargos*. O dono assume a propriedade e delega moderação e administração pelos cargos |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |
 | **Ver várias transmissões juntas** | Automático: com 2 ou mais, o palco vira mosaico. Clique numa pra ver só ela; clique de novo pra voltar |

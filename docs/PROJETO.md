@@ -1104,3 +1104,27 @@ Validação: `npm test`, suítes m1/m2/m3, `npm run test:mobile` e
 `npm run test:music:call`. O último testa alvos de clique e arraste reais, faixa recolhida,
 reações em tela cheia, chat central em PC/celular, continuidade do vídeo e do áudio,
 limpeza de resposta atrasada e preservação da fila. APK de teste atualizado localmente.
+
+
+### Câmera frontal/traseira e nome do dono (28/10/2026)
+
+O celular agora tem **Virar** nos controles da call e **⋯ → Virar câmera**. A lógica de
+captura está em `public/camera-source.js`, integrada ao fluxo de câmera em `app.js` e aos
+controles de `mobile.js`. Mantém a MediaStream, troca apenas o vídeo com `replaceTrack`
+nos emissores da câmera e conserva os peers de voz e transmissão de tela. Caso um emissor
+recuse a substituição, reconecta apenas aquele envio de câmera. O fluxo inicial e o de
+troca têm cancelamento por geração para não reabrir a câmera depois de sair/desligar.
+
+Armadilha: alguns Androids encerram a lente antiga ao abrir a outra, ou exigem que a
+captura antiga seja liberada. O `onended` da faixa antiga durante a troca não deve chamar
+`stopCameraShare`; o controlador trata esse encerramento e a recuperação. Se a troca
+falhar, mantém a captura antiga ou tenta reabri-la, sem mexer no microfone. Detalhes e
+validação em [ANDROID.md](ANDROID.md#alternar-câmera-28102026).
+
+A coroinha foi retirada do nome do proprietário na lista, na call e no cabeçalho do
+perfil. O texto **Dono do servidor** continua nos detalhes do perfil; identidade,
+propriedade e permissões não mudaram. Não transformar a retirada do selo numa alteração
+de `isOwner`, `isAdmin` ou dos handlers do servidor.
+
+Magic permanece guardado em `experimento/magic-no-teletela` (commit `03cc5d2`), para depois.
+Esta branch continua sendo `melhoria/cinema-dados-contas-e-privacidade`, sem integrar Magic.

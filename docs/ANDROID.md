@@ -14,7 +14,9 @@ Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md)
 - Canais de voz e texto, perfil local, chat, cargos e canais com senha ou invisíveis.
   Conta opcional com usuário/senha e o mesmo perfil do desktop; amigos ficam para depois.
   Acesso em **Você → Conta**. Dados de RPG e os controles do palco usam a mesma interface.
-- Microfone com o filtro e o ganho manual do desktop, mute, ensurdecer e câmera frontal.
+- Microfone com o filtro e o ganho manual do desktop, mute, ensurdecer e câmera frontal/traseira.
+  Com a câmera ligada, **Virar** nos controles da call ou **⋯ → Virar câmera** alterna a lente.
+  O nome do botão de câmera indica **Frontal** ou **Traseira**; a troca não altera o microfone.
 - Assistir às transmissões dos computadores. Abrir uma transmissão leva à aba Sala.
 - PiP automático: enquanto recebe vídeo de um amigo, Início/trocar de app mantém a imagem
   numa janela do Android. Voltar restaura a interface. Usa o mesmo vídeo/mixer; não muda
@@ -139,3 +141,38 @@ emulador em segundo plano e tela apagada, a call permaneceu ativa e o sinal de r
 do PC continuou presente no mixer, com pico próximo de 0,086. Não é uma medição de voz
 captada em um telefone físico. É necessário conferir microfone, fone/Bluetooth, rede móvel,
 bateria e bloqueio de tela no aparelho do dono antes de distribuir como versão definitiva.
+
+
+## Alternar câmera (28/10/2026)
+
+Implementado para teste na branch `melhoria/cinema-dados-contas-e-privacidade`, separado do
+experimento do Magic. O APK local foi atualizado; nenhum release/deploy foi executado.
+
+`public/camera-source.js` abre a frontal por preferência inicial e alterna entre
+`facingMode: user/environment`. Na troca exige a orientação pedida, usando `deviceId`
+como alternativa quando a WebView expõe as lentes dessa forma. A MediaStream da câmera
+permanece a mesma e só a faixa de vídeo é substituída nos emissores P2P/SFU. O microfone
+não entra na solicitação de câmera (`audio: false`) e não é recriado.
+
+Se o aparelho exigir liberar a lente antiga, o app encerra só esse vídeo e tenta a outra.
+Falhando depois de liberar, tenta recuperar a anterior; se nenhuma abrir, desliga apenas
+a câmera. Uma captura que termine depois de sair da call ou desligar a câmera é encerrada
+sem reativar o envio. O encerramento da lente antiga pelo próprio Android durante a troca
+é tratado pelo fluxo de troca, sem derrubar a conexão inteira.
+
+Testes:
+
+```bash
+npm run test:camera
+npm run test:camera:ui
+CAMERA_TEST_SFU=1 npm run test:camera:ui
+npm run test:mobile
+npm run build:android
+```
+
+Os testes de interface usam duas instâncias Electron com imagens de cores diferentes
+simulando as lentes. Conferem pixels recebidos por WebRTC real, tanto em P2P quanto via
+SFU local, preservando os peers e o microfone, além do botão, menu, falha e saída durante
+a troca. Não substituem a confirmação da abertura das duas lentes num telefone físico.
+Referências: [troca de faixa com replaceTrack](https://developer.mozilla.org/en-US/docs/Web/API/RTCRtpSender/replaceTrack)
+e [seleção/liberação de câmera](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia#front_and_back_camera).

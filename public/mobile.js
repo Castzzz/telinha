@@ -45,6 +45,17 @@ function renderChrome(state) {
   $('#mobile-open-pins')?.classList.toggle('hidden', view !== 'chat' || !state.textView);
   text('#mobile-callbar-name', name);
   text('#mobile-callbar-status', state.myUser.isDeafened ? 'Áudio desativado' : state.myUser.isMicOn ? 'Você está na call' : 'Microfone mutado · toque para abrir');
+  const cameraOn = inCall && state.myUser.isCameraOn;
+  $('#mobile-call-controls')?.classList.toggle('has-camera', cameraOn);
+  const flipLabel = state.cameraFacingMode === 'environment' ? 'Usar câmera frontal' : 'Usar câmera traseira';
+  for (const button of [$('#btn-mobile-flip-camera'), $('#mobile-flip-camera-option')]) {
+    if (!button) continue;
+    button.classList.toggle('hidden', !cameraOn);
+    button.disabled = Boolean(state.cameraBusy);
+    button.setAttribute('aria-label', flipLabel);
+  }
+  text('#mobile-flip-camera-hint', state.cameraBusy ? 'Trocando câmera…' : flipLabel);
+  text('#mobile-camera-label', state.cameraBusy ? 'Aguarde…' : cameraOn ? state.cameraFacingMode === 'environment' ? 'Traseira' : 'Frontal' : 'Câmera');
   // Os controles móveis acionam os originais: uma única lógica de mute e câmera.
   const actions = {
     'btn-toggle-mic': { icon: state.myUser.isMicOn ? icons.mic : icons.micOff, label: state.myUser.isMicOn ? 'Mutar microfone' : 'Ligar microfone', active: !state.myUser.isMicOn },
@@ -131,6 +142,7 @@ export function setupMobileUI(options) {
     if (view === 'canais') options.showRoom();
   }));
   all('[data-mobile-proxy]').forEach(button => button.addEventListener('click', () => {
+    if (button.dataset.mobileProxy === 'btn-mobile-flip-camera') $('#mobile-call-options').close();
     document.getElementById(button.dataset.mobileProxy)?.click();
     renderChrome(options.getState());
   }));

@@ -25,6 +25,7 @@ import {
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
 import { activityElapsed } from './game-activity.js';
 import { createMicrophonePipeline } from './microphone.js';
+import { CameraSource } from './camera-source.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
@@ -263,6 +264,8 @@ const appState = {
   // MediaStreams
   localScreenStream: null,
   localCameraStream: null,
+  cameraBusy: false,
+  cameraFacingMode: 'user',
   extraScreens: new Map(), // número (2, 3) -> { stream, publisher }: telas a mais, só imagem
   localMicStream: null,
 
@@ -3274,6 +3277,7 @@ function setupDockControls() {
   $('#btn-leave-call')?.addEventListener('click', leaveCall);
   $('#btn-dock-leave')?.addEventListener('click', leaveCall);
   $('#btn-share-camera')?.addEventListener('click', toggleCameraShare);
+  $('#btn-mobile-flip-camera')?.addEventListener('click', flipCameraShare);
 
 }
 
@@ -4121,7 +4125,7 @@ function renderUserPopoverVolume() {
 
 // Perfil grande no meio da tela: banner, foto com moldura, nome e bio
 function ownershipBadge(u) {
-  return u.isOwner === true ? '<span class="badge-admin" title="Dono do servidor">👑</span>'
+  return u.isOwner === true ? ''
     : u.isAdmin ? '<span class="badge-admin" title="Admin no servidor antigo">🛡️</span>' : '';
 }
 
@@ -7299,48 +7303,84 @@ async function onStartScreenShare() {
 
 // Câmera: transmissão separada da tela (dá pra ter as duas ligadas ao mesmo tempo).
 // Os amigos veem o selo "📷 CÂMERA" e clicam pra assistir, igual ao "AO VIVO".
+let cameraSource = null;
+function getCameraSource() {
+  if (cameraSource) return cameraSource;
+  cameraSource = new CameraSource({
+    onState({ busy, facing }) {
+      appState.cameraBusy = busy;
+      appState.cameraFacingMode = facing;
+      syncMobileState(appState);
+    },
+    onLost: () => stopCameraShare({ silent: true }),
+    async onStream(stream, previous, active) {
+      appState.localCameraStream = stream;
+      appState.myUser.isCameraOn = true;
+      document.getElementById('btn-share-camera')?.classList.add('sharing');
+      if (previous) {
+        const track = stream.getVideoTracks()[0];
+        const replace = async (pc, retry) => {
+          const sender = pc?.getSenders().find(s => s.track?.kind === 'video');
+          if (!sender) return;
+          try { await sender.replaceTrack(track); }
+          catch (error) {
+            if (active()) { console.warn('[Câmera] Reconectando vídeo:', error); retry(); }
+          }
+        };
+        const publisher = appState.sfuCameraPublisher;
+        const jobs = [replace(publisher?.pc, () => {
+          if (appState.sfuCameraPublisher !== publisher) return;
+          publisher.close();
+          appState.sfuCameraPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'camera', stream });
+          appState.sfuCameraPublisher.start();
+        })];
+        for (const [key, pc] of appState.screenPeersOut) {
+          if (streamKind(key) !== 'camera') continue;
+          jobs.push(replace(pc, () => {
+            if (appState.screenPeersOut.get(key) === pc) createScreenOfferForUser(streamOwner(key), 'camera');
+          }));
+        }
+        await Promise.all(jobs);
+      } else {
+        socket.emit('user-state-changed', { isCameraOn: true });
+        if (appState.sfuEnabled) {
+          appState.sfuCameraPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'camera', stream });
+          appState.sfuCameraPublisher.start();
+        }
+      }
+      if (!active()) return;
+      showLocalPreview(streamKey(appState.myId, 'camera'), streamLabel(streamKey(appState.myId, 'camera')), stream);
+      renderChannelsTree();
+      updateVoiceLounge();
+    }
+  });
+  return cameraSource;
+}
+
 async function toggleCameraShare() {
-  if (appState.myUser.isCameraOn) {
-    stopCameraShare();
-    return;
-  }
-  if (!appState.currentChannelId) {
-    showToast('Entre num canal pra ligar a câmera.');
-    return;
-  }
-  let stream;
+  if (appState.myUser.isCameraOn || appState.cameraBusy) { stopCameraShare(); return; }
+  if (!appState.currentChannelId) { showToast('Entre num canal pra ligar a câmera.'); return; }
   try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } },
-      audio: false
-    });
-  } catch (err) {
-    console.warn('[Câmera] Não abriu:', err);
-    showToast(err.name === 'NotFoundError' ? '❌ Nenhuma câmera encontrada.' : '❌ Não consegui abrir a câmera.', 'error');
-    return;
+    if (await getCameraSource().start()) showToast('📷 Câmera ligada! Seus amigos veem clicando em "CÂMERA" do seu lado.', 'success');
+  } catch (error) {
+    console.warn('[Câmera] Não abriu:', error);
+    showToast(error.name === 'NotFoundError' ? '❌ Nenhuma câmera encontrada.' : '❌ Não consegui abrir a câmera.', 'error');
   }
-  const videoTrack = stream.getVideoTracks()[0];
-  videoTrack.contentHint = 'motion';
-  videoTrack.onended = () => stopCameraShare();
+}
 
-  appState.localCameraStream = stream;
-  appState.myUser.isCameraOn = true;
-  document.getElementById('btn-share-camera')?.classList.add('sharing');
-  showLocalPreview(streamKey(appState.myId, 'camera'), streamLabel(streamKey(appState.myId, 'camera')), stream);
-  socket.emit('user-state-changed', { isCameraOn: true });
-
-  if (appState.sfuEnabled) {
-    appState.sfuCameraPublisher = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'camera', stream });
-    appState.sfuCameraPublisher.start();
+async function flipCameraShare() {
+  if (!appState.myUser.isCameraOn || appState.cameraBusy) return;
+  try {
+    if (await getCameraSource().flip()) showToast(appState.cameraFacingMode === 'environment' ? 'Câmera traseira ligada.' : 'Câmera frontal ligada.');
+  } catch (error) {
+    console.warn('[Câmera] Não trocou:', error);
+    showToast(appState.myUser.isCameraOn ? 'Não consegui trocar a câmera. A câmera anterior continua ligada.' : error.message, 'error');
   }
-  // Sem SFU, cada amigo pede a câmera (request-stream 'camera') quando clica no selo
-  showToast('📷 Câmera ligada! Seus amigos veem clicando em "CÂMERA" do seu lado.', 'success');
-  renderChannelsTree();
-  updateVoiceLounge();
 }
 
 function stopCameraShare({ silent = false } = {}) {
-  if (!appState.myUser.isCameraOn && !appState.localCameraStream) return;
+  if (!appState.myUser.isCameraOn && !appState.localCameraStream && !appState.cameraBusy) return;
+  cameraSource?.stop();
   appState.myUser.isCameraOn = false;
   appState.localCameraStream?.getTracks().forEach((track) => track.stop());
   appState.localCameraStream = null;

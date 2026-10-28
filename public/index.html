@@ -43,13 +43,15 @@
   <footer id="mobile-call-controls" class="mobile-only mobile-call-controls" aria-label="Controles da chamada">
     <button type="button" class="mobile-call-action mobile-mic-button" data-mobile-proxy="btn-toggle-mic"><span class="mobile-action-icon"></span><span>Microfone</span></button>
     <button type="button" class="mobile-call-action" data-mobile-proxy="btn-toggle-deafen"><span class="mobile-action-icon"></span><span>Áudio</span></button>
-    <button type="button" class="mobile-call-action" data-mobile-proxy="btn-share-camera"><span class="mobile-action-icon"></span><span>Câmera</span></button>
+    <button type="button" class="mobile-call-action" data-mobile-proxy="btn-share-camera"><span class="mobile-action-icon"></span><span id="mobile-camera-label">Câmera</span></button>
+    <button type="button" id="btn-mobile-flip-camera" class="mobile-call-action hidden" aria-label="Usar câmera traseira" title="Virar câmera"><span class="mobile-action-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 4h4a3 3 0 0 1 3 3v3m0-6v6h-6M10 20H6a3 3 0 0 1-3-3v-3m0 6v-6h6"/><rect x="7" y="7" width="10" height="10" rx="2"/><circle cx="12" cy="12" r="2"/></svg></span><span>Virar</span></button>
     <button type="button" class="mobile-call-action mobile-call-leave" data-mobile-proxy="btn-dock-leave"><span class="mobile-action-icon"></span><span>Sair</span></button>
   </footer>
 
   <dialog id="mobile-call-options" class="mobile-sheet" aria-labelledby="mobile-call-options-title">
     <div class="mobile-sheet-handle" aria-hidden="true"></div>
     <div class="mobile-sheet-header"><h2 id="mobile-call-options-title">Opções da chamada</h2><button type="button" id="mobile-close-options" class="mobile-icon-button" aria-label="Fechar opções">✕</button></div>
+    <button type="button" class="mobile-settings-row hidden" id="mobile-flip-camera-option" data-mobile-proxy="btn-mobile-flip-camera"><span>Virar câmera<small id="mobile-flip-camera-hint">Usar câmera traseira</small></span><span class="mobile-row-icon" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-6v6h6m-5 4a8 8 0 0 0 14 5l3-3m0 6v-6h-6"/></svg></span></button>
     <button type="button" id="btn-mobile-music" class="mobile-settings-row hidden"><span>Música<small>Fila e controles do bot nesta call</small></span><span aria-hidden="true">›</span></button>
     <button type="button" id="btn-mobile-audio-output" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></span><span>Saída de áudio<small>Escolher alto-falante ou fone</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Volume e redução de ruído</small></span><span aria-hidden="true">›</span></button>

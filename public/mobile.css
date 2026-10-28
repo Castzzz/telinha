@@ -101,6 +101,11 @@ html.android-pip .android-pip-tile video { width: 100% !important; height: 100% 
   .lounge-cta { display: none !important; }
   .mobile-call-controls { display: none; position: fixed; left: 0; right: 0; bottom: 0; height: var(--mobile-controls-size); padding: 12px 20px calc(12px + var(--mobile-safe-bottom)); background: var(--bg-primary); z-index: 170; }
   body[data-mobile-view="sala"].mobile-in-call .mobile-call-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  body[data-mobile-view="sala"].mobile-in-call .mobile-call-controls.has-camera { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .mobile-call-controls.has-camera .mobile-action-icon { width: 44px; height: 44px; }
+  .mobile-call-controls.has-camera .mobile-call-action { gap: 6px; }
+  #btn-mobile-flip-camera .mobile-action-icon { background: var(--accent-soft); color: var(--accent-brand); }
+  #btn-mobile-flip-camera:disabled { opacity: .5; }
   .mobile-call-action { display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 8px; color: var(--text-muted); font-size: 11px; font-weight: 600; }
   .mobile-action-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--bg-secondary); color: var(--text-header); }
   .mobile-action-icon .icon-svg { width: 25px; height: 25px; }

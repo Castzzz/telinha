@@ -3,6 +3,23 @@
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
+## Câmera do celular e coroinha (28/10/2026)
+
+Retomada na branch `melhoria/cinema-dados-contas-e-privacidade`, a pedido do dono.
+
+- [x] **Virar a câmera do celular.** Botão **Virar** durante a câmera ligada, também em
+  **⋯ → Virar câmera**, alternando frontal/traseira e indicando a lente atual.
+  Preserva o microfone, a MediaStream e os espectadores P2P/SFU; trata lente indisponível,
+  liberação do hardware, recuperação da anterior e cancelamento ao desligar/sair.
+- [x] **Retirar a coroinha ao lado do nome do dono.** Só o selo visual foi removido;
+  identificação nos detalhes do perfil e permissões de proprietário permanecem.
+- [x] **Deixar o Magic para depois.** Trabalho guardado em `experimento/magic-no-teletela`,
+  commit `03cc5d2`. Sem merge nesta branch ou na `main` e sem publicação conjunta.
+
+Testes de lentes simuladas com vídeo recebido por outra pessoa via WebRTC real, em P2P e
+SFU local, testes unitários de falha/cancelamento e regressão mobile passaram. Build/lint
+do APK local atualizado; falta confirmar as duas lentes num telefone físico. Sem release/deploy.
+
 ## Próxima retomada: ajustes após testar cinema, música e chat (28/10/2026)
 
 **Retomados com autorização do dono em 28/10/2026.** Implementados para teste na branch
