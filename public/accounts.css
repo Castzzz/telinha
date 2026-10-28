@@ -1,0 +1,22 @@
+.account-intro, .account-help { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.account-status { padding: 12px 14px; border-radius: 10px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.account-modes { display: flex; gap: 8px; flex-wrap: wrap; margin: 20px 0; }
+.account-modes [aria-pressed="true"] { outline: 2px solid var(--accent-brand); outline-offset: 2px; color: var(--text-normal); }
+.account-form { display: grid; gap: 10px; max-width: 460px; }
+.account-form label { display: block; margin-bottom: 5px; color: var(--text-normal); font-size: 13px; font-weight: 600; }
+.account-form input { box-sizing: border-box; width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-primary); color: var(--text-normal); font: inherit; }
+.account-form input:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 2px; }
+.account-form .btn-primary { justify-self: start; }
+.account-feedback { font-size: 13px; line-height: 1.5; color: var(--text-muted); margin-top: 18px; }
+.account-feedback[data-error="true"] { color: var(--accent-red); }
+.account-recovery-result { padding: 18px; border-radius: 12px; border: 1px solid var(--border-subtle); background: var(--bg-tertiary); }
+.account-recovery-result h5 { margin: 0 0 12px; font-size: 16px; }
+.account-recovery-result p { color: var(--text-muted); font-size: 13px; line-height: 1.6; }
+.account-recovery-result code { display: block; padding: 14px; user-select: all; overflow-wrap: anywhere; background: var(--bg-primary); color: var(--text-normal); border-radius: 8px; line-height: 1.7; font-size: 14px; }
+.account-recovery-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+@media (max-width: 600px) {
+  .account-form { max-width: none; }
+  .account-modes button, .account-recovery-actions button { flex: 1 1 auto; min-height: 44px; }
+}
+
+#account-logged p { margin-bottom: 16px; }

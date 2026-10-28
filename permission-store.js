@@ -79,11 +79,24 @@ export class PermissionStore {
       && this.rank(actor) > this.rank(target));
   }
   visible(user, channel) {
-    if (!channel?.access?.private || this.isOwner(user)) return true;
+    if (!channel?.access?.private) return true;
     return Boolean(user?.accessId && (channel.access.members.includes(user.accessId)
       || this.roles(user).some(role => channel.access.roles.includes(role.id))));
   }
   canWrite(user, channel) { return this.visible(user, channel) && this.visible(user, { access: channel?.writeAccess }); }
+  checkAssignment(actor, id, roles, channels) {
+    const before = this.data.members[id]?.roles || [];
+    for (const channel of channels) {
+      for (const access of [channel.access, channel.writeAccess]) {
+        if (!access?.private || access.members.includes(id)) continue;
+        const hadAccess = before.some(role => access.roles.includes(role));
+        const getsAccess = roles.some(role => access.roles.includes(role));
+        if (getsAccess !== hadAccess && !this.visible(actor, channel)) {
+          throw new Error('Essa alteração afeta o acesso a um canal privado. Peça a alguém autorizado no canal.');
+        }
+      }
+    }
+  }
   checkRole(actor, role) {
     if (!role || !Number.isInteger(role.position) || !Array.isArray(role.permissions)) throw new Error('Cargo inválido.');
     if (!this.isOwner(actor) && (role.position >= this.rank(actor) || role.permissions.some(p => !this.has(actor, p)))) throw new Error('Você só pode gerenciar cargos abaixo do seu, com permissões que já possui.');
@@ -140,7 +153,7 @@ export class PermissionStore {
         + (m.credentialHash ? 20 : 0)
         + ((m.roles?.length || 0) > 0 ? 5 : 0);
 
-      // 1. Mescla cadastros repetidos (mesma credencial ou cadastros legados sem credencial com o mesmo nome)
+      // Nome público não comprova identidade nem pode transferir acesso privado.
       const byName = new Map();
       for (const [id, member] of Object.entries(this.data.members)) {
         const key = (member.name || '').trim().toLowerCase();
@@ -156,13 +169,8 @@ export class PermissionStore {
           const [dupId, dupMember] = group[i];
           if (dupId === this.data.ownerId || activeIds.has(dupId)) continue;
           const sameCred = Boolean(keepMember.credentialHash && dupMember.credentialHash === keepMember.credentialHash);
-          const legacyDup = Boolean(keepMember.credentialHash && !dupMember.credentialHash);
           if (sameCred) {
             keepMember.roles = [...new Set([...(keepMember.roles || []), ...(dupMember.roles || [])])];
-            onMerge?.(dupId, keepId);
-            delete this.data.members[dupId];
-            merged++;
-          } else if (legacyDup) {
             onMerge?.(dupId, keepId);
             delete this.data.members[dupId];
             merged++;
@@ -175,7 +183,7 @@ export class PermissionStore {
         if (id === this.data.ownerId || activeIds.has(id)) continue;
         const hasRoles = (member.roles?.length || 0) > 0;
         const isReferenced = referencedIds.has(id);
-        if (mode === 'reset') {
+        if (mode === 'reset' && !isReferenced) {
           onMerge?.(id, null);
           delete this.data.members[id];
           removed++;

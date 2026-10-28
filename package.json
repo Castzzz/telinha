@@ -62,6 +62,9 @@
       "public/**",
       "server.js",
       "permission-store.js",
+      "account-store.js",
+      "accounts-protocol.js",
+      "dice-store.js",
       "music/**",
       "package.json"
     ],

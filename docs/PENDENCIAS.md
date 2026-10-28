@@ -3,6 +3,16 @@
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
+## Trabalho de 28/10/2026
+
+Branch `melhoria/cinema-dados-contas-e-privacidade`, separada da `main`:
+miniplayer de música, faixa de participantes no modo cinema, privacidade inclusive para o dono,
+dados de RPG com últimas 30 rolagens por canal, troca dos ícones, launcher e conta opcional
+com usuário/senha/código de recuperação. Conta preserva perfil/cargos e funciona entre
+PC e APK. Amigos continuam pendentes; vários servidores ficam para bem depois.
+O bot e o APK já existem na 4.0.0. Manter o Android nas próximas atualizações; reformulação
+maior dele fica para o futuro. Código e APK de teste locais; publicação depende do pedido do dono.
+
 ## Próxima sessão: pedidos acrescentados após a 3.7.0
 
 Anotados em 26/10/2026 e retomados depois do reset, com autorização do dono.

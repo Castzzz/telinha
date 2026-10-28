@@ -9,6 +9,9 @@
   <link rel="stylesheet" href="redesign.css" />
   <link rel="stylesheet" href="mobile.css" />
   <link rel="stylesheet" href="music.css" />
+  <link rel="stylesheet" href="stage-social.css" />
+  <link rel="stylesheet" href="dice.css" />
+  <link rel="stylesheet" href="accounts.css" />
 </head>
 <body class="theme-discord">
 
@@ -318,8 +321,8 @@
         </div>
 
         <div class="stage-controls-right">
-          <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
-          <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
+          <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
+          <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
           <button id="btn-stage-pip" class="btn-control-icon hidden" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon hidden" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
@@ -391,6 +394,7 @@
       </div>
       <h2 class="mobile-section-label">Do seu jeito</h2>
       <div class="mobile-settings-group">
+        <button type="button" class="mobile-settings-row" data-mobile-settings="conta"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span><span>Conta<small>Entrar, criar conta ou recuperar acesso</small></span><span aria-hidden="true">›</span></button>
         <button type="button" class="mobile-settings-row" data-mobile-settings="aparencia"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13z"/></svg></span><span>Aparência<small>Tema e modo leve</small></span><span aria-hidden="true">›</span></button>
         <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Sua voz, volume e filtro de ruído</small></span><span aria-hidden="true">›</span></button>
         <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Som<small>Volume, fones e avisos</small></span><span aria-hidden="true">›</span></button>
@@ -413,6 +417,7 @@
       <div class="modal-header">
         <h3 id="modal-room-password-title">🔒 Sala com senha</h3>
       </div>
+      <button type="button" id="btn-room-account" class="btn-secondary">Já tenho conta nesta sala</button>
       <form id="form-room-password" class="modal-body">
         <p class="form-help">Essa sala tem senha. Peça pra um amigo ou para o dono; o Teletela guarda e não pede de novo.</p>
         <p class="form-help room-password-error hidden" id="room-password-error">Senha errada, tenta de novo.</p>
@@ -528,6 +533,7 @@
 
         <div id="new-channel-access" class="form-group hidden">
           <label class="permission-choice"><input type="checkbox" id="new-channel-access-private"> Canal invisível</label>
+          <p class="form-help">O acesso vale para todos, inclusive o dono. Inclua seu perfil se quiser continuar vendo e gerenciando o canal.</p>
           <div id="new-channel-access-choices" class="hidden">
             <p class="form-help">Só as pessoas ou cargos marcados podem ver e entrar. O dono do servidor também vê. A senha do canal continua valendo.</p>
             <fieldset class="permission-list"><legend>Cargos permitidos</legend><div id="new-channel-access-roles"></div></fieldset>
@@ -1160,14 +1166,14 @@
 
             <div id="owner-transfer" class="form-group hidden"><label for="owner-transfer-member">Transferir propriedade</label><select id="owner-transfer-member" class="form-input"></select><button type="button" id="btn-owner-transfer" class="btn-secondary">Transferir para este perfil</button></div>
             <div id="permission-management" class="hidden">
-              <p class="form-help">Cargos e acesso funcionam sem conta. Cada perfil guarda uma identidade privada que permanece nas atualizações. Exporte seu perfil para levar os cargos a outro aparelho ou recuperá-los se apagar os dados. Guarde o backup só com você.</p>
+              <p class="form-help">Cargos e acesso funcionam com ou sem conta. Cada perfil guarda uma identidade privada que permanece nas atualizações. Exporte seu perfil para levar os cargos a outro aparelho ou recuperá-los se apagar os dados. Guarde o backup só com você.</p>
               <div id="permission-role-management" class="hidden">
                 <form id="permission-role-form" class="form-group permission-block">
                   <h4>Cargos</h4>
                   <label for="permission-role-id">Criar ou editar</label><select id="permission-role-id" class="form-input"><option value="">Criar cargo</option></select>
                   <label for="permission-role-name">Nome do cargo</label><input id="permission-role-name" class="form-input" maxlength="30" required>
                   <label for="permission-role-position">Hierarquia (1 a 99)</label><input id="permission-role-position" class="form-input" type="number" min="1" max="99" value="10" required>
-                  <p class="form-help">Um cargo só modera pessoas abaixo dele. O dono pode gerenciar todos os cargos. Quem tem a permissão de gerenciar cargos só altera cargos e pessoas abaixo da própria hierarquia, sem conceder poderes que não possui.</p>
+                  <p class="form-help">Um cargo só modera pessoas abaixo dele. O dono pode gerenciar os cargos, respeitando o acesso aos canais privados. Quem tem a permissão de gerenciar cargos só altera cargos e pessoas abaixo da própria hierarquia, sem conceder poderes que não possui.</p>
                   <div id="permission-role-flags" class="permission-list"></div>
                   <div class="admin-row"><button type="submit" class="btn-primary">Salvar cargo</button><button type="button" id="permission-role-delete" class="btn-secondary" disabled>Remover cargo</button></div>
                 </form>

@@ -7,6 +7,11 @@ for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) e
 cargos sem conta e canais invisíveis na 3.7.0. Contas/amigos e reforço de voz estão
 preservados em `teste/contas-amigos-e-canais-com-senha` (commit `08b262e`).
 
+**Implementado para teste (28/10/2026):** branch `melhoria/cinema-dados-contas-e-privacidade`:
+miniplayer, modo cinema, privacidade inclusive para o dono, dados de RPG, ícones,
+launcher e contas opcionais. O APK continua acompanhando as atualizações; múltiplos
+servidores ficam para depois. Este trabalho ainda não tem versão publicada.
+
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
 > chaves de preferências). Veja [Nomes que não podem mudar](#nomes-que-não-podem-mudar).
@@ -525,6 +530,8 @@ trocar: apague a linha `OWNER_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
+| `accounts.json` | contas opcionais, accessId original, perfil completo, scrypt e hashes dos códigos/tokens; arquivo atômico 0600, falha fechada se ilegível |
+| `dice.json` | últimas 30 rolagens por canal de voz/texto; autor, horário, dados individuais, modificador e total; arquivo atômico 0600 |
 | `permissions.json` | segredo HMAC, dono (`ownerId`), cargos, nomes, vínculos e hash das chaves públicas; acesso 0600 |
 | `chat-images/` | imagens/GIFs da call (15 MB por envio, até 2 GB; **apagadas a cada reinício**) |
 | `chat-files/` | vídeos e arquivos da call (20 MB por envio, até 1 GB; **apagados a cada reinício**) |
@@ -803,6 +810,9 @@ de ruído, e 11 inicialização (`initApp`).
 | Funcionalidade | Onde procurar |
 |---|---|
 | Lista de canais/pessoas (ordem alfabética, recolher, arrastar pra mover) | `renderChannelsTree`, `sortedUsers`, `setupCategoryCollapse`, `moveUserToChannel` |
+| Contas opcionais | `account-store.js`, `accounts-protocol.js`, `public/accounts.js`/`.css`; auth `accountToken`, aba Conta e login HTTP antes da senha da sala |
+| Dados de RPG | `dice-store.js`, `public/dice.js`/`.css`; eventos `dice-roll`, `dice-history`, `dice-rolled` |
+| Cinema e miniplayer | `public/stage-social.js`/`.css` e API de estado/ações em `public/music.js`; integração em `app.js` |
 | Tela inicial e controles por contexto | `renderServerHome` e `setupServerHome`: cartões de voz/pessoas e atalhos de texto; `updateTextLayout` e `updateStageControls`: chat e controles apenas no contexto correspondente |
 | Canais de texto | `renderTextChannels`, `openTextChannel`, `loadTextHistory`; servidor: `readTextMessages`, `appendTextMessage` |
 | Chat (responder, reagir, editar, apagar) | `buildChatMessage`, `setupChatMessageActions`, `startEditMessage`; servidor: `message-edit/delete/react` |
@@ -836,6 +846,40 @@ de ruído, e 11 inicialização (`initApp`).
 | Tela inicial, hospedar sala, túnel | `electron/connect.html`, `ensureLocalServer`, `startTunnel` no `main.cjs` |
 | Som de um app só | Linux: `routeAppAudio` (PipeWire/Pulse); Windows: `native/win-audio` + `start-win-audio` |
 | Auto-update | `electron-updater` no `main.cjs` (lê o `latest*.yml` do release) |
+
+### Contas, privacidade e dados (branch de testes)
+
+- A conta é opcional, local à sala, sem e-mail/telefone/amigos. Usuário único de 3–24 letras,
+  números ou `_`, sem diferença entre maiúsculas/minúsculas; senha 8–128 caracteres e apelido
+  independente. Cadastro mantém `accessId` (cargos, ACL e dono) e o perfil. Se um ID público
+  já estiver associado a outra conta, gera outro ID público, preservando o accessId comprovado.
+- `accounts.json` confirma conta, perfil e sessão juntos. Scrypt assíncrono, até dois hashes
+  simultâneos; limites por IP/usuário compartilhados entre HTTP e sockets. Sessões de 30 dias,
+  até oito por conta, tokens de 256 bits e recuperação de 192 bits guardados só como hashes.
+  Recuperar troca senha/código e revoga sessões e mídia. Logout revoga só a sessão atual.
+- Handshake `accountToken` resolve a identidade antes da senha da sala. Token expirado retorna
+  `account-session-expired`; o cliente volta ao visitante e permite novo login. `GET /api/account`
+  anuncia suporte; `POST /api/account/login`, `/recover` e `/logout` permitem entrar mesmo antes
+  da senha da sala. Cadastro usa `account-register` em socket que já entrou na sala. Eventos
+  `account-state` e `account-session-ended` sincronizam perfil/sessão. Não emitir `permission-identity`
+  para contas: tokens de permissões/provas antigos deixam de autenticar identidades vinculadas.
+- Perfis de conta são carregados do servidor antes de editar e nunca sobrescritos pelo visitante
+  ao conectar. Edição aguarda a gravação atômica antes de publicar ou anunciar sucesso.
+  A sessão local guarda só os campos leves; avatar/banner/som completos ficam na RAM e no
+  servidor, evitando duplicar GIFs nas preferências. Importar outro perfil exige sair da conta.
+  IDs públicos de contas não podem ser apresentados por visitantes para assumir autoria.
+- `PermissionStore.visible` aplica ACL inclusive ao dono; `has` ainda delega administração
+  global. Alterar cargos que afetam um canal inacessível é recusado, evitando autoliberação.
+  Limpeza nunca mescla perfis apenas pelo nome nem apaga referências de conta/canal no reset.
+  Continua sendo controle de acesso do aplicativo: o operador da VM tem acesso aos arquivos.
+- Rolagens `NdM` com modificador opcional: 1–100 dados, 2–10.000 lados e modificador até 10.000.
+  `crypto.randomInt` sorteia no servidor, que persiste antes de anunciar. Limites: 500 ms e
+  20 pedidos/minuto por identidade, inclusive entre canais/reconexões. Histórico acessível só
+  a quem vê o texto ou está na call; escrita respeita `canWrite`. Excluir o canal remove o
+  histórico. Arquivo sem pasta persistente dura só até reiniciar.
+- Novos módulos Node precisam entrar em `build.files` e no staging de `deploy/oracle/deploy.sh`.
+  O APK usa todos os arquivos de `public/`; incrementar `versionCode` junto da próxima release
+  e manter assinatura, ID e nome do artefato existentes.
 
 ## 12. Convenções
 

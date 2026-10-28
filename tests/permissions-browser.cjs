@@ -42,7 +42,7 @@ app.whenReady().then(async () => {
   await js(owner, `const person=[...document.querySelector('#permission-member-id').options].find(o=>o.textContent.startsWith('Pessoa permitida'));document.querySelector('#permission-member-id').value=person.value;document.querySelector('#permission-member-id').dispatchEvent(new Event('change'));document.querySelector('#permission-member-roles input[value="${roleId}"]').checked=true;void 0`);
   await click(owner, '#permission-member-save');
   await until(guest, 'appState.permissions?.includes("muteMembers")');
-  await js(owner, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#btn-header-add-channel').click();document.querySelector('#input-channel-name').value='Call reservada';document.querySelector('#new-channel-access-private').click();document.querySelector('#new-channel-access-roles input[value="${roleId}"]').checked=true;document.querySelector('#form-create-channel').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await js(owner, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#btn-header-add-channel').click();document.querySelector('#input-channel-name').value='Call reservada';document.querySelector('#new-channel-access-private').click();document.querySelector('#new-channel-access-roles input[value="${roleId}"]').checked=true;document.querySelector('#new-channel-access-members input[value="'+appState.memberId+'"]').checked=true;document.querySelector('#form-create-channel').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
   await until(owner, 'appState.currentChannelId === "call-reservada"');
   await until(guest, 'Boolean(document.querySelector("#channel-call-reservada"))');
   if (await js(outsider, 'Boolean(document.querySelector("#channel-call-reservada"))')) throw new Error('O canal invisível apareceu para quem não tem acesso');
@@ -53,10 +53,10 @@ app.whenReady().then(async () => {
   await js(owner, "document.querySelector('#modal-settings').classList.remove('hidden');document.querySelector('[data-settings-tab=admin]').click();document.querySelector('#permission-channel-id').value='call-reservada';document.querySelector('#permission-channel-id').dispatchEvent(new Event('change'));void 0");
   await until(owner, '!document.querySelector("#permission-channel-save").disabled');
   const guestMemberId = await js(owner, 'document.querySelector("#permission-member-id").value');
-  await js(owner, `document.querySelectorAll('#channel-access-roles input').forEach(input=>input.checked=false);document.querySelector('#channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#permission-channel-save').click();void 0`);
+  await js(owner, `document.querySelectorAll('#channel-access-roles input').forEach(input=>input.checked=false);document.querySelector('#channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#channel-access-members input[value="'+appState.memberId+'"]').checked=true;document.querySelector('#permission-channel-save').click();void 0`);
   await until(guest, 'Boolean(document.querySelector("#channel-call-reservada"))');
   // Configuração individual de texto pelo botão do próprio canal.
-  await js(owner, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#btn-add-text-channel').click();document.querySelector('#input-channel-name').value='Texto reservado';document.querySelector('#new-channel-access-private').click();document.querySelector('#new-channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#form-create-channel').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await js(owner, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#btn-add-text-channel').click();document.querySelector('#input-channel-name').value='Texto reservado';document.querySelector('#new-channel-access-private').click();document.querySelector('#new-channel-access-members input[value="${guestMemberId}"]').checked=true;document.querySelector('#new-channel-access-members input[value="'+appState.memberId+'"]').checked=true;document.querySelector('#form-create-channel').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
   await until(owner, 'appState.textChannels.has("texto-reservado")');
   await until(guest, 'appState.textChannels.has("texto-reservado")');
   if (await js(outsider, 'appState.textChannels.has("texto-reservado")')) throw new Error('Texto privado vazou');
@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
   await until(owner, 'document.querySelector("#user-popover-roles").textContent.includes("Moderador")');
   await click(owner, '#user-popover-avatar');
   await until(owner, 'document.querySelector("#profile-card-roles").textContent.includes("Moderador")');
-  await js(guest, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('.channel-user.is-me').click();document.querySelector('#profile-display-role').value='${roleId}';document.querySelector('#form-profile').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await js(guest, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#user-profile').click();document.querySelector('#profile-display-role').value='${roleId}';document.querySelector('#form-profile').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
   await until(owner, '[...document.querySelectorAll(".channel-user")].find(el=>el.dataset.username === "Pessoa permitida")?.querySelector(".badge-role")?.textContent === "Moderador"');
   await js(owner, "document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
   await click(owner, '[data-text-channel-id="texto-reservado"] .channel-settings-btn');

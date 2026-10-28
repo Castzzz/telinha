@@ -88,7 +88,7 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
     });
     await t.test('canal nasce invisível e não vaza em eventos, REST, sinalização nem token SFU', async () => {
       bob.events.length = 0;
-      const created = await emit(owner.socket, 'create-channel', { name: 'Segredo da turma', password: 'senha-canal', access: { private: true, roles: [role.id], members: [] } });
+      const created = await emit(owner.socket, 'create-channel', { name: 'Segredo da turma', password: 'senha-canal', access: { private: true, roles: [role.id], members: [owner.memberId] } });
       assert.equal(created.success, true); channelId = created.channelId;
       await waitFor(() => alice.channels.some(ch => ch.id === channelId));
       assert.ok(alice.channels.some(ch => ch.id === channelId));
@@ -123,7 +123,7 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
       assert.ok(revocations.includes(mediaId));
     });
     await t.test('acesso direto por pessoa funciona sem cargo e sem cadastro', async () => {
-      assert.equal((await emit(owner.socket, 'channel-access', { channelId, access: { private: true, roles: [], members: [bob.memberId] } })).success, true);
+      assert.equal((await emit(owner.socket, 'channel-access', { channelId, access: { private: true, roles: [], members: [bob.memberId, owner.memberId] } })).success, true);
       await waitFor(() => bob.channels.some(ch => ch.id === channelId));
       assert.ok(bob.channels.some(ch => ch.id === channelId));
       assert.equal((await emit(bob.socket, 'join-channel', { channelId, password: 'senha-canal' })).success, true);
@@ -162,14 +162,14 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
     });
     await t.test('configurações de texto protegem histórico, eventos, fixadas e anexos; revogação é imediata', async () => {
       bob.events.length = 0;
-      const created = await emit(owner.socket, 'create-text-channel', { name: 'Texto reservado', access: { private: true, roles: [role.id], members: [] } });
+      const created = await emit(owner.socket, 'create-text-channel', { name: 'Texto reservado', access: { private: true, roles: [role.id], members: [owner.memberId] } });
       assert.equal(created.success, true);
       const id = created.channelId;
       await waitFor(() => alice.textChannels.some(ch => ch.id === id));
       assert.ok(alice.textChannels.some(ch => ch.id === id));
       assert.ok(!bob.textChannels.some(ch => ch.id === id));
       const settings = { type: 'text', channelId: id, name: 'Texto da turma', description: 'Assuntos privados',
-        access: { private: true, roles: [role.id], members: [] }, writeAccess: { private: true, roles: [], members: [] } };
+        access: { private: true, roles: [role.id], members: [owner.memberId] }, writeAccess: { private: true, roles: [], members: [owner.memberId] } };
       assert.equal((await emit(owner.socket, 'channel-settings', settings)).success, true);
       assert.equal((await emit(alice.socket, 'text-message', { channelId: id, text: 'Sem poder escrever' })).success, false);
       assert.equal((await emit(bob.socket, 'text-history', { channelId: id })).success, false);
@@ -266,7 +266,7 @@ test('cargos e canais invisíveis sem conta, com servidor real', { timeout: 4500
     await t.test('remover cargo e carregar regra inválida nunca publica o canal', async () => {
       const admin = await connect('Dono', owner.token);
       await emit(admin.socket, 'admin-login', { key: 'admin-permissoes-teste' });
-      await emit(admin.socket, 'channel-access', { channelId, access: { private: true, roles: [role.id], members: [] } });
+      await emit(admin.socket, 'channel-access', { channelId, access: { private: true, roles: [role.id], members: [owner.memberId] } });
       assert.equal((await emit(admin.socket, 'role-delete', { id: role.id })).success, true);
       await stop(); await start();
       const visitor = await connect('Pessoa sem cargo', bob.token);

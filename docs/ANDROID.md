@@ -4,12 +4,16 @@ O APK reaproveita `public/`, Socket.IO, WebRTC, RNNoise e o SFU existentes. O pr
 fica em `android/` e usa Java + WebView, sem trocar o aplicativo desktop de Electron.
 Não há cliente para iPhone nesta implementação.
 
+A reformulação maior do Android fica para o futuro; continuar empacotando as melhorias
+de `public/` no APK a cada lançamento, mantendo o ID e a assinatura.
+
 Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md).
 
 ## O que funciona
 
 - Canais de voz e texto, perfil local, chat, cargos e canais com senha ou invisíveis.
-  Não exige conta; contas e amigos ficaram para uma versão futura.
+  Conta opcional com usuário/senha e o mesmo perfil do desktop; amigos ficam para depois.
+  Acesso em **Você → Conta**. Dados de RPG e os controles do palco usam a mesma interface.
 - Microfone com o filtro e o ganho manual do desktop, mute, ensurdecer e câmera frontal.
 - Assistir às transmissões dos computadores. Abrir uma transmissão leva à aba Sala.
 - PiP automático: enquanto recebe vídeo de um amigo, Início/trocar de app mantém a imagem
@@ -40,7 +44,7 @@ Precisa de JDK 17+ e Android SDK com a plataforma 35. O Gradle Wrapper 8.9 está
 repositório, com checksum da distribuição; o Android Gradle Plugin é 8.7.3. A combinação
 é compatível com SDK 35 e dispensa trocar as ferramentas do desktop.
 
-O APK atual usa `versionCode 4` / `3.7.0`, com o mesmo ID e a mesma assinatura
+O APK publicado da 4.0.0 usa `versionCode 7` / `4.0.0`, com o mesmo ID e a mesma assinatura
 do primeiro APK, permitindo instalar por cima e manter o perfil.
 
 ```bash

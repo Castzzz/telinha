@@ -136,6 +136,7 @@ export function setupPermissions({ socket, state, saveIdentity, showToast, escap
   });
   socket.on('permission-identity', ({ token }) => { if (typeof token === 'string') saveIdentity(token); });
   socket.on('permissions-state', payload => {
+    state.memberId = payload.memberId;
     state.permissions = payload.permissions || [];
     state.permissionRoles = payload.roles || [];
     $('#permission-device').textContent = payload.memberId ? `ID do seu perfil neste servidor: ${payload.memberId}. Permanece ao atualizar o app.` : '';

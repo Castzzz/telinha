@@ -1,7 +1,8 @@
 # Ideias e melhorias futuras
 
-Anotadas em 22/10/2026. Esta lista guarda pedidos para avaliar no futuro, sem ordem de
-prioridade nem prazo de implementação. As dúvidas abaixo ainda precisam ser investigadas.
+Anotadas em 22/10/2026, atualizadas em 28/10/2026. Esta lista guarda pedidos para avaliar
+no futuro, sem ordem de prioridade nem prazo de implementação. As dúvidas abaixo ainda
+precisam ser investigadas.
 
 ## 1. Mais personalização
 
@@ -10,6 +11,8 @@ prioridade nem prazo de implementação. As dúvidas abaixo ainda precisam ser i
 - Os detalhes e as opções ficam para definir quando essa ideia for desenvolvida.
 
 ## 2. Bot de música
+
+**Já disponível na 4.0.0**, com músicas e playlists compartilhadas na call.
 
 - Poder criar um bot de música, parecido com os do Discord, para tocar na call para todos.
 - Colar um link do YouTube e o bot tocar a música.
@@ -51,10 +54,15 @@ Sem resposta ou reconectando, fica vermelho; servidor antigo sem suporte exibe p
 
 ## 6. Versão para Android
 
+**APK já existente.** Continuar incluindo o Android nas atualizações. Uma mudança maior
+na abordagem fica para o futuro, conforme decisão do dono em 28/10/2026.
+
 - Fazer uma versão do Teletela para celular Android.
 - Avaliar a abordagem e quais funcionalidades precisam estar disponíveis na primeira versão.
 
 ## 7. Mais de um servidor
+
+**Adiado para bem depois**, conforme decisão do dono em 28/10/2026.
 
 - Considerar permitir criar mais de um servidor.
 - Ideia ainda em consideração pelo dono, que talvez mantenha o app só para o grupo atual,
@@ -83,6 +91,9 @@ A detecção nativa no Windows ainda precisa ser conferida em um PC Windows.
 
 ## 9. Miniplayer do bot de música durante transmissões
 
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
 - Quando alguém estiver assistindo a uma transmissão de tela ou câmera no palco principal
   (`#video-stage`), exibir uma pílula flutuante discreta na barra superior ou canto do palco
   com o nome da música atual, mini visualizador de áudio e botões rápidos de Pausar/Continuar (⏸/▶)
@@ -92,8 +103,78 @@ A detecção nativa no Windows ainda precisa ser conferida em um PC Windows.
 
 ## 10. Modo Cinema com faixa de participantes durante transmissões
 
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
 - Quando uma transmissão estiver aberta no palco (`#video-stage`), mostrar uma tirinha horizontal
   recolhível na parte inferior ou superior com as fotos dos amigos na call (acendendo a borda
   verde quando falam), o indicador do bot de música e os balões de reação de emoji subindo por cima.
 - Permite acompanhar quem está falando e reagindo na call mesmo com a barra lateral recolhida ou
   em tela cheia.
+
+## 11. Canais realmente privados, inclusive para o dono
+
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
+- Respeitar a privacidade independentemente de quem criou o canal e de para quem ele foi criado.
+- Ser dono do servidor não deve dar acesso automático a canais privados nem ao chat deles.
+  Se a pessoa não quiser liberar o acesso ao dono, ele não deve ver o canal nem ler o chat.
+- O dono só acessa quando estiver autorizado pelas regras do canal, como qualquer outro membro.
+- Remover a exceção atual de acesso para o dono e garantir a regra no servidor, incluindo
+  histórico, mensagens em tempo real, anexos e demais caminhos de acesso ao conteúdo.
+- Conferir também as permissões de gerenciamento, para que o cargo de dono não permita
+  contornar a privacidade e liberar o próprio acesso.
+
+## 12. Rolar dados no aplicativo
+
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
+- Adicionar um botão com ícone de dado que abre um seletor, conforme o desenho enviado.
+- Mostrar o ícone e a identificação de cada dado nas opções, como d4, d6, d8, d10, d12,
+  d20 e d100.
+- Abaixo das opções prontas, permitir informar uma rolagem personalizada, por exemplo
+  `1d15` (um dado de 15 lados).
+- Seletor disponível na call e nos canais de texto, com resultados compartilhados pelo servidor.
+- Manter as últimas **30 rolagens por canal**, com horário, autor e resultados individuais,
+  salvas no servidor para conferir durante um RPG. Suportar modificadores, como `2d6+3`.
+
+## 13. Trocar os ícones do bot de música e do soundboard
+
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
+- Trocar entre si os ícones dos dois botões na barra da call, conforme a captura enviada.
+- Usar as notas musicais, hoje no soundboard, para o bot de música.
+- Usar o fone de ouvido, hoje no bot de música, para o soundboard.
+- Preservar os rótulos e as ações de cada botão; a mudança é nos ícones.
+
+## 14. Redesenhar a tela inicial do aplicativo
+
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
+- Mudar o design da tela de entrada do app, onde aparecem as opções de entrar no servidor
+  e criar uma sala local.
+- Definir a direção visual quando essa mudança for desenvolvida; ainda não foi escolhido
+  um novo layout.
+
+## 15. Conta simples, só com usuário e senha
+
+**Implementado para teste** na branch `melhoria/cinema-dados-contas-e-privacidade`,
+a pedido do dono em 28/10/2026. Ainda não publicado.
+
+- Avaliar criar conta usando apenas nome de usuário e senha, sem exigir e-mail, telefone
+  ou outros dados de cadastro.
+- Facilitar usar o mesmo perfil em outro computador ou no futuro app Android, sem precisar
+  exportar e importar o perfil manualmente. Manter a sessão salva para entrar direto.
+- Separar o nome de usuário único usado para entrar do apelido exibido aos amigos.
+- Definir a recuperação de acesso sem e-mail; uma possibilidade é entregar um código de
+  recuperação para a pessoa guardar. Sem a senha nem esse código, pode perder o acesso.
+- Preservar a identidade dos perfis atuais, cargos e propriedade do servidor ao vincular
+  uma conta. Revisar o trabalho de contas/amigos já guardado na branch de testes antes
+  de escolher a implementação.
+- Conta **opcional**, com usuário único, senha e código de recuperação; apelido separado.
+  Sessão salva, perfil compartilhado entre aparelhos e cargos/propriedade preservados.
+  Amigos não fazem parte deste pedido.

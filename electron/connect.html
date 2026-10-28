@@ -1,134 +1,677 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-theme="escuro">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:" />
   <title>Teletela</title>
   <style>
+    :root {
+      --bg-primary: #1a1c23;
+      --bg-secondary: #13151a;
+      --bg-tertiary: #0d0e12;
+      --bg-elevated: #22252f;
+      --bg-floating: rgba(19, 21, 26, 0.92);
+      --bg-modifier-hover: rgba(255, 255, 255, 0.05);
+      --text-normal: #e3e5e8;
+      --text-muted: #949ba4;
+      --text-header: #ffffff;
+      --accent-brand: #6366f1;
+      --accent-brand-hover: #4f46e5;
+      --accent-soft: rgba(99, 102, 241, 0.14);
+      --accent-green: #23a55a;
+      --accent-green-soft: rgba(35, 165, 90, 0.14);
+      --accent-danger: #f23f43;
+      --accent-danger-soft: rgba(242, 63, 67, 0.14);
+      --border-subtle: rgba(255, 255, 255, 0.06);
+      --border-medium: rgba(255, 255, 255, 0.11);
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 18px;
+      --radius-pill: 9999px;
+      --panel-shadow: 0 20px 50px rgba(0, 0, 0, 0.48);
+      --glow-brand: radial-gradient(circle at 18% 12%, rgba(99, 102, 241, 0.18), transparent 48%),
+                    radial-gradient(circle at 84% 86%, rgba(35, 165, 90, 0.12), transparent 45%);
+    }
+
+    html[data-theme="preto"] {
+      --bg-primary: #050507;
+      --bg-secondary: #0c0d10;
+      --bg-tertiary: #000000;
+      --bg-elevated: #14151b;
+      --bg-floating: rgba(10, 10, 14, 0.95);
+      --bg-modifier-hover: rgba(255, 255, 255, 0.06);
+      --text-normal: #eceef2;
+      --text-muted: #8b929c;
+      --text-header: #ffffff;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-medium: rgba(255, 255, 255, 0.14);
+      --panel-shadow: 0 20px 55px rgba(0, 0, 0, 0.78);
+    }
+
+    html[data-theme="claro"] {
+      --bg-primary: #f3f4f6;
+      --bg-secondary: #ffffff;
+      --bg-tertiary: #e5e7eb;
+      --bg-elevated: #f9fafb;
+      --bg-floating: rgba(255, 255, 255, 0.94);
+      --bg-modifier-hover: rgba(15, 23, 42, 0.05);
+      --text-normal: #1f2937;
+      --text-muted: #6b7280;
+      --text-header: #111827;
+      --accent-brand: #4f46e5;
+      --accent-brand-hover: #4338ca;
+      --accent-soft: rgba(79, 70, 229, 0.11);
+      --accent-green: #16a34a;
+      --accent-green-soft: rgba(22, 163, 74, 0.12);
+      --accent-danger: #dc2626;
+      --accent-danger-soft: rgba(220, 38, 38, 0.1);
+      --border-subtle: rgba(15, 23, 42, 0.08);
+      --border-medium: rgba(15, 23, 42, 0.14);
+      --panel-shadow: 0 18px 42px rgba(15, 23, 42, 0.12);
+      --glow-brand: radial-gradient(circle at 18% 12%, rgba(79, 70, 229, 0.11), transparent 48%),
+                    radial-gradient(circle at 84% 86%, rgba(22, 163, 74, 0.09), transparent 45%);
+    }
+
     * { box-sizing: border-box; }
-    .window-drag { position: fixed; top: 0; left: 0; right: 0; height: 52px; -webkit-app-region: drag; }
+
+    .window-drag {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 48px;
+      -webkit-app-region: drag;
+      z-index: 10;
+    }
+
     body {
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      background: #1e1f22; color: #f2f3f5; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      padding: 52px 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--bg-primary);
+      background-image: var(--glow-brand);
+      color: var(--text-normal);
+      font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .card { width: min(520px, 92vw); background: #2b2d31; border-radius: 12px; padding: 32px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
-    h1 { margin: 0 0 4px; font-size: 26px; }
-    p.sub { margin: 0 0 24px; color: #b5bac1; }
-    h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #b5bac1; margin: 24px 0 8px; }
+
+    .icon-svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      vertical-align: middle;
+    }
+
+    .card {
+      width: min(560px, 94vw);
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: var(--panel-shadow);
+      position: relative;
+      z-index: 1;
+    }
+
+    .brand-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+
+    .brand-identity {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .brand-logo {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      border: 1px solid rgba(99, 102, 241, 0.3);
+      color: var(--accent-brand);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    }
+    .brand-logo .icon-svg {
+      width: 26px;
+      height: 26px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: var(--text-header);
+      line-height: 1.15;
+    }
+
+    p.sub {
+      margin: 4px 0 0;
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .theme-btn {
+      width: auto;
+      padding: 7px 11px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-medium);
+      background: var(--bg-elevated);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      -webkit-app-region: no-drag;
+      transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+    }
+    .theme-btn:hover:not(:disabled) {
+      background: var(--bg-modifier-hover);
+      color: var(--text-header);
+      border-color: var(--accent-brand);
+    }
+    .theme-btn .icon-svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .connect-sections {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .connect-section {
+      padding: 16px;
+      border-radius: var(--radius-md);
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-subtle);
+      transition: border-color 150ms ease;
+    }
+    .connect-section.primary-section {
+      background: linear-gradient(180deg, var(--accent-soft), rgba(99, 102, 241, 0.04));
+      border-color: rgba(99, 102, 241, 0.28);
+    }
+
+    .section-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .primary-section h2 {
+      color: var(--text-header);
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border-radius: var(--radius-pill);
+      background: var(--accent-green-soft);
+      color: var(--accent-green);
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 0 3px rgba(35, 165, 90, 0.2);
+    }
+
     button {
-      width: 100%; padding: 12px; border: 0; border-radius: 8px; font-size: 15px; font-weight: 600;
-      cursor: pointer; background: #5865f2; color: #fff;
+      width: 100%;
+      padding: 12px 16px;
+      border: 1px solid transparent;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      font-size: 14.5px;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--accent-brand);
+      color: #ffffff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      transition: background 140ms ease, transform 120ms ease, border-color 140ms ease, opacity 140ms ease;
     }
-    button:hover:not(:disabled) { background: #4752c4; }
-    button:disabled { opacity: .6; cursor: wait; }
-    button.secondary { background: #4e5058; }
-    button.secondary:hover:not(:disabled) { background: #6d6f78; }
-    .row { display: flex; gap: 8px; }
-    .row button { width: auto; white-space: nowrap; padding: 12px 18px; }
+    button:hover:not(:disabled) {
+      background: var(--accent-brand-hover);
+      transform: translateY(-1px);
+    }
+    button:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    button:focus-visible,
+    input:focus-visible {
+      outline: 2px solid var(--accent-brand);
+      outline-offset: 2px;
+    }
+    button:disabled {
+      opacity: 0.62;
+      cursor: wait;
+      transform: none;
+    }
+
+    button.secondary {
+      background: var(--bg-tertiary);
+      color: var(--text-normal);
+      border-color: var(--border-medium);
+    }
+    button.secondary:hover:not(:disabled) {
+      background: var(--bg-modifier-hover);
+      border-color: var(--accent-brand);
+      color: var(--text-header);
+    }
+
+    .row {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+    }
+    .row button {
+      width: auto;
+      white-space: nowrap;
+      padding: 12px 18px;
+    }
+
+    .input-wrap {
+      position: relative;
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+    }
+    .input-icon {
+      position: absolute;
+      left: 12px;
+      color: var(--text-muted);
+      pointer-events: none;
+      display: inline-flex;
+    }
+    .input-icon .icon-svg {
+      width: 16px;
+      height: 16px;
+    }
+
     input {
-      flex: 1; min-width: 0; padding: 12px; border-radius: 8px; border: 1px solid #1e1f22;
-      background: #1e1f22; color: #f2f3f5; font-size: 15px;
+      width: 100%;
+      flex: 1;
+      min-width: 0;
+      padding: 11px 12px 11px 36px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-medium);
+      background: var(--bg-tertiary);
+      color: var(--text-header);
+      font-family: inherit;
+      font-size: 14px;
+      transition: border-color 140ms ease;
     }
-    .msg { margin-top: 16px; font-size: 14px; min-height: 1em; }
-    .msg.error { color: #f23f43; }
-    .link-box { display: none; margin-top: 16px; padding: 16px; background: #1e1f22; border-radius: 8px; }
-    .link-box code { display: block; word-break: break-all; color: #23a55a; font-size: 15px; margin-bottom: 12px; }
-    .link-box .row { margin-top: 8px; }
-    .link-box .row button { flex: 1; }
-    small { color: #949ba4; }
-    small.hint { display: block; margin-top: 8px; }
+    input::placeholder {
+      color: var(--text-muted);
+      opacity: 0.75;
+    }
+    input:hover {
+      border-color: var(--accent-brand);
+    }
+
+    .link-box {
+      display: none;
+      margin-top: 12px;
+      padding: 14px;
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-medium);
+      border-radius: var(--radius-sm);
+    }
+    .link-box code {
+      display: block;
+      word-break: break-all;
+      color: var(--accent-green);
+      font-family: ui-monospace, 'Cascadia Code', 'Fira Code', monospace;
+      font-size: 13.5px;
+      font-weight: 600;
+      padding: 8px 10px;
+      margin: 6px 0 12px;
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+    .link-box .row {
+      margin-top: 8px;
+    }
+    .link-box .row button {
+      flex: 1;
+    }
+
+    small {
+      color: var(--text-muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    small.hint {
+      display: block;
+      margin-top: 8px;
+    }
+
+    .msg {
+      margin-top: 14px;
+      font-size: 13px;
+      font-weight: 600;
+      min-height: 1.25em;
+      line-height: 1.45;
+      color: var(--text-muted);
+      border-radius: var(--radius-sm);
+      transition: all 140ms ease;
+    }
+    .msg:not(:empty) {
+      padding: 10px 12px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border-medium);
+      color: var(--text-normal);
+    }
+    .msg.error:not(:empty) {
+      color: var(--accent-danger);
+      background: var(--accent-danger-soft);
+      border-color: rgba(242, 63, 67, 0.35);
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 520px) {
+      body {
+        padding: 44px 10px 16px;
+      }
+      .card {
+        padding: 20px 16px;
+      }
+      .row {
+        flex-direction: column;
+      }
+      .row button {
+        width: 100%;
+      }
+    }
   </style>
 </head>
 <body>
   <!-- Área pra arrastar a janela (os botões de fechar/maximizar ficam por cima, à direita) -->
   <div class="window-drag"></div>
-  <div class="card">
-    <h1>📺 Teletela</h1>
-    <p class="sub">Voz e transmissão de tela com o som do PC.</p>
 
-    <h2>Sala do servidor</h2>
-    <button id="btn-server-room">🌐 Entrar na sala do servidor</button>
-    <small class="hint">Sempre ligada: não precisa ninguém hospedar.</small>
-
-    <h2>Hospedar a sala</h2>
-    <button id="btn-host">🏠 Hospedar no meu PC</button>
-    <div class="link-box" id="link-box">
-      <small>Mande este link para seus amigos:</small>
-      <code id="public-link"></code>
-      <div class="row">
-        <button class="secondary" id="btn-copy">📋 Copiar link</button>
-        <button id="btn-enter-host">Entrar na sala</button>
+  <main class="card" aria-labelledby="connect-title">
+    <header class="brand-header">
+      <div class="brand-identity">
+        <div class="brand-logo" aria-hidden="true">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="7" width="20" height="15" rx="3" ry="3"/>
+            <polyline points="17 2 12 7 7 2"/>
+          </svg>
+        </div>
+        <div>
+          <h1 id="connect-title">Teletela</h1>
+          <p class="sub">Voz, cinema e transmissão de tela com o som do PC.</p>
+        </div>
       </div>
+      <button type="button" id="btn-theme" class="theme-btn" title="Alternar tema visual" aria-label="Alternar tema visual">
+        <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+        </svg>
+        <span id="theme-label">Escuro</span>
+      </button>
+    </header>
+
+    <div class="connect-sections">
+      <section class="connect-section primary-section" aria-labelledby="heading-server-room">
+        <div class="section-head">
+          <h2 id="heading-server-room">Sala do servidor</h2>
+          <span class="status-pill"><span class="status-dot" aria-hidden="true"></span>Sempre ligada</span>
+        </div>
+        <button type="button" id="btn-server-room">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="2" y1="12" x2="22" y2="12"/>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span>Entrar na sala do servidor</span>
+        </button>
+        <small class="hint">Pronta para entrar a qualquer hora — ninguém precisa hospedar.</small>
+      </section>
+
+      <section class="connect-section" aria-labelledby="heading-friend-room">
+        <div class="section-head">
+          <h2 id="heading-friend-room">Entrar na sala de um amigo</h2>
+        </div>
+        <label class="sr-only" for="server-url">Link da sala do amigo</label>
+        <div class="row">
+          <div class="input-wrap">
+            <span class="input-icon" aria-hidden="true">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+            </span>
+            <input id="server-url" type="text" placeholder="https://xxxx.trycloudflare.com" spellcheck="false" autocomplete="off" />
+          </div>
+          <button type="button" id="btn-join">
+            <span>Entrar</span>
+            <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="5" y1="12" x2="19" y2="12"/>
+              <polyline points="12 5 19 12 12 19"/>
+            </svg>
+          </button>
+        </div>
+      </section>
+
+      <section class="connect-section" aria-labelledby="heading-host-room">
+        <div class="section-head">
+          <h2 id="heading-host-room">Hospedar a sala</h2>
+        </div>
+        <button type="button" class="secondary" id="btn-host">
+          <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          <span>Hospedar no meu PC</span>
+        </button>
+        <div class="link-box" id="link-box">
+          <small>Mande este link para seus amigos:</small>
+          <code id="public-link"></code>
+          <div class="row">
+            <button type="button" class="secondary" id="btn-copy">
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <span>Copiar link</span>
+            </button>
+            <button type="button" id="btn-enter-host">
+              <span>Entrar na sala</span>
+              <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="12 5 19 12 12 19"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <h2>Entrar na sala de um amigo</h2>
-    <div class="row">
-      <input id="server-url" type="text" placeholder="https://xxxx.trycloudflare.com" spellcheck="false" />
-      <button id="btn-join">Entrar</button>
-    </div>
-
-    <div class="msg" id="msg"></div>
-  </div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </main>
 
   <script>
     const api = window.telinhaLauncher;
+    const prefsApi = window.electronAPI;
     const $ = (id) => document.getElementById(id);
+
+    const COPY_DEFAULT_HTML = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>Copiar link</span>';
+    const COPY_DONE_HTML = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span>Copiado!</span>';
+
+    const THEMES = ['escuro', 'preto', 'claro'];
+    const THEME_LABELS = { escuro: 'Escuro', preto: 'Preto', claro: 'Claro' };
+
+    function applyTheme(theme) {
+      const normalized = THEMES.includes(theme) ? theme : 'escuro';
+      document.documentElement.dataset.theme = normalized;
+      const label = $('theme-label');
+      if (label) label.textContent = THEME_LABELS[normalized];
+      try {
+        localStorage.setItem('telinha_theme', normalized);
+      } catch (_) {}
+      return normalized;
+    }
+
+    (function initTheme() {
+      let initial = 'escuro';
+      try {
+        initial = localStorage.getItem('telinha_theme') || 'escuro';
+      } catch (_) {}
+      applyTheme(initial);
+      if (prefsApi && typeof prefsApi.getPrefs === 'function') {
+        Promise.resolve(prefsApi.getPrefs()).then((prefs) => {
+          if (prefs && THEMES.includes(prefs.theme)) applyTheme(prefs.theme);
+        }).catch(() => {});
+      }
+    })();
+
+    $('btn-theme')?.addEventListener('click', () => {
+      const current = document.documentElement.dataset.theme || 'escuro';
+      const next = THEMES[(THEMES.indexOf(current) + 1) % THEMES.length];
+      applyTheme(next);
+      if (prefsApi && typeof prefsApi.setPrefs === 'function') {
+        Promise.resolve(prefsApi.setPrefs({ theme: next })).catch(() => {});
+      }
+    });
+
     const msg = (text, isError) => {
-      $('msg').textContent = text || '';
-      $('msg').className = 'msg' + (isError ? ' error' : '');
+      const el = $('msg');
+      if (!el) return;
+      el.textContent = text || '';
+      el.className = 'msg' + (isError ? ' error' : '');
     };
 
     let hostLocalUrl = null;
     let serverRoomUrl = null;
 
-    api.getState().then((state) => {
-      if (state.lastServerUrl && state.lastServerUrl !== state.serverRoomUrl) $('server-url').value = state.lastServerUrl;
-      serverRoomUrl = state.serverRoomUrl;
-      if (state.error) msg(state.error, true);
-    });
+    if (api && typeof api.getState === 'function') {
+      Promise.resolve(api.getState()).then((state) => {
+        if (!state) return;
+        if (state.lastServerUrl && state.lastServerUrl !== state.serverRoomUrl) {
+          $('server-url').value = state.lastServerUrl;
+        }
+        serverRoomUrl = state.serverRoomUrl;
+        if (state.error) msg(state.error, true);
+      }).catch((err) => {
+        msg(err?.message || 'Não foi possível carregar o estado inicial.', true);
+      });
+    }
 
     $('btn-host').addEventListener('click', async () => {
       $('btn-host').disabled = true;
       msg('Iniciando servidor e criando link público (pode levar até 1 minuto)…');
-      const res = await api.host();
-      $('btn-host').disabled = false;
-      if (!res.ok) return msg(res.error, true);
-      hostLocalUrl = res.localUrl;
-      if (res.publicUrl) {
-        $('public-link').textContent = res.publicUrl;
-        $('link-box').style.display = 'block';
-        msg('');
-      } else {
-        msg(res.tunnelError || 'Servidor iniciado, mas não deu para criar o link público.', true);
-        $('public-link').textContent = 'Só na rede local: ' + (res.lanUrls.join(', ') || res.localUrl);
-        $('btn-copy').style.display = 'none';
-        $('link-box').style.display = 'block';
+      try {
+        const res = await api.host();
+        $('btn-host').disabled = false;
+        if (!res || !res.ok) return msg(res?.error || 'Não foi possível iniciar o servidor.', true);
+        hostLocalUrl = res.localUrl;
+        if (res.publicUrl) {
+          $('public-link').textContent = res.publicUrl;
+          $('btn-copy').style.display = '';
+          $('link-box').style.display = 'block';
+          msg('');
+        } else {
+          msg(res.tunnelError || 'Servidor iniciado, mas não deu para criar o link público.', true);
+          const lanList = Array.isArray(res.lanUrls) ? res.lanUrls.join(', ') : '';
+          $('public-link').textContent = 'Só na rede local: ' + (lanList || res.localUrl);
+          $('btn-copy').style.display = 'none';
+          $('link-box').style.display = 'block';
+        }
+      } catch (err) {
+        $('btn-host').disabled = false;
+        msg(err?.message || 'Erro ao hospedar a sala.', true);
       }
     });
 
     $('btn-copy').addEventListener('click', async () => {
       await api.copy($('public-link').textContent);
-      $('btn-copy').textContent = '✅ Copiado!';
-      setTimeout(() => { $('btn-copy').textContent = '📋 Copiar link'; }, 1500);
+      $('btn-copy').innerHTML = COPY_DONE_HTML;
+      setTimeout(() => {
+        $('btn-copy').innerHTML = COPY_DEFAULT_HTML;
+      }, 1500);
     });
 
-    $('btn-enter-host').addEventListener('click', () => api.open(hostLocalUrl));
+    $('btn-enter-host').addEventListener('click', () => {
+      if (hostLocalUrl) api.open(hostLocalUrl);
+    });
 
     const join = async (url, btn) => {
       btn.disabled = true;
       msg('Conectando…');
-      const res = await api.join(url);
-      btn.disabled = false;
-      if (!res.ok) msg(res.error, true);
+      try {
+        const res = await api.join(url);
+        btn.disabled = false;
+        if (!res || !res.ok) msg(res?.error || 'Não foi possível conectar.', true);
+      } catch (err) {
+        btn.disabled = false;
+        msg(err?.message || 'Erro ao conectar na sala.', true);
+      }
     };
+
     const joinFriend = () => {
       const url = $('server-url').value.trim();
       if (!url) return msg('Cole o link que seu amigo mandou.', true);
       join(url, $('btn-join'));
     };
+
     $('btn-join').addEventListener('click', joinFriend);
     $('btn-server-room').addEventListener('click', () => join(serverRoomUrl, $('btn-server-room')));
-    $('server-url').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinFriend(); });
+    $('server-url').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') joinFriend();
+    });
   </script>
 </body>
 </html>

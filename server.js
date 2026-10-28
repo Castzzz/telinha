@@ -14,6 +14,9 @@ import { randomUUID, createHash, createHmac, timingSafeEqual, scryptSync, random
 import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { PermissionStore, PERMISSIONS } from './permission-store.js';
+import { DiceStore, installDice } from './dice-store.js';
+import { AccountStore, createAccountLimiter } from './account-store.js';
+import { installAccountHandlers, installAccountHttp, sendAccountState } from './accounts-protocol.js';
 
 // Process-Level Defensive Error Boundaries
 process.on('uncaughtException', (err) => {
@@ -38,6 +41,8 @@ const ADMIN_KEY = process.env.ADMIN_KEY || '';
 // A antiga senha compartilhada de admin nunca autoriza propriedade.
 const OWNER_KEY = process.env.OWNER_KEY || '';
 const permissions = new PermissionStore(DATA_DIR);
+const accounts = new AccountStore(DATA_DIR);
+const accountLimit = createAccountLimiter();
 
 function verifiedProfileKey(socket) {
   const proof = socket.handshake.auth?.profileProof;
@@ -315,7 +320,9 @@ function canReadAsset(req) {
   const ch = (reference.type === 'text' ? textChannels : channels).get(reference.id);
   if (!ch) return false;
   if (!ch.access?.private) return true;
-  const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access)?.data.user;
+  const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access
+    && (!client.data.accountSession || accounts.resolveSessionMeta(client.handshake.auth?.accountToken))
+    && (client.data.accountSession || !accounts.accountForAccessId(client.data.user.accessId)))?.data.user;
   return Boolean(viewer && permissions.visible(viewer, ch));
 }
 const textImages = []; // [{ file, size, mtime }] do mais antigo pro mais novo
@@ -726,6 +733,12 @@ const SOUND_RE = /^data:(audio\/(?:ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac));b
 const MAX_JOIN_SOUND_BYTES = 1024 * 1024;
 const FRAME_PRESETS = ['', 'cor', 'ouro', 'neon', 'fogo', 'gelo', 'arco-iris'];
 
+function safeProfileId(user, requested) {
+  if (user.accountProfileId) return user.accountProfileId;
+  if (!accounts.accountForProfileId(requested)) return requested;
+  return user.profileId && !accounts.accountForProfileId(user.profileId) ? user.profileId : randomUUID();
+}
+
 // Aplica os campos válidos do perfil; retorna true se algo mudou
 function applyProfile(user, raw) {
   const profile = safeObject(raw);
@@ -803,8 +816,9 @@ function applyProfile(user, raw) {
       changed = true;
     }
   }
-  if (typeof profile.profileId === 'string' && PROFILE_ID_RE.test(profile.profileId)) {
-    user.profileId = profile.profileId;
+  if (typeof profile.profileId === 'string' && PROFILE_ID_RE.test(profile.profileId)
+    && (!user.accountProfileId || profile.profileId === user.accountProfileId)) {
+    user.profileId = safeProfileId(user, profile.profileId);
   }
   if (profile.avatar === '' && user.avatar) {
     user.avatar = null;
@@ -898,6 +912,7 @@ function getPermissionContextSets() {
     if (s.data?.user?.accessId) activeIds.add(s.data.user.accessId);
   }
   const referencedIds = new Set();
+  for (const id of accounts.referencedAccessIds()) referencedIds.add(id);
   for (const ch of [...channels.values(), ...textChannels.values()]) {
     for (const id of ch.access?.members || []) referencedIds.add(id);
     for (const id of ch.writeAccess?.members || []) referencedIds.add(id);
@@ -1062,9 +1077,7 @@ function safeCallback(callback) {
 
 function safeHandler(fn) {
   return function (...args) {
-    try {
-      return fn.apply(this, args);
-    } catch (err) {
+    const failed = err => {
       console.error(`💥 [Socket Error] Handler "${fn.name || 'anonymous'}" encountered unhandled exception:`, err);
       const lastArg = args[args.length - 1];
       if (typeof lastArg === 'function') {
@@ -1072,7 +1085,11 @@ function safeHandler(fn) {
           lastArg({ success: false, error: 'Internal server error' });
         } catch {}
       }
-    }
+    };
+    try {
+      const result = fn.apply(this, args);
+      return result && typeof result.catch === 'function' ? result.catch(failed) : result;
+    } catch (err) { failed(err); }
   };
 }
 
@@ -1155,11 +1172,60 @@ function isRoomPassword(password) {
 
 loadRoomPassword();
 
+function storedAccountProfile(user) {
+  const profile = { id: user.profileId };
+  for (const key of ['name', 'color', 'bio', 'nameColor', 'nameColor2', 'frame', 'frameColor', 'bannerColor', 'displayRoleId', 'avatarCrop', 'bannerCrop']) profile[key] = user[key];
+  for (const key of ['avatar', 'banner', 'joinSound']) profile[key] = user[key]
+    ? `data:${user[key].mime};base64,${user[key].data.toString('base64')}` : '';
+  return profile;
+}
+
+function endAccountSocket(socket, notify = true, delay = 0) {
+  if (!socket.connected || socket.data.accountEnding) return;
+  socket.data.accountEnding = true;
+  leaveCurrentChannel(socket);
+  if (notify) socket.emit('account-session-ended');
+  if (delay) setTimeout(() => socket.disconnect(true), delay).unref();
+  else socket.disconnect(true);
+}
+
+function revokeAccountSockets({ accountId, accessId, kind, exceptSocketId }) {
+  for (const client of io.sockets.sockets.values()) {
+    const isGuest = kind === 'register' && client.data.user?.accessId === accessId && !client.data.accountSession;
+    const expired = client.data.accountSession?.account.id === accountId && !accounts.resolveSessionMeta(client.handshake.auth?.accountToken);
+    if (isGuest || expired) endAccountSocket(client, client.id !== exceptSocketId, client.id === exceptSocketId ? 250 : 0);
+  }
+}
+
+const accountExpiryTimer = setInterval(() => {
+  for (const client of io.sockets.sockets.values()) if (client.data.accountSession && !accounts.resolveSessionMeta(client.handshake.auth?.accountToken)) endAccountSocket(client);
+}, 30000);
+accountExpiryTimer.unref();
+server.on('close', () => clearInterval(accountExpiryTimer));
+installAccountHttp({ app, store: accounts, limit: accountLimit, onRevoke: revokeAccountSockets });
+
+const dice = new DiceStore(DATA_DIR);
+const pruneDice = () => dice.prune(new Set([...channels.keys()].map(id => `voice:${id}`).concat([...textChannels.keys()].map(id => `text:${id}`))));
+pruneDice();
+const setupDiceSocket = installDice({ io, store: dice, permissions, channels, textChannels });
+
 // Quem não tem a senha nem chega a entrar (a senha de admin também abre a porta)
 io.use((socket, next) => {
   const auth = socket.handshake.auth || {};
+  const session = accounts.resolveSession(auth.accountToken);
+  if (session && permissions.data.members[session.account.accessId]) {
+    socket.data.accountSession = session;
+    return next();
+  }
+  if (auth.accountToken) return next(new Error('account-session-expired'));
   socket.data.profileKey = verifiedProfileKey(socket);
-  const accessId = permissions.authenticatedId(auth.permissionToken, socket.data.profileKey);
+  let accessId = permissions.authenticatedId(auth.permissionToken, socket.data.profileKey);
+  // Depois do vínculo, só uma sessão de conta autoriza a identidade antiga.
+  if (accounts.accountForAccessId(accessId)) {
+    accessId = null;
+    socket.data.profileKey = null;
+    socket.data.blockLegacyIdentity = true;
+  }
   if (permissions.isOwner({ accessId })) return next();
   if (isRoomPassword(auth.roomPassword) || isAdminKey(auth.adminKey) || isMemberKey(auth.profileId, auth.memberKey)) return next();
   const err = new Error('room-password');
@@ -1183,7 +1249,10 @@ io.on('connection', (socket) => {
     console.error(`⚠️ [Socket Error] Socket ID ${socket.id}:`, err?.message || err);
   });
   const colorIndex = (channels.size + io.engine.clientsCount) % USER_COLORS.length;
-  const accessIdentity = permissions.identity(socket.handshake.auth?.permissionToken, socket.data.profileKey, safeString(socket.handshake.auth?.profileId, '', 64));
+  const accountSession = socket.data.accountSession;
+  const accessIdentity = accountSession ? { id: accountSession.account.accessId } : permissions.identity(
+    socket.data.blockLegacyIdentity ? '' : socket.handshake.auth?.permissionToken,
+    socket.data.profileKey, safeString(socket.handshake.auth?.profileId, '', 64));
   const user = {
     accessId: accessIdentity.id,
     mediaId: randomBytes(16).toString('hex'),
@@ -1221,8 +1290,24 @@ io.on('connection', (socket) => {
   };
 
   user.isAdmin = permissions.isOwner(user);
+  if (accountSession) {
+    user.accountProfileId = accountSession.profile.id;
+    applyProfile(user, { ...accountSession.profile, profileId: accountSession.profile.id });
+  }
   socket.data.user = user;
-  socket.emit('permission-identity', { token: accessIdentity.token });
+  socket.use((_packet, next) => {
+    if ((accountSession && !accounts.resolveSessionMeta(socket.handshake.auth?.accountToken))
+      || (!accountSession && accounts.accountForAccessId(user.accessId))) {
+      endAccountSocket(socket);
+      return;
+    }
+    if (!accountSession && user.profileId) user.profileId = safeProfileId(user, user.profileId);
+    next();
+  });
+  installAccountHandlers({ socket, store: accounts, user, getProfile: storedAccountProfile,
+    limit: accountLimit, onRevoke: revokeAccountSockets });
+  setupDiceSocket(socket);
+  if (accessIdentity.token) socket.emit('permission-identity', { token: accessIdentity.token });
   sendPermissions(socket);
   // Scrypt tem custo alto; limita criações e tentativas antes de calcular qualquer hash.
   let channelPasswordAttempts = [];
@@ -1296,6 +1381,7 @@ io.on('connection', (socket) => {
       if (!role) throw new Error('Cargo inválido.');
       permissions.checkRole(user, role);
     }
+    permissions.checkAssignment(user, payload.memberId, payload.roles, [...channels.values(), ...textChannels.values()]);
     permissions.assign(payload.memberId, payload.roles);
   }));
   socket.on('permissions-clean-members', permissionAction('manageRoles', payload => {
@@ -1352,7 +1438,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, accounts: accounts.available, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
@@ -1467,6 +1553,7 @@ io.on('connection', (socket) => {
       if (member) leaveCurrentChannel(member);
     }
     channels.delete(channel.id);
+    pruneDice();
     saveChannels();
     broadcastChannels();
     cb({ success: true });
@@ -1505,7 +1592,7 @@ io.on('connection', (socket) => {
     if (password && channelPasswordRateLimited()) return cb({ success: false, error: 'Muitas tentativas. Espere 10 segundos e tente de novo.' });
     // Quem cria fora da call ainda não mandou o perfil: o id dele vem junto pra poder apagar depois
     if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId) && !data.profileId.toLowerCase().startsWith('conta-')) {
-      user.profileId = data.profileId;
+      user.profileId = safeProfileId(user, data.profileId);
     }
 
     const rawName = typeof data.name === 'string' ? data.name.trim() : '';
@@ -1767,9 +1854,26 @@ io.on('connection', (socket) => {
   }));
 
   // O perfil continua local; só publica a aparência para a sala.
-  socket.on('update-profile', safeHandler((rawPayload, callback) => {
+  socket.on('update-profile', safeHandler(async (rawPayload, callback) => {
     const cb = safeCallback(callback);
-    if (!applyProfile(user, rawPayload)) return cb({ success: true });
+    const draft = accountSession ? { ...user } : user;
+    if (!applyProfile(draft, accountSession ? { ...safeObject(rawPayload), profileId: accountSession.profile.id } : rawPayload)) return cb({ success: true });
+    if (accountSession) {
+      try { await accounts.saveProfile(accountSession.account.id, storedAccountProfile(draft)); }
+      catch { return cb({ success: false, error: 'Não deu para guardar o perfil na conta. Tente de novo.' }); }
+      // A gravação assíncrona não pode restaurar canal, mute ou fala antigos.
+      for (const key of [...Object.keys(storedAccountProfile(draft)), 'avatarV', 'bannerV', 'joinSoundV']) {
+        if (key !== 'id') user[key] = draft[key];
+      }
+      const snapshot = storedAccountProfile(user);
+      for (const client of io.sockets.sockets.values()) if (client.data.accountSession?.account.id === accountSession.account.id) {
+        if (client !== socket) {
+          applyProfile(client.data.user, { ...snapshot, profileId: snapshot.id });
+          emitVisibleUserEvent('user-profile-updated', { userId: client.id, user: publicUser(client.data.user) }, client.data.user);
+        }
+        sendAccountState(client, accounts);
+      }
+    }
     permissions.remember(user.accessId, user.name);
     emitVisibleUserEvent('user-profile-updated', { userId: socket.id, user: publicUser(user) }, user);
     for (const client of io.sockets.sockets.values()) if (permissions.has(client.data.user, 'manageChannels')) sendPermissions(client);
@@ -2153,7 +2257,7 @@ io.on('connection', (socket) => {
     const cb = safeCallback(maybeCallback);
     const data = safeObject(rawPayload);
     if (!user.profileId && typeof data.profileId === 'string' && PROFILE_ID_RE.test(data.profileId)) {
-      user.profileId = data.profileId;
+      user.profileId = safeProfileId(user, data.profileId);
     }
     const cleanName = (typeof data.name === 'string' ? data.name.trim() : '').slice(0, 30);
     if (!cleanName) return cb({ success: false, error: 'Dê um nome pro canal.' });
@@ -2181,6 +2285,7 @@ io.on('connection', (socket) => {
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
     if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     textChannels.delete(ch.id);
+    pruneDice();
     deleteTextChannelData(ch);
     saveChannels();
     emitText(ch, 'text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });

@@ -192,7 +192,7 @@ test('eventos reais exigem presença, respeitam acesso e encerram canal vazio', 
   const owner = await connect(), friend = await connect(), outside = await connect();
   assert.equal((await emit(outside, 'music-get')).success, false);
   await emit(owner, 'owner-claim', { key: 'dono-musica-teste' });
-  const created = await emit(owner, 'create-channel', { name: 'Música privada', password: 'senha-musica', access: { private: true, roles: [], members: [] } });
+  const created = await emit(owner, 'create-channel', { name: 'Música privada', password: 'senha-musica', access: { private: true, roles: [], members: [backend.io.sockets.sockets.get(owner.id).data.user.accessId] } });
   assert.equal(created.success, true);
   await emit(owner, 'join-channel', { channelId: created.channelId, password: 'senha-musica' });
   await emit(friend, 'join-channel', { channelId: 'geral' });

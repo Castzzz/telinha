@@ -28,8 +28,13 @@ import { createMicrophonePipeline } from './microphone.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
+import { setupDice } from './dice.js';
+import { setupStageSocial } from './stage-social.js';
+import { setupAccounts, accountSession, initialAccountProfile, accountProfileSnapshot } from './accounts.js';
 
 let musicUI = null;
+let diceUI = null;
+let stageSocialUI = null;
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -184,26 +189,31 @@ function updateDeafenButton() {
 // Cores prontas pro nome (além do seletor livre)
 const NAME_COLORS = ['#FF5C5C', '#FF9F43', '#FEE75C', '#57F287', '#1ABC9C', '#00A8FC', '#9B84EC', '#EB459E'];
 const PROFILE_COLORS = ['#5865F2', '#57F287', '#FEE75C', '#EB459E', '#ED4245', '#F47B67', '#9B84EC', '#00A8FC'];
-const isFirstRun = !prefs.profile;
+const SERVER_URL = (() => {
+  const fromQuery = new URLSearchParams(window.location.search).get('server');
+  return fromQuery && /^https?:\/\//.test(fromQuery) ? fromQuery.replace(/\/+$/, '') : window.location.origin;
+})();
+const savedProfile = initialAccountProfile(prefs, SERVER_URL);
+const isFirstRun = !savedProfile;
 const myProfile = {
-  id: prefs.profile?.id || randomId(),
-  name: prefs.profile?.name || localStorage.getItem('telinha_username') || `Amigo-${Math.floor(1000 + Math.random() * 9000)}`,
-  color: prefs.profile?.color || localStorage.getItem('telinha_user_color') || PROFILE_COLORS[0],
-  bio: prefs.profile?.bio || '',
-  avatar: prefs.profile?.avatar || '',
-  avatarCrop: normalizeImageCrop(prefs.profile?.avatarCrop),
-  nameColor: prefs.profile?.nameColor || '',
-  nameColor2: prefs.profile?.nameColor2 || '',
-  frame: prefs.profile?.frame || '',
-  frameColor: prefs.profile?.frameColor || '',
-  bannerColor: prefs.profile?.bannerColor || '',
-  banner: prefs.profile?.banner || '',
-  bannerCrop: normalizeImageCrop(prefs.profile?.bannerCrop),
-  joinSound: prefs.profile?.joinSound || '',
-  displayRoleId: prefs.profile?.displayRoleId || ''
+  id: savedProfile?.id || randomId(),
+  name: savedProfile?.name || localStorage.getItem('telinha_username') || `Amigo-${Math.floor(1000 + Math.random() * 9000)}`,
+  color: savedProfile?.color || localStorage.getItem('telinha_user_color') || PROFILE_COLORS[0],
+  bio: savedProfile?.bio || '',
+  avatar: savedProfile?.avatar || '',
+  avatarCrop: normalizeImageCrop(savedProfile?.avatarCrop),
+  nameColor: savedProfile?.nameColor || '',
+  nameColor2: savedProfile?.nameColor2 || '',
+  frame: savedProfile?.frame || '',
+  frameColor: savedProfile?.frameColor || '',
+  bannerColor: savedProfile?.bannerColor || '',
+  banner: savedProfile?.banner || '',
+  bannerCrop: normalizeImageCrop(savedProfile?.bannerCrop),
+  joinSound: savedProfile?.joinSound || '',
+  displayRoleId: savedProfile?.displayRoleId || ''
 };
 if (isFirstRun) await savePrefs({ profile: { ...myProfile } });
-const profileCredential = await profileIdentity(prefs, myProfile.id, savePrefs);
+const profileCredential = accountSession(prefs, SERVER_URL) ? '' : await profileIdentity(prefs, myProfile.id, savePrefs);
 
 function profilePayload() {
   return {
@@ -330,10 +340,7 @@ const appState = {
 // -----------------------------------------------------------------------------
 // No app desktop a interface vem instalada no app (telinha://app/...?server=<sala>) e
 // da sala só vem a conexão; no navegador a página é servida pela própria sala.
-const SERVER_URL = (() => {
-  const fromQuery = new URLSearchParams(window.location.search).get('server');
-  return fromQuery && /^https?:\/\//.test(fromQuery) ? fromQuery.replace(/\/+$/, '') : window.location.origin;
-})();
+
 
 // Sala com senha: manda a senha guardada, a chave de membro (quem já entrou uma vez não
 // precisa digitar) ou a senha de admin. Tudo guardado por sala, nas preferências.
@@ -354,9 +361,10 @@ const socket = io(SERVER_URL, {
     let proof;
     try {
       const response = await fetch(`${SERVER_URL}/api/identity`, { signal: AbortSignal.timeout(5000), cache: 'no-store' });
-      if (response.ok) proof = await profileProof(profileCredential, SERVER_URL, (await response.json()).challenge);
+      if (response.ok && profileCredential) proof = await profileProof(profileCredential, SERVER_URL, (await response.json()).challenge);
     } catch (_) { /* Servidores antigos continuam usando a credencial por sala. */ }
     cb({
+    accountToken: accountSession(prefs, SERVER_URL)?.token || '',
     profileId: myProfile.id,
     memberKey: roomAccess().memberKey || '',
     roomPassword: roomAccess().password || '',
@@ -472,6 +480,16 @@ appState.isOwner = false;
 appState.legacyAdmin = false;
 appState.ownershipSupported = false;
 appState.serverHasAdmin = false;
+const accountUI = setupAccounts({
+  socket, prefs, savePrefs, serverUrl: SERVER_URL, getProfile: () => ({ ...myProfile }),
+  getMemberId: () => appState.memberId, showToast, selectSettingsTab,
+  onProfile: profile => {
+    Object.assign(myProfile, profile);
+    Object.assign(appState.myUser, { name: myProfile.name, color: myProfile.color });
+    updateUserDockProfile();
+  }
+});
+
 const permissionUI = setupPermissions({
   socket, state: appState, showToast, escapeHtml,
   saveIdentity: token => saveRoomAccess({ permissionToken: token }),
@@ -510,6 +528,7 @@ socket.on('connect_error', (err) => {
 function openRoomPasswordModal(wrong) {
   const modal = $('#modal-room-password');
   if (!modal) return;
+  $('#modal-settings')?.classList.add('hidden');
   $('#room-password-error').classList.toggle('hidden', !wrong);
   modal.classList.remove('hidden');
   const input = $('#input-room-password');
@@ -518,6 +537,10 @@ function openRoomPasswordModal(wrong) {
 }
 
 function setupRoomPassword() {
+  $('#btn-room-account')?.addEventListener('click', () => {
+    $('#modal-room-password').classList.add('hidden');
+    openSettings('conta');
+  });
   $('#form-room-password')?.addEventListener('submit', (e) => {
     e.preventDefault();
     const password = $('#input-room-password').value.trim();
@@ -553,7 +576,7 @@ socket.on('connect', () => {
   console.log(`[Socket.IO] Conectado ao servidor! ID: ${socket.id}`);
 
   // Texto e perfil funcionam mesmo antes de entrar em qualquer chamada.
-  socket.emit('update-profile', profilePayload());
+  if (!accountSession(prefs, SERVER_URL)) socket.emit('update-profile', profilePayload());
   publishGameActivity(true);
   // Uma senha de admin salva nunca reivindica a propriedade automaticamente.
 
@@ -1484,6 +1507,7 @@ function renderChannelsTree() {
 }
 
 function updateTopBar() {
+  diceUI?.sync();
   syncConnectionMonitor();
   updateTextLayout();
   updateStageControls();
@@ -1568,6 +1592,7 @@ function setupServerHome() {
 }
 
 function updateVoiceLounge() {
+  stageSocialUI?.update();
   const lounge = $('#voice-lounge');
   const videosGrid = $('#videos-grid');
   if (!lounge) return;
@@ -2562,12 +2587,13 @@ function setupProfileTransfer() {
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    showToast('💾 Perfil exportado. Guarde o arquivo: ele permite recuperar seus cargos e acessos. Não compartilhe esse backup.');
+    showToast(accountSession(prefs, SERVER_URL) ? 'Aparência exportada. Para recuperar os cargos da conta, entre com usuário e senha.' : '💾 Perfil exportado. Guarde o arquivo: ele permite recuperar seus cargos e acessos. Não compartilhe esse backup.');
   });
   $('#input-profile-import')?.addEventListener('change', async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    if (accountSession(prefs, SERVER_URL)) return showToast('Saia da conta antes de importar outro perfil.', 'error');
     try {
       if (file.size > 30 * 1024 * 1024) throw new Error('Arquivo grande demais.');
       const data = JSON.parse(await file.text());
@@ -3144,6 +3170,7 @@ function addSystemChatMessage(text, channelId = appState.currentChannelId) {
 }
 
 function spawnFloatingReaction(userName, emoji) {
+  if (stageSocialUI?.reaction({ userName, emoji, channelId: appState.currentChannelId })) return;
   const container = $('#reactions-layer');
   if (!container) return;
   while (container.childElementCount >= 40) container.firstElementChild?.remove();
@@ -3528,6 +3555,7 @@ function selectSettingsTab(name) {
 
 function openSettings(name = $('.settings-tab.active')?.dataset.settingsTab || 'aparencia') {
   const modal = $('#modal-settings');
+  mountStageOverlay(modal);
   if (modal.classList.contains('hidden')) {
     profileDraft = null;
     ++imageCropRequest;
@@ -3732,6 +3760,7 @@ window.teletelaExitFullscreen = () => {
 };
 
 document.addEventListener('fullscreenchange', () => {
+  for (const id of ['user-popover', 'modal-user-profile', 'modal-settings', 'image-viewer']) mountStageOverlay(document.getElementById(id));
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     document.body.classList.remove('stage-fullscreen');
     document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
@@ -4009,10 +4038,16 @@ function applyUserVolume(userId) {
 
 let popoverUserId = null;
 
+function mountStageOverlay(element) {
+  const host = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+  if (element && host !== element && element.parentElement !== host) host.appendChild(element);
+}
+
 function openUserPopover(userId, anchorEvent) {
   const u = findUser(userId);
   const pop = $('#user-popover');
   if (!u || !pop) return;
+  mountStageOverlay(pop);
   popoverUserId = userId;
   const isMe = userId === appState.myId;
   const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
@@ -4078,6 +4113,7 @@ function roleBadges(u) {
 function openProfileCard(userId) {
   const u = findUser(userId);
   if (!u) return;
+  mountStageOverlay($('#modal-user-profile'));
   closeUserPopover();
   const isMe = userId === appState.myId;
   const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
@@ -4535,27 +4571,40 @@ function setupProfileSettings() {
     renderProfileDraft();
   });
 
-  $('#form-profile')?.addEventListener('submit', (e) => {
+  let profileSaving = false;
+  $('#form-profile')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('#input-profile-name').value.trim().slice(0, 24);
-    if (!name || !profileDraft) return;
-    Object.assign(myProfile, profileDraft, {
-      name,
-      bio: $('#input-profile-bio').value.trim().slice(0, 140),
-      displayRoleId: $('#profile-display-role').value
-    });
-    savePrefs({ profile: { ...myProfile } });
-
-    appState.myUser.name = myProfile.name;
-    appState.myUser.color = myProfile.color;
-    socket.emit('update-profile', profilePayload());
-
-    updateUserDockProfile();
-    renderChannelsTree();
-    updateVoiceLounge();
-    document.activeElement?.blur();
-    resetProfileDraft();
-    showToast('Perfil salvo!', 'success');
+    if (!name || !profileDraft || profileSaving) return;
+    if (accountSession(prefs, SERVER_URL) && !accountUI.ready) return showToast('Espere seu perfil da conta carregar.', 'error');
+    const draft = { ...myProfile, ...profileDraft, name,
+      bio: $('#input-profile-bio').value.trim().slice(0, 140), displayRoleId: $('#profile-display-role').value };
+    profileSaving = true;
+    $('#btn-profile-save').disabled = true;
+    try {
+      const session = accountSession(prefs, SERVER_URL);
+      if (session) {
+        if (!socket.connected) throw new Error('Espere a conexão voltar para salvar o perfil na conta.');
+        const result = await socket.timeout(20000).emitWithAck('update-profile', { ...draft, profileId: draft.id });
+        if (!result?.success) throw new Error(result?.error || 'Não deu para guardar o perfil na conta.');
+        const currentSession = accountSession(prefs, SERVER_URL);
+        if (!currentSession || currentSession.token !== session.token) throw new Error('Sua sessão mudou. Abra o perfil de novo.');
+        if (await savePrefs({ accountSessions: { ...prefs.accountSessions,
+          [SERVER_URL]: { ...currentSession, profile: accountProfileSnapshot(draft) } } }) === false) {
+          throw new Error('Perfil guardado no servidor, mas não deu para salvar neste aparelho.');
+        }
+      } else {
+        if (await savePrefs({ profile: draft }) === false) throw new Error('Não deu para salvar o perfil neste aparelho.');
+        socket.emit('update-profile', { ...draft, profileId: draft.id });
+      }
+      Object.assign(myProfile, draft);
+      appState.myUser.name = myProfile.name;
+      appState.myUser.color = myProfile.color;
+      updateUserDockProfile(); renderChannelsTree(); updateVoiceLounge();
+      document.activeElement?.blur(); resetProfileDraft();
+      showToast('Perfil salvo!', 'success');
+    } catch (err) { showToast(err.message || 'Não deu para salvar. Tente de novo.', 'error'); }
+    finally { profileSaving = false; $('#btn-profile-save').disabled = false; }
   });
 }
 
@@ -5180,6 +5229,7 @@ function enableAutoplayOnFirstInteraction() {
 }
 
 function updateSpeakingIndicators(userId, isSpeaking) {
+  stageSocialUI?.updateSpeaking(userId, isSpeaking);
   // 1. Sidebar Channels tree
   const userRow = document.querySelector(`.channel-user[data-user-id="${userId}"]`);
   if (userRow) {
@@ -5777,6 +5827,7 @@ function placeGutter(grid, gutter, i) {
 // Cada controle aparece junto da ação que está disponível na sala.
 function updateStageControls() {
   musicUI?.syncChannel();
+  stageSocialUI?.update();
   const inCall = Boolean(appState.currentChannelId);
   const watching = appState.activeStreams.size > 0;
   const watchingOthers = [...appState.activeStreams.values()].some((info) => !info.isLocal);
@@ -7661,6 +7712,11 @@ function initApp() {
   }
   initAudioSystem();
   musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options) });
+  diceUI = setupDice({ socket, appState, showToast, escapeHtml });
+  stageSocialUI = setupStageSocial({ appState, prefs, savePrefs, music: musicUI,
+    avatarInnerHtml, safeColor, frameClass, frameStyle, nameStyle, sortedUsers,
+    isWatching: () => appState.activeStreams.size > 0,
+    openUserPopover });
   setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings });
   updateUserDockProfile();
   setupDockControls();

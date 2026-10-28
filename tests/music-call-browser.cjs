@@ -166,6 +166,51 @@ app.whenReady().then(async () => {
   await until(() => hasAudio(second), 'O outro ouvinte não voltou a receber áudio.');
   console.log('Volume individual, ensurdecer e pausa conferidos.');
 
+  // Vídeo local de teste: confere os controles do palco sem uma segunda captura de tela.
+  await evaluate(first, `(async () => {
+    document.querySelectorAll('.modal-backdrop').forEach(el => el.classList.add('hidden'));
+    const canvas = document.createElement('canvas'); canvas.width=960; canvas.height=540;
+    const ctx=canvas.getContext('2d'); ctx.fillStyle='#18243c';ctx.fillRect(0,0,960,540);
+    ctx.fillStyle='#b3c9ff';ctx.font='36px sans-serif';ctx.fillText('Mesa de RPG · Transmissão de teste',90,260);
+    window.stageFixtureStream=canvas.captureStream(5);
+    const tile=document.createElement('div');tile.className='video-tile';tile.id='video-tile-stage-fixture';
+    const video=document.createElement('video');video.muted=true;video.autoplay=true;video.srcObject=stageFixtureStream;tile.append(video);
+    document.querySelector('#videos-grid').append(tile);document.querySelector('#videos-grid').classList.remove('hidden');document.querySelector('#voice-lounge').classList.add('hidden');
+    appState.activeStreams.set('stage-fixture',{stream:stageFixtureStream,userName:'Mesa de RPG',isLocal:true});
+    appState.focusedStreamUserId='stage-fixture';await video.play();
+    document.documentElement.classList.remove('pause-in-background', 'light-mode');
+    document.dispatchEvent(new Event('fullscreenchange'));
+  })()`);
+  await until(() => evaluate(first, `Boolean(document.querySelector('#music-stage-miniplayer') && document.querySelectorAll('.stage-cinema-participant').length >= 3)`), 'Miniplayer ou participantes não apareceram no palco.');
+  await until(() => evaluate(first, `Boolean(document.querySelector('.music-mini-bar').style.getPropertyValue('--music-mini-level'))`), 'As barras não receberam o nível real do áudio.');
+  await evaluate(first, `document.querySelector('.music-mini-pause').click()`);
+  await until(() => call.backend.music.state('geral').phase === 'paused', 'Miniplayer não pausou.');
+  await until(() => evaluate(first, `document.querySelector('.music-mini-pause').getAttribute('aria-label') === 'Continuar música'`), 'Miniplayer não refletiu a pausa.');
+  await evaluate(first, `document.querySelector('.music-mini-pause').click()`);
+  await until(() => call.backend.music.state('geral').phase === 'playing', 'Miniplayer não retomou.');
+  await evaluate(first, `document.querySelector('#stage-cinema-toggle').click()`);
+  if (!await evaluate(first, `document.querySelector('#stage-cinema-toggle').getAttribute('aria-expanded') === 'false'`)) throw new Error('Faixa não recolheu.');
+  await evaluate(first, `document.querySelector('#stage-cinema-toggle').click();document.querySelector('#quick-reactions button').click()`);
+  await until(() => evaluate(first, `document.querySelectorAll('#stage-cinema-reactions > *').length > 0`), 'Reação não apareceu no cinema.');
+  for (const theme of ['escuro','preto','claro']) {
+    await evaluate(first, `document.documentElement.dataset.theme='${theme}'`);
+    await fs.writeFile(`/tmp/teletela-cinema-${theme}.png`, (await first.webContents.capturePage()).toPNG());
+  }
+  await first.webContents.executeJavaScript(`document.querySelector('#videos-grid').requestFullscreen()`, true);
+  await until(() => evaluate(first, `document.fullscreenElement?.contains(document.querySelector('#music-stage-miniplayer')) && document.fullscreenElement?.contains(document.querySelector('#stage-cinema-bar'))`), 'Controles não acompanharam a tela cheia nativa.');
+  await evaluate(first, `document.querySelector('.stage-cinema-participant[data-user-id]').click()`);
+  if (!await evaluate(first, `document.fullscreenElement.contains(document.querySelector('#user-popover')) && !document.querySelector('#user-popover').classList.contains('hidden')`)) throw new Error('Perfil ficou fora da tela cheia.');
+  await evaluate(first, `document.querySelector('#user-popover-avatar').click()`);
+  if (!await evaluate(first, `document.fullscreenElement.contains(document.querySelector('#modal-user-profile')) && !document.querySelector('#modal-user-profile').classList.contains('hidden')`)) throw new Error('Perfil grande ficou fora da tela cheia.');
+  await evaluate(first, `document.querySelector('[data-close-modal=modal-user-profile]').click()`);
+  await evaluate(first, `document.querySelector('.music-mini-title-btn').click()`);
+  if (!await evaluate(first, `document.fullscreenElement.contains(document.querySelector('#modal-music'))`)) throw new Error('Fila completa ficou fora da tela cheia.');
+  await evaluate(first, `document.querySelector('[data-close-modal=modal-music]').click();document.exitFullscreen()`);
+  await until(() => evaluate(first, `!document.fullscreenElement`), 'Não saiu da tela cheia.');
+  console.log('Cinema e miniplayer: participantes, recolher, reações, pausa/continuar, três temas e tela cheia nativa conferidos.');
+
+
+  await evaluate(first, `document.querySelector('.music-mini-title-btn').click()`);
   const outside = await open('cinema');
   if (await evaluate(outside, "Boolean(document.querySelector('#music-remote-audio'))")) throw new Error('Outro canal recebeu a música do Geral.');
   if (!real) {
@@ -178,7 +223,7 @@ app.whenReady().then(async () => {
     await evaluate(first, "document.querySelector('#music-shuffle').click(); document.querySelector('#music-repeat').value = 'off'; document.querySelector('#music-repeat').dispatchEvent(new Event('change'))");
     await evaluate(first, "document.querySelector('#music-queue button').click()");
     await until(() => call.backend.music.state('geral').queue.length === 1, 'Remover não alterou a fila.');
-    await evaluate(first, "document.querySelector('#music-skip').click()");
+    await evaluate(first, "document.querySelector('.music-mini-skip').click()");
     await until(() => call.backend.music.state('geral').phase === 'playing' && call.backend.music.state('geral').generation !== original, 'Pular não iniciou a próxima faixa.', 30);
     await until(() => hasAudio(first), 'O áudio não voltou depois de pular.');
     await until(() => hasAudio(second), 'O segundo ouvinte não acompanhou a próxima música.');
@@ -186,7 +231,7 @@ app.whenReady().then(async () => {
     await evaluate(first, "document.querySelector('#music-results button').click()");
     await until(() => call.backend.music.sessions.get('geral').prefetch?.buffered, 'A próxima faixa não foi pré-carregada.', 40);
     const nextStarted = Date.now();
-    await evaluate(first, "document.querySelector('#music-skip').click()");
+    await evaluate(first, "document.querySelector('.music-mini-skip').click()");
     await until(() => {
       const state = call.backend.music.state('geral');
       if (state.phase === 'error') throw new Error(state.error);
@@ -199,7 +244,15 @@ app.whenReady().then(async () => {
     await evaluate(first, `document.documentElement.dataset.theme = '${theme}'`);
     await fs.writeFile(`/tmp/teletela-musica-call-${suffix}-${theme}.png`, (await first.webContents.capturePage()).toPNG());
   }
+  await evaluate(first, `document.querySelector('[data-close-modal=modal-music]').click()`);
   first.setSize(390, 844);
+  await pause(200);
+  await evaluate(first, `document.querySelector('#mobile-return-call').click()`);
+  await pause(200);
+  const cinemaFits = await evaluate(first, `(() => {const b=document.querySelector('#stage-cinema-bar').getBoundingClientRect(),m=document.querySelector('#music-stage-miniplayer').getBoundingClientRect();return b.width>0&&m.width>0&&b.left>=0&&b.right<=innerWidth&&m.left>=0&&m.right<=innerWidth})()`);
+  if (!cinemaFits) throw new Error('Controles do cinema não cabem no celular.');
+  await fs.writeFile('/tmp/teletela-cinema-celular.png',(await first.webContents.capturePage()).toPNG());
+  await evaluate(first, `document.querySelector('.music-mini-title-btn').click()`);
   await pause(200);
   if (await evaluate(first, 'document.documentElement.scrollWidth > innerWidth')) throw new Error('O modal transborda na tela estreita.');
   await fs.writeFile(`/tmp/teletela-musica-call-${suffix}-celular.png`, (await first.webContents.capturePage()).toPNG());
