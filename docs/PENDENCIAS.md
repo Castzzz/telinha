@@ -3,6 +3,24 @@
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
+## Publicação da 4.1.0 concluída (28/10/2026)
+
+Autorizada pelo dono para testar com a galera, **sem o Magic**. Reaproveitada a validação
+já feita, sem repetir toda a bateria. Código integrado e enviado à `main` em `7f68864`.
+
+- Release pública: https://github.com/Castzzz/telinha/releases/tag/v4.1.0
+- Windows: instalador/portátil; Linux: AppImage/tar.gz; manifests do auto-update atualizados.
+- Android: APK 4.1.0, `versionCode 8`, assinatura anterior preservada.
+- Servidor Oracle atualizado, com Node/Caddy mantidos nas versões já instaladas;
+  serviços ativos e saúde HTTP conferida, com arquivos iguais aos locais.
+- Backup anterior ao deploy: `~/Teletela-backups/teletela-dados-2026-10-28_19-42-14.tar.gz`.
+- Oito arquivos publicados; tamanhos/hashes dos uploads e manifests conferidos.
+- Magic permanece somente em `experimento/magic-no-teletela` (`03cc5d2`), fora dos pacotes
+  e do servidor publicados.
+
+As menções a “sem release/deploy” abaixo descrevem as etapas anteriores desta sessão.
+Agora falta o uso em grupo, incluindo a troca das lentes em celulares físicos.
+
 ## Câmera do celular e coroinha (28/10/2026)
 
 Retomada na branch `melhoria/cinema-dados-contas-e-privacidade`, a pedido do dono.

@@ -1128,3 +1128,23 @@ de `isOwner`, `isAdmin` ou dos handlers do servidor.
 
 Magic permanece guardado em `experimento/magic-no-teletela` (commit `03cc5d2`), para depois.
 Esta branch continua sendo `melhoria/cinema-dados-contas-e-privacidade`, sem integrar Magic.
+
+
+### Publicação da 4.1.0 (28/10/2026)
+
+Release pública [v4.1.0](https://github.com/Castzzz/telinha/releases/tag/v4.1.0), código
+`7f68864` integrado à main. Inclui Windows (Setup/Portátil), Linux (AppImage/tar.gz), APK
+Android (4.1.0, código 8) e os manifests de atualização. Magic segue na branch experimental,
+sem módulos nos pacotes nem no servidor publicados.
+
+Servidor atualizado com backup anterior em
+`~/Teletela-backups/teletela-dados-2026-10-28_19-42-14.tar.gz`. Node `v24.22.1` e Caddy
+`2.11.7` foram mantidos, sem trocar versões de infraestrutura. Serviço Node, SFU e Caddy
+ativos, saúde HTTP e hashes do código instalado conferidos. A assinatura do APK permanece
+a mesma, permitindo atualizar a instalação anterior.
+
+A pedido do dono, a bateria de testes já executada foi reaproveitada; na publicação foram
+conferidos versão, build/lint, conteúdo dos pacotes, hashes/tamanhos e links de atualização.
+Os artefatos foram gerados com `npm run dist -- --publish never` e `npm run build:android`.
+O release foi preparado como rascunho, recebeu os oito arquivos e só depois foi publicado
+como latest, com notas em português. Assim não houve uma versão pública com assets pela metade.
