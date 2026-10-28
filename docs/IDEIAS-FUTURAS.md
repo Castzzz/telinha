@@ -179,3 +179,19 @@ a pedido do dono em 28/10/2026. Ainda não publicado.
 - Conta **opcional**, com usuário único, senha e código de recuperação; apelido separado.
   Sessão salva, perfil compartilhado entre aparelhos e cargos/propriedade preservados.
   Amigos não fazem parte deste pedido.
+
+## 16. Ajustes após testar cinema, música e chat
+
+**Anotados em 28/10/2026 para fazer mais tarde, quando o limite voltar.**
+Lista detalhada e andamento em [PENDENCIAS.md](PENDENCIAS.md#próxima-retomada-ajustes-após-testar-cinema-música-e-chat-28102026).
+
+- Remover o texto com o nome de quem está falando no cabeçalho de Participantes.
+- Quando a faixa estiver recolhida, ocultar também o cabeçalho após inatividade e
+  reaparecer ao passar/mover o mouse na transmissão.
+- Corrigir a camada de Participantes que deixa os emojis atrás e impede clicar nas reações.
+- Melhorar o visual do seletor de repetição e da barra de volume no painel de música.
+- Permitir limpar os resultados da busca de músicas, por botão ou ao buscar com campo
+  vazio, preservando a reprodução e a fila.
+- Corrigir a divisória do chat lateral que não permite aumentar/diminuir sua largura.
+- Abrir canais de texto na área central, com a transmissão em tamanho reduzido, como no
+  Discord. Distinguir esses canais do chat da call; posição e layout ficam para definir.
