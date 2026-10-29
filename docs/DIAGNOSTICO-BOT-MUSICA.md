@@ -121,7 +121,7 @@ As portas de teste `40001`/`40002` ficaram fechadas. Nenhuma chave/token foi par
 **Renovar WARP não resolveu o bloqueio.** Não automatizar registros em massa nem
 considerar o candidato anterior pronto para ativação.
 
-## Conta separada do bot — validação concluída, ativação pendente
+## Conta separada do bot — correção ativa na Oracle
 
 Após a reversão, o dono escolheu testar uma conta Google separada. Foi aberto um Firefox
 com perfil exclusivo e sem automação de login, usando um encaminhamento SSH local para
@@ -142,17 +142,31 @@ novo. Com a saída WARP oficial e os executáveis instalados na Oracle:
 - Tudo ocorreu na Oracle, com o túnel do PC já encerrado. Não foi enviada música às calls;
   esses testes validam obtenção/decodificação, sem afirmar escuta real pelo SFU nesta etapa.
 
-O suporte novo é opcional. O segredo persistente deverá ficar em `MUSIC_COOKIES_BASE64`
+O suporte novo é opcional. O segredo persistente ficou em `MUSIC_COOKIES_BASE64`
 somente no `/etc/telinha/telinha.env`; base64 é codificação, não criptografia. Cada processo
 yt-dlp recebe uma cópia temporária `0600`, em diretório `0700`, removida ao terminar.
 O conteúdo não aparece nos argumentos; o cache distingue sessões por hash. Não existem
 cookies reais no repositório. Os testes exercitam preparação, download, cache, permissões,
 limpeza em sucesso/falha e rejeição de sessão inválida sem expor seu conteúdo.
 
-Validação local: **18/18** testes de música e **62/62** gerais. Código preparado e testado
-isoladamente na VM; **ainda não ativado na sala**. Para ativar, precisa guardar a sessão
-no ambiente, atualizar `music/source.mjs` e reiniciar somente `telinha-server`, com
-autorização. Não precisa release do desktop, mudança de `public/` ou reinício do SFU/WARP.
+Validação local: **18/18** testes de música e **62/62** gerais. O dono autorizou a ativação:
+em **29/10/2026, às 20:46 UTC**, foram atualizados apenas `music/source.mjs` e o ambiente
+privado na VM, com reinício somente de `telinha-server`. Sem release do desktop, mudança
+de `public/` ou reinício de SFU/WARP. O hash instalado coincide com o código local.
+
+Depois da ativação, a sessão foi confirmada no ambiente do processo oficial, sem exibir
+seu conteúdo. Um processo separado, como `telinha`, usando esse ambiente e o módulo já
+instalado, repetiu busca com cinco candidatos e cinco segundos de áudio das duas fontes,
+com os mesmos volumes anteriores. Isso valida a fonte na configuração em produção;
+não foi inserida música em nenhuma call para afirmar nova escuta de ouvintes pelo SFU.
+`/api/health` público respondeu `ok`, com três canais visíveis e quatro clientes reconectados.
+
+Backup anterior: `~/Teletela-backups/teletela-dados-2026-10-29_17-45-14.tar.gz`.
+Para reversão pontual, fonte e ambiente anteriores foram guardados em diretório root `0700`
+`/etc/telinha/backup-musica-20261029-204643`, com arquivos `0600`. Restaurar os dois juntos
+e reiniciar somente `telinha-server` se houver necessidade. Nenhum segredo foi para o git.
+Diretório de teste na VM, cookies intermediários, túnel e perfil exclusivo do Firefox no PC
+foram removidos/encerrados após a validação. A sessão persistente fica no `telinha.env`.
 
 A sessão pode expirar e exigir novo login manual. O yt-dlp alerta que usar uma conta pode
 causar restrições ou banimento; usar somente a conta dedicada e evitar repetição de

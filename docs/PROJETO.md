@@ -363,8 +363,10 @@ autorizada e no controle isolado. A configuração anterior foi restaurada; some
 foi reiniciado e o registro novo foi revogado. Renovar WARP não é uma correção validada.
 O dono escolheu e autenticou uma conta Google separada num perfil exclusivo, sem acessar
 o navegador pessoal. A sessão permitiu obter e decodificar as duas fontes e buscar cinco
-resultados na Oracle, com o túnel do PC já encerrado. O código com suporte a essa sessão
-foi validado isoladamente na VM; ativação na sala ainda depende de deploy autorizado.
+resultados na Oracle, com o túnel do PC já encerrado. Com autorização, `music/source.mjs`
+e o ambiente da VM foram atualizados em 29/10/2026, às 20:46 UTC; reiniciado somente Node.
+A validação do código instalado com o ambiente do processo oficial confirmou busca e áudio;
+saúde pública OK e clientes reconectados. SFU/WARP não foram reiniciados nessa ativação.
 
 `MUSIC_COOKIES_BASE64` contém o arquivo Netscape da conta dedicada codificado em base64
 (não é criptografia). O segredo persistente fica somente em `/etc/telinha/telinha.env`.

@@ -22,10 +22,12 @@ Retomado na `main`, a pedido do dono. Magic guardado na branch separada, commit 
   busca retornou cinco resultados. Teste inteiramente na Oracle, após encerrar o túnel do PC.
 - [x] Preparar suporte opcional a `MUSIC_COOKIES_BASE64`: segredo no ambiente, arquivos
   temporários privados, limpeza ao encerrar e cache separado por sessão. Validado na VM.
-- [ ] Autorizar e publicar a correção no servidor, configurar a sessão no `telinha.env`
-  e conferir o bot da sala. Precisa reiniciar Node; não precisa release do app ou reiniciar SFU.
+- [x] Aplicar a correção autorizada no servidor e configurar a sessão no `telinha.env`.
+  Reiniciado somente Node em 29/10, às 20:46 UTC; saúde pública OK, quatro clientes reconectados.
+  Código instalado e ambiente do processo oficial entregaram áudio das duas fontes e cinco
+  resultados de busca. SFU/WARP mantiveram os processos. Arquivos e perfil de teste removidos.
 
-Sem mudanças no bot publicado ou reinício da sala. Resultados, limites e continuação em
+Correção ativa na Oracle, sem precisar atualizar o app ou manter o PC ligado. Resultados e limites em
 [DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
 
 ## Publicação da 4.1.0 concluída (28/10/2026)
