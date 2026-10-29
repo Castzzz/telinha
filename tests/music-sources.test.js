@@ -1,9 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, stat } from 'node:fs/promises';
+import { once } from 'node:events';
 import os from 'node:os';
 import path from 'node:path';
-import { parseInput, loadPlaylist, spotifyPlaylistTracks, prepareStream, formatToolError } from '../music/source.mjs';
+import { parseInput, loadPlaylist, spotifyPlaylistTracks, prepareStream, startMusicDownload, formatToolError } from '../music/source.mjs';
 
 const id = '4cOdK2wGLETKBW3PvgPWqT';
 function spotifyHTML() {
@@ -103,4 +104,61 @@ console.log(JSON.stringify({id:'dQw4w9WgXcQ',duration:25,filesize_approx:1024,ti
   const proxyIdx = calls[0].indexOf('--proxy');
   assert.notEqual(proxyIdx, -1, 'Deve passar --proxy quando MUSIC_PROXY estiver configurado.');
   assert.equal(calls[0][proxyIdx + 1], 'socks5://127.0.0.1:40000');
+});
+
+test('sessão do bot usa cookies privados temporários na preparação e no download, sem compartilhar cache entre sessões', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'teletela-cookies-teste-'));
+  const oldYtdlp = process.env.MUSIC_YTDLP;
+  const oldCookies = process.env.MUSIC_COOKIES_BASE64;
+  t.after(async () => {
+    if (oldYtdlp === undefined) delete process.env.MUSIC_YTDLP; else process.env.MUSIC_YTDLP = oldYtdlp;
+    if (oldCookies === undefined) delete process.env.MUSIC_COOKIES_BASE64; else process.env.MUSIC_COOKIES_BASE64 = oldCookies;
+    await rm(directory, { recursive: true, force: true });
+  });
+  const counter = path.join(directory, 'pedidos');
+  const script = path.join(directory, 'extrator-conta.cjs');
+  await writeFile(script, `#!/usr/bin/env node
+const fs = require('node:fs');
+const path = require('node:path');
+const args = process.argv.slice(2);
+const cookie = args[args.indexOf('--cookies') + 1];
+const data = fs.readFileSync(cookie, 'utf8');
+fs.appendFileSync(${JSON.stringify(counter)}, JSON.stringify({args, cookie,
+  mode:fs.statSync(cookie).mode & 0o777, directoryMode:fs.statSync(path.dirname(cookie)).mode & 0o777,
+  session:data.includes('segunda-sessao') ? 2 : 1})+'\\n');
+if(data.includes('sessao-falha')) { process.stderr.write('ERROR: falha de teste'); process.exit(1); }
+if(args.includes('--load-info-json')) process.stdout.write('audio de teste');
+else console.log(JSON.stringify({id:'aaaaaaaaaaa',duration:19,title:'Teste autenticado',url:'https://r1.googlevideo.com/audio?conta=teste'}));
+`, { mode: 0o700 });
+  process.env.MUSIC_YTDLP = script;
+  const setSession = value => { process.env.MUSIC_COOKIES_BASE64 = Buffer.from(`# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t2000000000\tSID\t${value}\n`).toString('base64'); };
+  const url = 'https://youtube.com/watch?v=aaaaaaaaaaa';
+  setSession('primeira-sessao');
+  await prepareStream(url, directory);
+  setSession('segunda-sessao');
+  const prepared = await prepareStream(url, directory);
+  const child = startMusicDownload(prepared.infoFile);
+  let audio = '';
+  child.stdout.on('data', chunk => { audio += chunk; });
+  const [code] = await once(child, 'close');
+  assert.equal(code, 0);
+  assert.equal(audio, 'audio de teste');
+  const calls = (await readFile(counter, 'utf8')).trim().split('\n').map(line => JSON.parse(line));
+  assert.deepEqual(calls.map(call => call.session), [1, 2, 2]);
+  assert.equal(new Set(calls.map(call => call.cookie)).size, 3);
+  for (const call of calls) {
+    assert.equal(call.mode, 0o600);
+    assert.equal(call.directoryMode, 0o700);
+    assert.ok(!call.args.some(arg => arg.includes('primeira-sessao') || arg.includes('segunda-sessao')));
+    await assert.rejects(stat(path.dirname(call.cookie)), { code: 'ENOENT' });
+  }
+  setSession('sessao-falha');
+  await assert.rejects(prepareStream(url, directory), /falha de teste/);
+  const failedCall = JSON.parse((await readFile(counter, 'utf8')).trim().split('\n').at(-1));
+  await assert.rejects(stat(path.dirname(failedCall.cookie)), { code: 'ENOENT' });
+  setSession('terceira-sessao');
+  process.env.MUSIC_YTDLP = path.join(directory, 'extrator-ausente');
+  await assert.rejects(prepareStream(url, directory), /Ferramenta ausente/);
+  process.env.MUSIC_COOKIES_BASE64 = Buffer.from('segredo-invalido').toString('base64');
+  await assert.rejects(prepareStream(url, directory), error => /sessão do bot está inválida/.test(error.message) && !error.message.includes('segredo-invalido'));
 });

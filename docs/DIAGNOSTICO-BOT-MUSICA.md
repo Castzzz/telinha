@@ -2,7 +2,8 @@
 
 Investigação na `main`, após o dono relatar que todas as músicas que tentou falhavam com
 “O YouTube bloqueou temporariamente a leitura desta faixa no servidor”. Não houve deploy,
-release, troca de ferramentas, alteração de segredos nem reinício dos serviços oficiais.
+release nem reinício do servidor da sala ou do SFU. Houve uma troca autorizada de perfil
+WARP, revertida após falhar na validação; apenas `telinha-warp` foi reiniciado.
 O trabalho do Magic foi guardado em `experimento/magic-no-teletela`, commit `aeebdbb`.
 
 ## O que foi confirmado
@@ -45,12 +46,13 @@ observada aqui; não confundir essa proteção de sites com o proxy Cloudflare W
 
 1. Reproduzir com os links específicos usados pelo grupo, quando disponíveis, separando
    busca/metadados, download/decodificação e recepção pelo SFU.
-2. Uma solução autônoma continua sem validação. As tentativas com PO Tokens e Firefox
-   estão registradas abaixo; não liberaram a fonte bloqueada pela saída WARP.
+2. As tentativas com PO Tokens e Firefox estão registradas abaixo; não liberaram a fonte
+   bloqueada pela saída WARP antiga. A sessão nova entregou áudio inicialmente, mas depois
+   voltou a falhar, inclusive em teste isolado. A configuração anterior foi restaurada.
 3. Uma eventual correção deve preservar a reprodução única no servidor e ser testada
    antes de propor publicação. O pedido atual não autorizou deploy ou release.
 
-## Tentativas adicionais e alternativa validada
+## Tentativas adicionais e saída pelo PC
 
 O dono pediu para tentar resolver o bloqueio. Todos os testes abaixo foram isolados,
 sem alterar o processo da sala, usar uma conta Google ou enviar áudio às calls:
@@ -80,34 +82,81 @@ obtenção/decodificação, sem afirmar uma validação nova de ouvintes pelo SF
 ficar ligado, com internet e a ponte aberta, e recebe/reenvia o tráfego das fontes. Não
 é uma solução autônoma na Oracle nem uma garantia contra bloqueios futuros do YouTube.
 
-### Ponte preparada no projeto
+Essa alternativa não foi ativada na sala. O dono descartou a dependência do PC ligado;
+o comando auxiliar e o exemplo de configuração adicionados no commit `7465581` foram
+retirados do estado atual do projeto. A ponte, Firefox/geckodriver e o provedor de tokens
+de teste foram encerrados; os cookies anônimos foram removidos. Nesse estágio, os testes
+de música passaram 17/17 e o runner geral 62/62.
 
-No PC do dono que já tem a chave SSH da Oracle:
+## Sessão independente na Oracle — sem depender do PC
 
-```bash
-npm run music:relay
-```
+Foi registrado um dispositivo WARP novo, com chave própria, em diretório temporário
+privado na VM. Um segundo wireproxy escutou somente em `127.0.0.1:40002`; o perfil
+oficial e o serviço existente não foram modificados. Não reutilizar simultaneamente a
+mesma chave WireGuard em dois processos: o teste usou outra identidade.
 
-`deploy/oracle/music-relay.sh` usa `VM` e `SSH_KEY` de `config.sh` e mantém uma conexão SSH
-própria. `MUSIC_RELAY_PORT` troca a porta (padrão 40001); a escuta fica em loopback, as
-conexões de destino ficam limitadas à porta 443 e nenhum agente SSH é encaminhado.
-Ctrl+C encerra a ponte. O comando não instala um timer nem modifica o serviço da sala.
+- A nova saída resolveu e entregou cinco segundos de áudio das duas fontes
+  (`jNQXAC9IVRw` e `djV11Xbc914`), usando os módulos e o yt-dlp já instalados na Oracle.
+  Os volumes medidos coincidiram com o teste pela ponte do PC.
+- Na rodada de controle feita no mesmo período, a saída antiga em `40000` ainda retornou
+  confirmação de robô para `jNQXAC9IVRw`.
+- A ponte do PC já estava encerrada e a porta `40001` fechada. A obtenção e a decodificação
+  aconteceram inteiramente na Oracle. Não foi usada conta Google.
+- Ambas as conexões informaram WARP ativo. O endereço mostrado pelo trace do Cloudflare
+  foi igual; isso não permite atribuir o resultado apenas a uma troca de IP público.
+  O resultado comprovado é que a sessão nova recebeu áudio e a antiga falhou no controle.
 
-O endereço para o bot seria `MUSIC_PROXY=socks5://127.0.0.1:40001`. O exemplo revisável está
-em `deploy/oracle/music-relay.env.example`: acrescentar ao arquivo de ambiente existente,
-preservando os segredos e demais campos. Isso só entra em uso depois de reiniciar
-`telinha-server`; depende de autorização explícita do dono. Para reverter, restaurar
-`socks5://127.0.0.1:40000` e reiniciar. Não alterar rotas, firewall ou o serviço WARP.
+O dono autorizou aplicar o perfil. A configuração candidata substituiu a oficial e
+somente `telinha-warp` foi reiniciado. Na validação em `40000`, **as duas fontes voltaram
+a receber a exigência de confirmar que não é robô**. O backup foi restaurado imediatamente
+e somente WARP reiniciado outra vez. Um novo controle isolado, como usuário `telinha` em
+`40002`, também falhou: o resultado positivo foi temporário, sem correção sustentada.
 
-A alternativa foi preparada, **não ativada na sala oficial**. Os componentes e sessões
-anônimas temporários dos testes são descartáveis; não precisam ser instalados para a ponte.
-O comando final `npm run music:relay` também foi usado para repetir a decodificação da
-faixa bloqueada, com o mesmo resultado. Testes de música: 17/17; runner geral: 62/62;
-`bash -n` passou e a porta inválida foi rejeitada antes de abrir SSH.
-Pelo mesmo caminho, `resolveMusic` identificou o link bloqueado e a busca por título
-retornou cinco versões. Ao terminar, a ponte de teste, Firefox/geckodriver, o encaminhamento
-para WARP, o provedor de tokens e seus arquivos/cookies anônimos na VM foram encerrados
-ou removidos. O serviço oficial manteve a saída WARP anterior.
+Confirmado depois da reversão: configuração oficial idêntica ao backup privado
+`/opt/telinha/data/warp.conf.backup-20261029-174827`, serviços ativos e processos do
+servidor (`102279`) e SFU (`102273`) preservados. O registro WARP criado exclusivamente
+para o teste foi revogado (HTTP 204); candidato, chaves e diretórios temporários removidos.
+As portas de teste `40001`/`40002` ficaram fechadas. Nenhuma chave/token foi para o git.
+
+**Renovar WARP não resolveu o bloqueio.** Não automatizar registros em massa nem
+considerar o candidato anterior pronto para ativação.
+
+## Conta separada do bot — validação concluída, ativação pendente
+
+Após a reversão, o dono escolheu testar uma conta Google separada. Foi aberto um Firefox
+com perfil exclusivo e sem automação de login, usando um encaminhamento SSH local para
+o WARP oficial da Oracle. O dono faz o login e qualquer verificação diretamente na janela;
+senha, códigos e cookies não devem passar pelo chat nem pelo repositório. Não acessar o
+perfil pessoal do navegador. O dono concluiu o login e fechou a janela; foram exportados
+somente cookies de `youtube.com` desse perfil, transferidos por SSH para um diretório
+temporário `0700` na VM, com arquivo `0600`. Nenhum valor de cookie foi exibido.
+
+Esse encaminhamento serviu apenas ao login inicial. Foi encerrado antes de testar o código
+novo. Com a saída WARP oficial e os executáveis instalados na Oracle:
+
+- O código atual, com `--cookies` num extrator de teste, obteve e decodificou cinco segundos
+  de `jNQXAC9IVRw` e `djV11Xbc914`.
+- O código candidato com `MUSIC_COOKIES_BASE64` repetiu o resultado: média −25,1 dB/pico
+  −9,1 dB na primeira e média −21,0 dB/pico 0,0 dB na segunda.
+- A busca por “a-ha Take On Me” retornou cinco candidatos.
+- Tudo ocorreu na Oracle, com o túnel do PC já encerrado. Não foi enviada música às calls;
+  esses testes validam obtenção/decodificação, sem afirmar escuta real pelo SFU nesta etapa.
+
+O suporte novo é opcional. O segredo persistente deverá ficar em `MUSIC_COOKIES_BASE64`
+somente no `/etc/telinha/telinha.env`; base64 é codificação, não criptografia. Cada processo
+yt-dlp recebe uma cópia temporária `0600`, em diretório `0700`, removida ao terminar.
+O conteúdo não aparece nos argumentos; o cache distingue sessões por hash. Não existem
+cookies reais no repositório. Os testes exercitam preparação, download, cache, permissões,
+limpeza em sucesso/falha e rejeição de sessão inválida sem expor seu conteúdo.
+
+Validação local: **18/18** testes de música e **62/62** gerais. Código preparado e testado
+isoladamente na VM; **ainda não ativado na sala**. Para ativar, precisa guardar a sessão
+no ambiente, atualizar `music/source.mjs` e reiniciar somente `telinha-server`, com
+autorização. Não precisa release do desktop, mudança de `public/` ou reinício do SFU/WARP.
+
+A sessão pode expirar e exigir novo login manual. O yt-dlp alerta que usar uma conta pode
+causar restrições ou banimento; usar somente a conta dedicada e evitar repetição de
+requisições sem necessidade. O resultado atual não garante ausência de bloqueios futuros.
 
 Referências oficiais consultadas:
 

@@ -208,6 +208,7 @@ Variáveis de ambiente do `server.js`:
 | `SFU_PATH` | Caminho do websocket do SFU atrás do Caddy (mandado pro cliente junto com a senha) | `/sfu/ws` |
 | `TELINHA_MUSIC` | Liga o bot experimental de música nos canais de voz | desligado; `1` liga |
 | `MUSIC_PROXY` | Proxy opcional (ex: `socks5://127.0.0.1:40000`) passado ao `yt-dlp` para contornar bloqueios de IP de datacenter no YouTube | vazio = conexão direta |
+| `MUSIC_COOKIES_BASE64` | Sessão opcional de uma conta dedicada do YouTube: arquivo Netscape codificado em base64, guardado somente no `telinha.env` da VM | vazio = sem autenticação |
 
 Exemplo de servidor local completo pra testar admin e dados salvos:
 
@@ -353,14 +354,28 @@ STUN (`[{"urls":["stun:stun.l.google.com:19302"]}]`). O formato string aceito pe
 causava `invalid ICEServer` na ponte Go; a validação real na Oracle detectou e corrigiu isso.
 Em 29/10/2026, o YouTube voltou a pedir confirmação de robô para parte das fontes mesmo
 com WARP ativo e o yt-dlp estável atual. Outra faixa entregou áudio na mesma VM; não
-tratar como bloqueio universal nem atribuir ao Chromium da interface. Investigação sem
-alterar o serviço e limites em [DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
+tratar como bloqueio universal nem atribuir ao Chromium da interface. Resultados e limites
+em [DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
 Nos testes posteriores, Firefox real e PO Tokens não resolveram a fonte bloqueada pelo
-WARP, mas a saída pela conexão do PC entregou áudio com o extrator existente. A ponte
-opcional `npm run music:relay` usa SSH reverso dinâmico em loopback na VM (`40001`), limitado
-a destinos HTTPS. Depende do PC ligado. Exemplo de configuração em
-`deploy/oracle/music-relay.env.example`; não está ativado na sala e requer autorização
-para mudar o ambiente e reiniciar. O processamento/repasse continuam na Oracle.
+WARP. A ponte pelo PC entregou áudio, mas foi descartada pelo dono por depender dele ligado.
+Uma sessão WARP nova entregou áudio inicialmente, mas voltou a falhar depois da ativação
+autorizada e no controle isolado. A configuração anterior foi restaurada; somente WARP
+foi reiniciado e o registro novo foi revogado. Renovar WARP não é uma correção validada.
+O dono escolheu e autenticou uma conta Google separada num perfil exclusivo, sem acessar
+o navegador pessoal. A sessão permitiu obter e decodificar as duas fontes e buscar cinco
+resultados na Oracle, com o túnel do PC já encerrado. O código com suporte a essa sessão
+foi validado isoladamente na VM; ativação na sala ainda depende de deploy autorizado.
+
+`MUSIC_COOKIES_BASE64` contém o arquivo Netscape da conta dedicada codificado em base64
+(não é criptografia). O segredo persistente fica somente em `/etc/telinha/telinha.env`.
+Cada execução do yt-dlp recebe um arquivo temporário `0600` em diretório `0700`, removido
+ao encerrar o processo, inclusive em falha/cancelamento normais. Não passam cookies nos
+argumentos, na interface nem em logs. O cache de fontes separa sessões por hash, além da
+URL/busca/proxy. Sem a variável, permanece a extração anônima. Não usar cookies de conta
+pessoal ou de outros sites; não reabrir a sessão exportada no navegador. Um encerramento
+forçado do Node pode deixar cópias em `/tmp`; removê-las como operador com o bot parado.
+Quando a sessão expirar, renovar via login manual e atualizar a variável com reinício
+autorizado do servidor. Não há garantia contra novos bloqueios ou restrições da conta.
 Salas hospedadas pelo app continuam com música desativada por padrão; as ferramentas
 nativas não vão dentro dos instaladores desktop.
 

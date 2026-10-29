@@ -1,5 +1,6 @@
 import { execFile, spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { stat, writeFile, mkdtemp, rm, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -86,24 +87,46 @@ function ytdlpCommand(args) {
   // Dentro do Electron, execPath abre outro app, não um processo Node de console.
   const runtime = process.versions.electron ? 'node' : `node:${process.execPath}`;
   const proxy = process.env.MUSIC_PROXY?.trim();
+  const encodedCookies = process.env.MUSIC_COOKIES_BASE64?.trim();
+  let cookieDirectory;
+  const cleanup = () => {
+    if (cookieDirectory) rmSync(cookieDirectory, { recursive: true, force: true, maxRetries: 3 });
+  };
+  if (encodedCookies) {
+    if (encodedCookies.length > 128 * 1024) throw new Error('A sessão do bot está inválida. Atualize MUSIC_COOKIES_BASE64 no servidor.');
+    const cookies = Buffer.from(encodedCookies, 'base64').toString('utf8');
+    if (!/^# (?:Netscape )?HTTP Cookie File\r?\n/.test(cookies)) {
+      throw new Error('A sessão do bot está inválida. Atualize MUSIC_COOKIES_BASE64 no servidor.');
+    }
+    // O segredo fica no ambiente; cada extrator recebe uma cópia temporária privada.
+    cookieDirectory = mkdtempSync(path.join(os.tmpdir(), 'teletela-musica-sessao-'));
+    try { writeFileSync(path.join(cookieDirectory, 'youtube.cookies'), cookies, { mode: 0o600 }); }
+    catch (error) { cleanup(); throw error; }
+  }
   const common = ['--ignore-config', '--no-plugin-dirs', '--no-colors', '--no-progress',
     '--socket-timeout', '12', '--retries', '1', '--extractor-retries', '1',
-    '--js-runtimes', runtime, ...(proxy ? ['--proxy', proxy] : [])];
+    '--js-runtimes', runtime, ...(proxy ? ['--proxy', proxy] : []),
+    ...(cookieDirectory ? ['--cookies', path.join(cookieDirectory, 'youtube.cookies')] : [])];
   // Sem shell: links e buscas nunca viram comandos do sistema.
-  if (process.env.MUSIC_YTDLP) return [process.env.MUSIC_YTDLP, [...common, ...args]];
-  if (existsSync(cachedTool)) return ['python3', [cachedTool, ...common, ...args]];
-  return ['yt-dlp', [...common, ...args]];
+  if (process.env.MUSIC_YTDLP) return [process.env.MUSIC_YTDLP, [...common, ...args], cleanup];
+  if (existsSync(cachedTool)) return ['python3', [cachedTool, ...common, ...args], cleanup];
+  return ['yt-dlp', [...common, ...args], cleanup];
 }
 
 async function ytdlp(args, timeout, signal) {
-  const [command, parameters] = ytdlpCommand(args);
-  return run(command, parameters, timeout, signal);
+  const [command, parameters, cleanup] = ytdlpCommand(args);
+  try { return await run(command, parameters, timeout, signal); }
+  finally { cleanup(); }
 }
 
 export function startMusicDownload(infoFile) {
-  const [command, args] = ytdlpCommand(['--load-info-json', infoFile, '--no-playlist', '--no-part',
+  const [command, args, cleanup] = ytdlpCommand(['--load-info-json', infoFile, '--no-playlist', '--no-part',
     '-f', 'bestaudio[acodec=opus]/bestaudio/best', '--http-chunk-size', '1M', '-o', '-']);
-  return spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+  try {
+    const child = spawn(command, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    child.once('close', cleanup);
+    return child;
+  } catch (error) { cleanup(); throw error; }
 }
 
 async function metadata(url, kind) {
@@ -241,7 +264,8 @@ export async function prepareStream(input, directory, signal, track = {}) {
   if (!['youtube', 'spotify'].includes(source.kind)) throw new Error('Escolha uma faixa da busca ou da playlist.');
   let query = '';
   if (source.kind === 'spotify') query = track.query || `${track.title || (await metadata(source.url, 'spotify')).title} ${track.author || ''}`.trim();
-  const key = `${source.url}|${query}|${process.env.MUSIC_PROXY?.trim() || ''}`;
+  const session = createHash('sha256').update(process.env.MUSIC_COOKIES_BASE64?.trim() || '').digest('hex');
+  const key = `${source.url}|${query}|${process.env.MUSIC_PROXY?.trim() || ''}|${session}`;
   const cached = streamCache.get(key);
   const withFile = async prepared => {
     const infoFile = path.join(directory, 'fonte.json');
