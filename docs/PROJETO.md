@@ -351,6 +351,16 @@ o restante da fila para não tentar 50 faixas em cascata.
 `MUSIC_ICE_SERVERS` usa o formato Pion: `urls` precisa ser uma lista, mesmo com um único
 STUN (`[{"urls":["stun:stun.l.google.com:19302"]}]`). O formato string aceito pelo navegador
 causava `invalid ICEServer` na ponte Go; a validação real na Oracle detectou e corrigiu isso.
+Em 29/10/2026, o YouTube voltou a pedir confirmação de robô para parte das fontes mesmo
+com WARP ativo e o yt-dlp estável atual. Outra faixa entregou áudio na mesma VM; não
+tratar como bloqueio universal nem atribuir ao Chromium da interface. Investigação sem
+alterar o serviço e limites em [DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
+Nos testes posteriores, Firefox real e PO Tokens não resolveram a fonte bloqueada pelo
+WARP, mas a saída pela conexão do PC entregou áudio com o extrator existente. A ponte
+opcional `npm run music:relay` usa SSH reverso dinâmico em loopback na VM (`40001`), limitado
+a destinos HTTPS. Depende do PC ligado. Exemplo de configuração em
+`deploy/oracle/music-relay.env.example`; não está ativado na sala e requer autorização
+para mudar o ambiente e reiniciar. O processamento/repasse continuam na Oracle.
 Salas hospedadas pelo app continuam com música desativada por padrão; as ferramentas
 nativas não vão dentro dos instaladores desktop.
 

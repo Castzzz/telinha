@@ -9,6 +9,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "music:setup": "node scripts/music-lab/setup.mjs",
+    "music:relay": "bash deploy/oracle/music-relay.sh",
     "music:lab": "node scripts/music-lab/server.mjs",
     "music:build": "node music/build.mjs",
     "music:call": "node scripts/music-call.mjs",

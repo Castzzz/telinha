@@ -402,6 +402,11 @@ Ele não tem fila nem playlists. O buffer dos navegadores pode gerar alguns segu
 ouvintes. Fechar com Ctrl+C limpa os áudios temporários. Detalhes, resultados e continuação
 em [docs/TESTE-BOT-MUSICA.md](docs/TESTE-BOT-MUSICA.md).
 
+Se o YouTube bloquear a saída da Oracle, o dono pode testar `npm run music:relay`:
+uma ponte SSH permite buscar as fontes pela conexão do PC, mantendo o bot na VM.
+Esse modo depende do PC ligado e da ponte aberta; ativá-lo na sala exige configurar
+o serviço e reiniciar com autorização. [Resultados e instruções](docs/DIAGNOSTICO-BOT-MUSICA.md).
+
 ### Testar anexos e sons localmente
 
 Rode `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-anexos npm start`

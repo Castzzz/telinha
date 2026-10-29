@@ -3,6 +3,23 @@
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
 
+## Bot de música: bloqueio do YouTube (29/10/2026)
+
+Retomado na `main`, a pedido do dono. Magic guardado na branch separada, commit `aeebdbb`.
+
+- [x] Confirmar configuração do bot, versão do extrator e saída WARP na Oracle.
+- [x] Reproduzir a exigência de confirmar que não é robô, sem tocar nas calls reais.
+  Uma faixa falhou direto e com WARP e funcionou neste PC; outra entregou áudio na VM.
+- [x] Testar Firefox real/assinatura Firefox, cliente alternativo e PO Tokens. Esses
+  caminhos não resolveram a faixa bloqueada pela saída WARP.
+- [x] Validar a obtenção/decodificação de duas fontes pela conexão deste PC, mantendo
+  o processamento na Oracle. Ponte preparada em `npm run music:relay`.
+- [ ] Decidir se aceita a dependência do PC ligado e autorizar a ativação desse modo
+  na sala. A ponte não foi ativada no bot publicado; não há solução autônoma na VM validada.
+
+Sem mudanças no bot publicado ou reinício da sala. Resultados, limites e continuação em
+[DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
+
 ## Publicação da 4.1.0 concluída (28/10/2026)
 
 Autorizada pelo dono para testar com a galera, **sem o Magic**. Reaproveitada a validação
