@@ -31,6 +31,7 @@ import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
 import { setupDice } from './dice.js';
 import { setupStageSocial } from './stage-social.js';
+import { applyAppearance, setupPersonalization } from './personalization.js';
 import { setupTransmissionDiagnostics } from './transmission-diagnostics.js';
 import { setupMessageSearch } from './message-search.js';
 import { setupAccounts, accountSession, initialAccountProfile, accountProfileSnapshot } from './accounts.js';
@@ -115,6 +116,7 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = THEMES.includes(theme) ? theme : 'escuro';
 }
 applyTheme(prefs.theme);
+applyAppearance(prefs.appearanceExperiment);
 
 // Desempenho: modo leve e pausa em segundo plano são opções independentes.
 function applyPerformancePrefs() {
@@ -7830,6 +7832,7 @@ function initApp() {
   setupMicGain();
   setupThemeSelect();
   setupAutostart();
+  setupPersonalization({ prefs, savePrefs, showToast });
   setupTransmissionDiagnostics({ mountStageOverlay, getConnections: () => {
     const list = [];
     const add = (pc, label, direction, route) => { if (pc && pc.connectionState !== 'closed') list.push({ pc, label, direction, route }); };

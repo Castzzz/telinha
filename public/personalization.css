@@ -1,0 +1,26 @@
+.personalization-controls { display: grid; gap: 14px; margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--border-subtle); }
+.personalization-controls h5 { color: var(--text-header); font-size: 15px; }
+.personalization-controls p, .personalization-controls small { color: var(--text-muted); font-size: 12px; }
+.personalization-controls .personal-field { display: grid; gap: 8px; }
+.personalization-controls label { text-transform: none; letter-spacing: normal; }
+.personal-presets, .personal-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.personal-presets button { width: 34px; height: 34px; border: 2px solid transparent; border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 2px var(--bg-primary); }
+.personal-presets button[aria-pressed="true"] { outline: 2px solid var(--text-header); outline-offset: 2px; }
+.personalization-controls button:focus-visible, .personalization-controls input:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 3px; }
+.personalization-controls input[type="color"] { width: 64px; height: 36px; padding: 3px; border: 1px solid var(--border-medium); border-radius: 6px; background: var(--bg-secondary); cursor: pointer; }
+.personalization-controls input[type="range"] { width: min(100%, 360px); accent-color: var(--accent-brand); }
+.personalization-controls input[type="file"] { max-width: 100%; }
+.personalization-controls .btn-secondary:disabled { opacity: .5; cursor: default; }
+html.has-personal-wallpaper body { background: var(--bg-tertiary) var(--personal-wallpaper) center / cover fixed; }
+html.has-personal-wallpaper[data-look="novo"] .app-layout,
+html.has-personal-wallpaper[data-look="novo"] .app-topbar { background: transparent; }
+html.has-personal-wallpaper[data-look="novo"] .sidebar-channels,
+html.has-personal-wallpaper[data-look="novo"] .stage-section,
+html.has-personal-wallpaper[data-look="novo"] .chat-drawer {
+  background-image: linear-gradient(color-mix(in srgb, var(--bg-primary) calc(100% - var(--personal-wallpaper-strength)), transparent), color-mix(in srgb, var(--bg-primary) calc(100% - var(--personal-wallpaper-strength)), transparent)), var(--personal-wallpaper);
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+/* Texto e controles continuam sobre superfícies sólidas, sem blur ou animação extra. */
+html.has-personal-wallpaper .home-header { padding: 16px; background: var(--bg-primary); border-radius: var(--radius-md); }

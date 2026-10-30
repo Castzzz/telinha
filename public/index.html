@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="dice.css" />
   <link rel="stylesheet" href="accounts.css" />
   <link rel="stylesheet" href="tools.css">
+  <link rel="stylesheet" href="personalization.css">
 </head>
 <body class="theme-discord">
 
@@ -984,6 +985,36 @@
                 <option value="preto">Mais escuro (preto)</option>
                 <option value="claro">Claro</option>
               </select>
+            </div>
+
+            <div class="personalization-controls">
+              <h5>Personalização</h5>
+              <p>Teste sua combinação. Só muda a aparência neste aparelho.</p>
+              <div class="personal-field">
+                <label for="personal-accent">Cor de destaque</label>
+                <div class="personal-presets" role="group" aria-label="Cores de destaque">
+                  <button type="button" data-personal-accent="#5865f2" style="--swatch: #5865f2" aria-label="Azul" aria-pressed="false"></button>
+                  <button type="button" data-personal-accent="#7c3aed" style="--swatch: #7c3aed" aria-label="Violeta" aria-pressed="false"></button>
+                  <button type="button" data-personal-accent="#0369a1" style="--swatch: #0369a1" aria-label="Oceano" aria-pressed="false"></button>
+                  <button type="button" data-personal-accent="#047857" style="--swatch: #047857" aria-label="Verde" aria-pressed="false"></button>
+                  <button type="button" data-personal-accent="#b45309" style="--swatch: #b45309" aria-label="Âmbar" aria-pressed="false"></button>
+                  <button type="button" data-personal-accent="#be123c" style="--swatch: #be123c" aria-label="Rosa" aria-pressed="false"></button>
+                  <input type="color" id="personal-accent" value="#5865f2" aria-label="Escolher outra cor de destaque">
+                </div>
+                <small>Cores muito claras são escurecidas para manter o texto dos botões legível.</small>
+              </div>
+              <div class="personal-field">
+                <label for="personal-wallpaper-file">Imagem de fundo</label>
+                <div class="personal-actions"><button type="button" class="btn-secondary" id="personal-choose-wallpaper">Escolher imagem</button><span id="personal-wallpaper-name">Nenhuma imagem escolhida</span></div>
+                <input type="file" id="personal-wallpaper-file" accept="image/png,image/jpeg,image/webp" hidden>
+                <small>PNG, JPG ou WebP até 2 MB. A imagem fica salva no aparelho.</small>
+              </div>
+              <div class="personal-field">
+                <label for="personal-wallpaper-intensity">Intensidade do fundo: <output id="personal-wallpaper-value" for="personal-wallpaper-intensity">15%</output></label>
+                <input type="range" id="personal-wallpaper-intensity" min="5" max="30" value="15">
+              </div>
+              <div class="personal-actions"><button type="button" class="btn-secondary" id="personal-remove-wallpaper">Remover fundo</button><button type="button" class="btn-secondary" id="personal-reset">Restaurar personalização</button></div>
+              <p id="personal-status" role="status">As mudanças aparecem na hora. Seu tema e perfil continuam independentes.</p>
             </div>
 
             <!-- Desempenho e Economia -->

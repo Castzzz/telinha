@@ -184,6 +184,15 @@ Na branch `melhoria/inicializacao-busca-e-diagnostico`:
   Mostra resolução, FPS, taxa de vídeo, perda e latência reais enquanto transmite ou assiste.
   Via SFU, mede o trecho entre você e o servidor. Dados ausentes aparecem como indisponíveis.
 
+A branch **`experimento/personalizacao-local`** acrescenta um teste de **Personalização**
+em Configurações → Aparência, mantendo as melhorias anteriores como base. Escolha uma cor
+pronta ou própria, envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade.
+Tudo fica neste aparelho, funciona com os três temas e continua após reabrir.
+**Restaurar personalização** remove o fundo e a cor próprios, preservando tema e perfil.
+Para experimentar só no seu PC, selecione essa branch e rode `npm run app`.
+Para voltar às melhorias sem personalização, use `melhoria/inicializacao-busca-e-diagnostico`.
+Nenhuma dessas branches foi publicada.
+
 Para testar a busca antes do deploy, suba um servidor local com dados separados:
 `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-melhorias npm start`.
 Abra `npm run app` e entre no endereço `http://127.0.0.1:3999` pela tela inicial.

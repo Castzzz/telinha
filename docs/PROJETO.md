@@ -1214,3 +1214,31 @@ no Windows e o login real após reiniciar o PC ainda precisam de conferência ne
 Referências: [Electron: login items](https://www.electronjs.org/docs/latest/api/app#appsetloginitemsettingssettings-macos-windows),
 [Desktop Entry: Exec](https://specifications.freedesktop.org/desktop-entry/latest/exec-variables.html),
 [estatísticas WebRTC](https://www.w3.org/TR/webrtc-stats/).
+
+
+### Experimento de personalização local (30/10/2026)
+
+Branch `experimento/personalizacao-local`, derivada do commit das melhorias de
+inicialização/busca/diagnóstico. A branch dessas melhorias não contém o experimento;
+`main` permanece como estava. Sem release/deploy ou alteração de versão.
+
+- `public/personalization.js` / `.css`: seção Personalização em Aparência, seis cores
+  prontas, seletor de cor, fundo estático e intensidade de 5 a 30%. As cores claras são
+  escurecidas até contraste mínimo de 4,5 com branco nos botões de destaque.
+- Preferência `appearanceExperiment: { accent, wallpaper, intensity }` dentro do prefs
+  local; não enviada ao servidor nem incluída no perfil compartilhado da conta. A branch
+  sem esse módulo ignora a preferência, então alternar entre branches é reversível.
+- PNG/JPG/WebP até 2 MB; decodificação local, redução para no máximo 1920×1080 e WebP.
+  Apenas data URLs desses formatos, até 3 MB de texto, são aceitas ao restaurar preferências.
+  Não aceita SVG, GIF, URL remota ou CSS arbitrário. Bitmap temporário é liberado.
+- Usa tokens CSS existentes. Imagens ficam no fundo; cartões, configurações e controles
+  preservam superfícies sólidas, sem adicionar blur ou animações. Restaurar remove apenas
+  cor/fundo experimentais, sem tocar em tema, perfil, acesso ou volumes.
+- Gravações são sequenciais; em falha de persistência restaura o estado anterior e avisa.
+  A escolha de outro arquivo/remoção/restauração cancela uma decodificação anterior pendente.
+
+Validação: `node --test tests/personalization.test.js` e Electron do sistema executando
+`tests/personalization-browser.cjs`: cor, imagem local real, intensidade, reabertura,
+três temas, falha de gravação, remoção e restauração com identidade/tema preservados.
+Esse teste também repete os caminhos de inicialização automática, busca e vídeo WebRTC.
+Todos os dados e a entrada de autostart desses testes ficam em diretórios temporários.

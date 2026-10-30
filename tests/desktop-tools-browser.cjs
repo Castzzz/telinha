@@ -19,6 +19,7 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const js = async (win, code) => { try { return await win.webContents.executeJavaScript(code); } catch (error) { console.error('Falha no trecho de teste:', code); throw error; } };
 async function until(win, condition) { for (let i = 0; i < 160; i++) { if (await js(win, condition)) return; await pause(75); } throw new Error('Estado não chegou: ' + condition); }
 const click = (win, selector) => js(win, `document.querySelector(${JSON.stringify(selector)}).click();void 0`);
+let failPrefs = false;
 let backend; const windows = [], errors = [];
 const timeout = setTimeout(() => { console.error('Tempo esgotado'); app.exit(1); }, 65000);
 app.whenReady().then(async () => {
@@ -26,7 +27,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('autostart-get', () => autostart.get()); ipcMain.handle('autostart-set', (_event, enabled) => autostart.set(enabled));
   const preferences = new Map();
   ipcMain.handle('prefs-get', event => preferences.get(event.sender.id) || {});
-  ipcMain.handle('prefs-set', (event, patch) => { preferences.set(event.sender.id, { ...preferences.get(event.sender.id), ...patch }); return true; });
+  ipcMain.handle('prefs-set', (event, patch) => { if (failPrefs) return false; preferences.set(event.sender.id, { ...preferences.get(event.sender.id), ...patch }); return true; });
   ipcMain.handle('get-game-activity', () => ({ activity: null })); ipcMain.handle('set-global-hotkeys', () => ({}));
   backend = await import('../server.js'); const server = await backend.startServer(0, '127.0.0.1');
   async function open(name) {
@@ -47,6 +48,42 @@ app.whenReady().then(async () => {
   await until(first, '!document.querySelector("#modal-settings").classList.contains("hidden")'); await pause(200);
   await fs.promises.writeFile('/tmp/teletela-inicializacao.png', (await first.webContents.capturePage()).toPNG());
   await click(first, '#check-autostart'); await until(first, '!document.querySelector("#check-autostart").disabled && !document.querySelector("#check-autostart").checked'); assert(!autostart.get().enabled);
+  if (process.env.TEST_PERSONALIZATION === '1') {
+    await click(first, '[data-personal-accent="#047857"]');
+    await until(first, 'document.documentElement.style.getPropertyValue("--accent-brand") === "#047857"');
+    await js(first, `(async()=>{
+      const canvas=document.createElement('canvas');canvas.width=1000;canvas.height=600;
+      const ctx=canvas.getContext('2d'), gradient=ctx.createLinearGradient(0,0,1000,600);
+      gradient.addColorStop(0,'#8b5cf6');gradient.addColorStop(.5,'#06b6d4');gradient.addColorStop(1,'#f59e0b');ctx.fillStyle=gradient;ctx.fillRect(0,0,1000,600);
+      const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+      const transfer=new DataTransfer();transfer.items.add(new File([blob],'fundo.png',{type:'image/png'}));
+      const input=document.querySelector('#personal-wallpaper-file');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+    })()`);
+    await until(first, 'document.documentElement.classList.contains("has-personal-wallpaper") && document.querySelector("#personal-status").textContent.includes("salva")');
+    await js(first, 'document.querySelector("#personal-wallpaper-intensity").value=30;document.querySelector("#personal-wallpaper-intensity").dispatchEvent(new Event("input"));document.querySelector("#personal-wallpaper-intensity").dispatchEvent(new Event("change"));void 0');
+    await until(first, 'document.querySelector("#personal-wallpaper-value").textContent==="30%"');
+    await pause(150); await fs.promises.writeFile('/tmp/teletela-personalizacao-config.png', (await first.webContents.capturePage()).toPNG());
+    assert(preferences.get(first.webContents.id).appearanceExperiment.wallpaper.startsWith('data:image/webp;base64,'));
+    assert.equal(preferences.get(first.webContents.id).appearanceExperiment.intensity,30);
+    await new Promise(resolve => { first.webContents.once('did-finish-load', resolve); first.webContents.reload(); });
+    await until(first, 'Boolean(window.appState?.myId && document.documentElement.classList.contains("has-personal-wallpaper"))');
+    assert(await js(first, 'document.documentElement.style.getPropertyValue("--accent-brand")==="#047857"'));
+    await js(first, "document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
+    for(const theme of ['escuro','preto','claro']) {
+      await js(first, `document.documentElement.dataset.theme='${theme}';void 0`);await pause(150);
+      await fs.promises.writeFile(`/tmp/teletela-personalizacao-${theme}.png`, (await first.webContents.capturePage()).toPNG());
+    }
+    await click(first,'#btn-open-settings');await until(first,'!document.querySelector("#modal-settings").classList.contains("hidden")');
+    failPrefs=true;await click(first,'[data-personal-accent="#be123c"]');
+    await until(first,'document.querySelector("#personal-status").textContent.includes("anterior foi restaurada")');
+    assert(await js(first,'document.documentElement.style.getPropertyValue("--accent-brand")==="#047857"'));failPrefs=false;
+    await click(first,'#personal-remove-wallpaper');await until(first,'!document.documentElement.classList.contains("has-personal-wallpaper")');
+    await click(first,'#personal-reset');await until(first,'!document.documentElement.style.getPropertyValue("--accent-brand")');
+    assert.equal(preferences.get(first.webContents.id).profile.name,'Cast');
+    assert(await js(first,'document.documentElement.dataset.theme==="claro"'));
+    console.log('Personalização: cor, contraste, imagem local, intensidade, persistência após reabrir, falha de gravação, remoção e restauração passaram; perfil e tema preservados.');
+  }
+
   await js(first, "document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('[data-text-channel-id=arquivo]').click();void 0");
   await click(first, '#btn-chat-search');
   await js(first, "document.querySelector('#message-search-query').value='cafe da turma 0';document.querySelector('#message-search-form').requestSubmit();void 0");
