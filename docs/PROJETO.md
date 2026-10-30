@@ -1232,3 +1232,62 @@ backup e execução de argumentos contendo espaços e caracteres especiais. O te
 interface usa um `hyprland.conf` temporário e verifica a restauração exata ao desmarcar.
 A configuração real deste PC não foi alterada nos testes.
 Referência: [Hyprland: exec-once](https://wiki.hypr.land/0.53.0/Configuring/Keywords/).
+
+### Categorias, ordem, apelidos, download e ausentes (30/10/2026, teste local)
+
+Branch `melhoria/categorias-apelidos-e-ausentes`, baseada nas melhorias anteriores, sem
+incluir o experimento de personalização e sem release/deploy. Os dados antigos continuam
+válidos: os canais começam nos grupos padrão até alguém organizar.
+
+- `channel-extras.js` persiste `channel-extras.json` dentro de `TELINHA_DATA_DIR`, via
+  arquivo temporário e rename, com rollback em memória quando a gravação falha. Contém
+  `categories`, `placements` (`voice:<id>` / `text:<id>` → categoria/posição), `nicknames`
+  (por `accessId` e `call:<id>` / `text:<id>`) e `afk: { channelId, minutes }`.
+  Faz parte do backup da pasta data; foi incluído nos arquivos do instalador e do deploy.
+- Categorias de voz/texto têm tipos separados. Os dois títulos padrão podem ser renomeados;
+  os grupos personalizados podem ser criados, reordenados e apagados quando vazios.
+  Os grupos padrão permanecem no começo de cada seção. Categorias não acrescentam ACL:
+  o acesso continua por canal. Categorias que só contêm canais invisíveis não são enviadas
+  a quem não vê nenhum deles, inclusive o dono. Listas de posições só incluem canais visíveis.
+- `category-save`, `category-delete`, `category-move`, `channel-move` e `afk-settings`
+  exigem `manageChannels`, com máximo de 30 operações por socket em 10 segundos.
+  `channel-layout` comunica categorias/posições/ausentes e capacidade de gerenciamento.
+  A ordem é compartilhada. Mover usa o ID de um canal anterior ou fim da categoria; não
+  aceita destinos de outro tipo ou IDs ocultos. Posições relativas de canais ocultos são
+  preservadas. As regras de acesso, senha e propriedade dos canais não mudam ao movê-los.
+- `public/channel-organization.js` agrupa a lista existente sem perder seus listeners.
+  A alça pontilhada permite arrastar antes de outro canal ou soltar no título de um grupo
+  para colocar no final. Um clique abre os seletores de categoria/posição, também para
+  teclado e celular. O controle no cabeçalho da lista abre nomes, categorias e ausentes.
+  Recolhimento das categorias personalizadas fica local em `collapsedCategories`.
+- `chat-nickname-get` / `chat-nickname-set` validam o chat e o acesso, e alteram somente o
+  apelido da própria identidade (máximo 25 caracteres, até 10 mudanças/10 s por socket).
+  Texto usa o apelido nas novas mensagens; voz usa também nos participantes da call.
+  As mensagens guardam `profileName` para identificar o nome original no tooltip e na busca.
+  Histórico não é reescrito; o nome do perfil/conta permanece igual. Apagar o canal limpa
+  seu apelido e posição; vazio volta ao nome do perfil. Conta opcional preserva o accessId,
+  então usa o mesmo apelido nos aparelhos dessa identidade.
+- Imagens da call e dos canais de texto têm **Baixar imagem**, inclusive na ampliação.
+  As mesmas rotas recebem `download=1`, validam acesso e devolvem attachment com extensão
+  da imagem; não há rota pública alternativa. Revogar acesso bloqueia o download mesmo
+  para o dono. CORS permite o uso pela interface instalada; o nome é gerado pelo servidor.
+- Ausentes começa desligado. Quem gerencia canais escolhe/cria um canal público sem senha,
+  diferente do Geral, e um tempo de 5, 10, 15, 30 ou 60 minutos. A varredura acontece a cada
+  10 s; fala, transmissão, câmera e assistir a uma transmissão mantêm a presença.
+  `idle-activity` envia apenas atividade sim/não e a preferência, sem teclas ou coordenadas.
+  Desktop Windows/X11 consulta `powerMonitor.getSystemIdleTime()` por IPC da interface local;
+  Wayland e navegador usam interações dentro do Teletela. A tela explica essa diferença e
+  permite desativar em Som (`afkEnabled`), útil ao jogar em silêncio fora da janela.
+  Não altera a preferência de mute. Não retorna automaticamente ao canal anterior.
+- Ao vencer o tempo, o servidor encerra a participação anterior e emite `afk-move`; o
+  cliente entra no destino pelo fluxo normal, que reconfere acesso/senha. Clientes antigos
+  que não anunciam suporte via `idle-activity` não são movidos. Se o destino ganhar senha,
+  ficar privado ou for apagado, a varredura para; apagar o canal desliga a configuração.
+
+Validação: `npm test` (62), suítes m1/m2/m3 + busca (80), integração m4,
+`node --test tests/channel-extras.test.js tests/channel-extras-store.test.js` (3),
+e Electron do sistema executando `tests/channel-extras-browser.cjs`: duas pessoas, categorias,
+ordem compartilhada por drag/drop e formulário, apelido preservado ao recarregar, download
+real de PNG, movimento para Ausentes e interface nos três temas/em 390 px.
+
+Referência para inatividade nativa: [Electron powerMonitor](https://www.electronjs.org/docs/latest/api/power-monitor#powermonitorgetsystemidletime).

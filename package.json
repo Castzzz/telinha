@@ -64,6 +64,7 @@
       "public/**",
       "server.js",
       "permission-store.js",
+      "channel-extras.js",
       "account-store.js",
       "accounts-protocol.js",
       "dice-store.js",

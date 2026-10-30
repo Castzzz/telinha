@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="dice.css" />
   <link rel="stylesheet" href="accounts.css" />
   <link rel="stylesheet" href="tools.css">
+  <link rel="stylesheet" href="channel-extras.css">
 </head>
 <body class="theme-discord">
 
@@ -100,6 +101,7 @@
         title="Arraste pra mudar a largura (duplo clique volta ao normal)"></div>
       <div class="sidebar-header">
         <h2 class="sidebar-title">Salas & Canais</h2>
+        <button type="button" id="btn-organize-channels" class="btn-icon-add hidden" title="Organizar categorias e ausentes" aria-label="Organizar categorias e ausentes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
         <button id="btn-header-add-channel" class="btn-icon-add" title="Criar novo canal de voz">+</button>
       </div>
 
@@ -372,6 +374,7 @@
       <div id="mention-suggest" class="mention-suggest hidden" role="listbox" aria-label="Marcar alguém"></div>
 
       <!-- CHAT INPUT FORM -->
+      <button type="button" id="btn-chat-nickname" class="chat-nickname-button" title="Mudar meu apelido só neste chat"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg>Meu apelido neste chat</button>
       <form id="chat-form" class="chat-form">
         <div class="chat-composer">
           <input
@@ -448,6 +451,24 @@
     </div>
   </div>
 
+  <div id="modal-chat-nickname" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="chat-nickname-title">
+    <div class="modal-card"><div class="modal-header"><h3 id="chat-nickname-title">Meu apelido neste chat</h3><button type="button" class="modal-close-btn" data-close-modal="modal-chat-nickname" aria-label="Fechar">✕</button></div>
+      <p id="chat-nickname-profile"></p><p>Vale só neste chat. As mensagens antigas mantêm o nome usado ao enviar.</p>
+      <form id="chat-nickname-form"><label for="chat-nickname-input">Apelido</label><input id="chat-nickname-input" class="form-input" maxlength="25" placeholder="Vazio para usar seu nome de perfil"><div class="modal-actions"><button type="button" class="btn-secondary" id="chat-nickname-reset">Usar nome do perfil</button><button type="submit" id="chat-nickname-save" class="btn-primary">Salvar apelido</button></div></form>
+    </div>
+  </div>
+  <div id="modal-channel-organization" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="channel-organization-title">
+    <div class="modal-card tools-modal"><div class="modal-header"><h3 id="channel-organization-title">Organizar canais</h3><button type="button" class="modal-close-btn" data-close-modal="modal-channel-organization" aria-label="Fechar">✕</button></div>
+      <p>Os nomes e posições mudam para todos. Arraste a alça de um canal para ordenar ou solte no título de uma categoria. Clique na alça para mover pelo teclado ou celular.</p>
+      <div id="channel-category-list" class="tools-results"></div>
+      <form id="category-create-form" class="tools-form"><h4>Nova categoria</h4><label>Tipo<select id="category-create-type" class="form-select"><option value="voice">Voz</option><option value="text">Texto</option></select></label><label>Nome<input id="category-create-name" class="form-input" maxlength="30" required></label><button type="submit" class="btn-primary">Criar categoria</button></form>
+      <form id="afk-form" class="tools-form"><h4>Canal de ausentes</h4><label>Destino<select id="afk-channel" class="form-select"></select></label><label>Tempo sem atividade<select id="afk-minutes" class="form-select"><option value="5">5 minutos</option><option value="10">10 minutos</option><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="60">1 hora</option></select></label><p>Escolha um canal público e sem senha. Quem fala, transmite ou assiste não é movido. Cada pessoa pode desligar a movimentação automática em Som.</p><div class="personal-actions"><button type="submit" class="btn-primary">Salvar ausentes</button><button type="button" id="afk-create" class="btn-secondary">Criar e usar Ausentes</button></div></form>
+    </div>
+  </div>
+  <div id="modal-channel-move" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="channel-move-title">
+    <div class="modal-card"><div class="modal-header"><h3 id="channel-move-title">Mover canal</h3><button type="button" class="modal-close-btn" data-close-modal="modal-channel-move" aria-label="Fechar">✕</button></div><form id="channel-move-form" class="tools-form"><label>Categoria<select id="channel-move-category" class="form-select"></select></label><label>Posição<select id="channel-move-before" class="form-select"></select></label><button type="submit" class="btn-primary">Mover</button></form></div>
+  </div>
+
   <div id="modal-message-search" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="message-search-title">
     <div class="modal-card tools-modal">
       <div class="modal-header"><h3 id="message-search-title">Buscar mensagens</h3><button type="button" class="modal-close-btn" data-close-modal="modal-message-search" aria-label="Fechar">✕</button></div>
@@ -504,6 +525,7 @@
 
   <!-- Imagem do chat em tamanho grande (clique fora ou Esc fecha) -->
   <div id="image-viewer" class="image-viewer hidden" role="dialog" aria-label="Imagem do chat">
+    <div class="image-viewer-actions"><a id="image-viewer-download" class="btn-secondary hidden" download>Baixar imagem</a><button type="button" id="image-viewer-close" class="btn-secondary" aria-label="Fechar imagem">Fechar</button></div>
     <div class="image-viewer-media"><img id="image-viewer-img" alt="" /></div>
   </div>
 
@@ -1066,6 +1088,7 @@
           </section>
           <section class="settings-section hidden" data-settings-section="som">
             <h4 class="settings-section-title">Som</h4>
+            <div class="form-group"><label class="permission-choice"><input type="checkbox" id="check-afk-enabled" checked> Permitir ir para Ausentes por inatividade</label><small>O servidor define o canal e o tempo. Enquanto fala, transmite ou assiste, você permanece na call. No Wayland e navegador, conta a atividade no Teletela; você pode desligar ao jogar em silêncio.</small></div>
             <!-- Dispositivo de Saída -->
             <div class="form-group">
               <label for="select-audio-output">Dispositivo de Saída (Fones / Alto-falante)</label>

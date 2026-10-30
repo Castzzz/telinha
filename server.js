@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import { ChannelExtras } from './channel-extras.js';
 import http from 'node:http';
 import { Server } from 'socket.io';
 import path from 'node:path';
@@ -477,13 +478,13 @@ function deleteTextChannelData(ch) {
 }
 
 function getTextChannelsSummary(viewer = null) {
-  return [...textChannels.values()].filter(ch => permissions.visible(viewer, ch))
+  return channelExtras.ordered('text', [...textChannels.values()]).filter(ch => permissions.visible(viewer, ch))
     .map(ch => ({ id: ch.id, name: ch.name, description: ch.description, createdBy: ch.createdBy, createdAt: ch.createdAt,
-      lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
-      canManageAccess: permissions.has(viewer, 'manageChannels') }))
-    .sort((a, b) => a.createdAt - b.createdAt);
+      ...channelExtras.placement('text', ch.id), lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
+      canManageAccess: permissions.has(viewer, 'manageChannels') }));
 }
 function broadcastTextChannels() {
+  broadcastLayout();
   for (const client of io.sockets.sockets.values()) client.emit('text-channels', getTextChannelsSummary(client.data.user));
 }
 function emitText(ch, event, data, except = null) {
@@ -492,6 +493,21 @@ function emitText(ch, event, data, except = null) {
 
 loadSavedChannels();
 loadTextStorage();
+const channelExtras = new ChannelExtras(DATA_DIR);
+const chatName = (user, scope, id) => channelExtras.nickname(user.accessId, scope, id) || user.name;
+function layoutFor(user) {
+  const canManage = permissions.has(user, 'manageChannels');
+  const categories = channelExtras.categories().filter(category => {
+    const map = category.type === 'voice' ? channels : textChannels;
+    const members = [...map.values()].filter(ch => channelExtras.placement(category.type, ch.id).categoryId === category.id);
+    return category.id === category.type || !members.length || members.some(ch => permissions.visible(user, ch));
+  });
+  const afk = channels.get(channelExtras.data.afk.channelId);
+  return { categories, canManage, afk: { channelId: afk && permissions.visible(user, afk) ? afk.id : '', minutes: channelExtras.data.afk.minutes },
+    placements: Object.fromEntries(['voice','text'].flatMap(type => [...(type === 'voice' ? channels : textChannels).values()].filter(ch => permissions.visible(user, ch)).map(ch => [`${type}:${ch.id}`, channelExtras.placement(type,ch.id)]))) };
+}
+function broadcastLayout() { for (const client of io.sockets.sockets.values()) client.emit('channel-layout', layoutFor(client.data.user)); }
+
 
 // ----------------------------------------------------
 // SOUNDBOARD: sons que cada um sobe (ficam salvos) + os áudios dos amigos que vêm no app
@@ -684,7 +700,8 @@ function canDeleteChannel(user, channel) {
 function publicUser(u) {
   return {
     id: u.id,
-    name: u.name,
+    name: u.channelId ? chatName(u, 'call', u.channelId) : u.name,
+    profileName: u.name,
     color: u.color,
     nameColor: u.nameColor || '',
     nameColor2: u.nameColor2 || '',
@@ -838,7 +855,7 @@ function applyProfile(user, raw) {
 
 function getChannelsSummary(viewer = null) {
   const list = [];
-  for (const channel of channels.values()) {
+  for (const channel of channelExtras.ordered('voice', channels.values())) {
     if (!permissions.visible(viewer, channel)) continue;
     const userList = Array.from(channel.users.values()).map(publicUser);
     const sharers = userList.filter(u => u.isSharing).map(u => u.name);
@@ -846,6 +863,8 @@ function getChannelsSummary(viewer = null) {
     list.push({
       id: channel.id,
       name: channel.name,
+      ...channelExtras.placement('voice', channel.id),
+      isAfk: channelExtras.data.afk.channelId === channel.id,
       isDefault: channel.isDefault,
       createdBy: channel.createdBy,
       hasPassword: Boolean(channel.password),
@@ -869,6 +888,7 @@ function getChannelUsersList(channelId) {
 }
 
 function broadcastChannels() {
+  broadcastLayout();
   for (const socket of io.sockets.sockets.values()) {
     const list = getChannelsSummary(socket.data.user);
     socket.emit('channels-list', list);
@@ -964,7 +984,8 @@ app.get('/api/channels', (req, res) => {
 app.get('/api/chat-image/:file', (req, res) => {
   const file = req.params.file;
   if (!CHAT_IMAGE_ID_RE.test(file) || !canReadAsset(req)) return res.status(404).end();
-  res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  if (req.query.download === '1') res.attachment('teletela-imagem.' + file.split('.').pop());
   res.sendFile(path.join(CHAT_IMAGE_DIR, file), (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
@@ -973,7 +994,8 @@ app.get('/api/chat-image/:file', (req, res) => {
 app.get('/api/text-image/:file', (req, res) => {
   const file = req.params.file;
   if (!TEXT_IMAGE_FILE_RE.test(file) || !canReadAsset(req)) return res.status(404).end();
-  res.set({ 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  if (req.query.download === '1') res.attachment('teletela-imagem.' + file.split('.').pop());
   res.sendFile(path.join(TEXT_IMAGE_DIR, file), (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
@@ -1284,7 +1306,8 @@ io.on('connection', (socket) => {
     isDeafened: false,
     isSpeaking: false,
     streamQuality: '1080p60',
-    joinedAt: Date.now()
+    joinedAt: Date.now(),
+    lastActiveAt: Date.now(), afkSupported: false, afkEnabled: true
   };
 
   user.isAdmin = permissions.isOwner(user);
@@ -1428,6 +1451,66 @@ io.on('connection', (socket) => {
     try { saveChannels(true); } catch (err) { Object.assign(ch, previous); throw err; }
   }));
 
+  socket.emit('channel-layout', layoutFor(user));
+  const extraWrites = [];
+  const extraAction = action => safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    try {
+      if (!permissions.has(user, 'manageChannels')) throw new Error('Seu cargo não permite organizar os canais.');
+      const now = Date.now(); while (extraWrites.length && now - extraWrites[0] > 10000) extraWrites.shift();
+      if (extraWrites.length >= 30) throw new Error('Aguarde um pouco antes de organizar novamente.');
+      extraWrites.push(now);
+      const result = action(safeObject(raw));
+      broadcastChannels(); broadcastTextChannels();
+      cb({ success: true, ...result });
+    } catch (error) { cb({ success: false, error: error.message || 'Não consegui salvar.' }); }
+  });
+  const categoryFor = (id, type) => layoutFor(user).categories.find(c => c.id === id && (!type || c.type === type));
+  socket.on('category-save', extraAction(payload => {
+    if (payload.id && !categoryFor(payload.id, payload.type)) throw new Error('Categoria indisponível.');
+    return { categoryId: channelExtras.categorySave(payload) };
+  }));
+  socket.on('category-delete', extraAction(payload => {
+    const category = categoryFor(payload.id);
+    if (!category || category.id === category.type) throw new Error('A categoria padrão pode ser renomeada, mas não apagada.');
+    const map = category.type === 'voice' ? channels : textChannels;
+    if ([...map.values()].some(ch => channelExtras.placement(category.type, ch.id).categoryId === category.id)) throw new Error('Mova os canais antes de apagar esta categoria.');
+    channelExtras.change(() => { channelExtras.data.categories = channelExtras.data.categories.filter(c => c.id !== category.id); });
+  }));
+  socket.on('category-move', extraAction(payload => {
+    const category = categoryFor(payload.id), before = payload.beforeId ? categoryFor(payload.beforeId) : null;
+    if (!category || category.id === category.type || (payload.beforeId && (!before || before.type !== category.type || before.id === before.type || before.id === category.id))) throw new Error('Posição de categoria inválida.');
+    channelExtras.change(() => {
+      const list = channelExtras.data.categories.filter(c => c.id !== category.id);
+      const index = before ? list.findIndex(c => c.id === before.id) : list.length;
+      list.splice(index, 0, category); channelExtras.data.categories = list;
+    });
+  }));
+  socket.on('channel-move', extraAction(payload => {
+    const type = payload.type, map = type === 'voice' ? channels : type === 'text' ? textChannels : null;
+    const ch = map?.get(payload.channelId), category = categoryFor(payload.categoryId, type), before = payload.beforeId ? map?.get(payload.beforeId) : null;
+    if (!ch || !permissions.visible(user, ch) || !category || (payload.beforeId && (!before || before === ch || !permissions.visible(user, before) || channelExtras.placement(type,before.id).categoryId !== category.id))) throw new Error('Canal ou posição indisponível.');
+    channelExtras.change(() => {
+      const list = channelExtras.ordered(type, [...map.values()].filter(item => item.id !== ch.id && channelExtras.placement(type,item.id).categoryId === category.id));
+      const index = before ? list.findIndex(item => item.id === before.id) : list.length;
+      list.splice(index,0,ch);
+      list.forEach((item,position) => { channelExtras.data.placements[`${type}:${item.id}`] = { categoryId: category.id, position }; });
+    });
+  }));
+  socket.on('afk-settings', extraAction(payload => {
+    const destination = payload.channelId ? channels.get(payload.channelId) : null;
+    if (payload.channelId && (!destination || destination.isDefault || destination.password || destination.access?.private || !permissions.visible(user,destination))) throw new Error('Escolha um canal de voz público, sem senha, diferente do Geral.');
+    if (![5,10,15,30,60].includes(payload.minutes)) throw new Error('Escolha um tempo de ausência válido.');
+    channelExtras.change(() => { channelExtras.data.afk = { channelId: destination?.id || '', minutes: payload.minutes }; });
+    for (const client of io.sockets.sockets.values()) client.data.user.lastActiveAt = Date.now();
+  }));
+  socket.on('idle-activity', safeHandler(raw => {
+    const payload = safeObject(raw);
+    if (typeof payload.enabled !== 'boolean') return;
+    user.afkSupported = true; user.afkEnabled = payload.enabled;
+    if (payload.active === true && Date.now() - user.lastActiveAt > 4000) user.lastActiveAt = Date.now();
+  }));
+
   // Entrou (com senha, chave de membro ou sala aberta): ganha a chave pra próxima vez
   const sendMemberKey = (s) => {
     const pid = s.handshake.auth?.profileId;
@@ -1544,6 +1627,7 @@ io.on('connection', (socket) => {
     if (!canDeleteChannel(user, channel)) {
       return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     }
+    channelExtras.removeChannel('voice', channel.id);
     // Avisa antes: quem está no canal sai da call sozinho no app
     for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
     for (const memberId of [...channel.users.keys()]) {
@@ -1705,6 +1789,7 @@ io.on('connection', (socket) => {
     }
 
     const channel = channels.get(cleanChannelId);
+    user.lastActiveAt = Date.now();
     const now = Date.now();
     if (channel.users.size === 0 || !channel.callStartedAt) channel.callStartedAt = now;
     user.voiceJoinedAt = now;
@@ -1751,6 +1836,7 @@ io.on('connection', (socket) => {
   const handleStateUpdate = safeHandler((rawPayload) => {
     if (!user.channelId || !isPlainObject(rawPayload)) return;
     const channelId = user.channelId;
+    if (rawPayload.isSpeaking === true) user.lastActiveAt = Date.now();
 
     let presenceChanged = false;
 
@@ -1991,8 +2077,9 @@ io.on('connection', (socket) => {
       userId: socket.id,
       profileId: user.profileId,
       replyTo: replySnippet({ scope: 'call', channel }, rawPayload.replyTo),
-      senderName: user.name,
-      userName: user.name,
+      senderName: chatName(user, 'call', user.channelId),
+      userName: chatName(user, 'call', user.channelId),
+      profileName: user.name,
       userColor: user.color,
       userNameColor: user.nameColor || '',
       userNameColor2: user.nameColor2 || '',
@@ -2001,6 +2088,7 @@ io.on('connection', (socket) => {
       timestamp: Date.now()
     };
 
+    user.lastActiveAt = Date.now();
     indexAssets(channel, [chatMsg], 'voice');
     channel.messages.push(chatMsg);
     if (channel.messages.length > 50) {
@@ -2021,6 +2109,28 @@ io.on('connection', (socket) => {
     if (payload.channelId && payload.channelId !== user.channelId) return null;
     return channel ? { scope: 'call', channel } : null;
   };
+  const nicknameWrites = [];
+  socket.on('chat-nickname-get', safeHandler((raw, callback) => {
+    const payload = safeObject(raw), cb = safeCallback(callback);
+    if (!['call','text'].includes(payload.scope) || typeof payload.channelId !== 'string' || !chatTarget(payload)) return cb({ success: false, error: 'Chat indisponível.' });
+    cb({ success: true, nickname: channelExtras.nickname(user.accessId,payload.scope,payload.channelId), profileName: user.name });
+  }));
+  socket.on('chat-nickname-set', safeHandler((raw, callback) => {
+    const payload = safeObject(raw), cb = safeCallback(callback);
+    if (!['call','text'].includes(payload.scope) || !chatTarget(payload) || typeof payload.channelId !== 'string') return cb({ success: false, error: 'Chat indisponível.' });
+    try {
+      const now = Date.now(); while (nicknameWrites.length && now - nicknameWrites[0] > 10000) nicknameWrites.shift();
+      if (nicknameWrites.length >= 10) throw new Error('Aguarde antes de mudar o apelido novamente.');
+      nicknameWrites.push(now);
+      channelExtras.setNickname(user.accessId,payload.scope,payload.channelId,payload.nickname);
+      for (const client of io.sockets.sockets.values()) if (client.data.user.accessId === user.accessId) {
+        client.emit('chat-nickname-changed', { scope: payload.scope, channelId: payload.channelId, nickname: payload.nickname.trim() });
+        if (payload.scope === 'call' && client.data.user.channelId === payload.channelId) emitVisibleUserEvent('user-profile-updated', { userId: client.id, user: publicUser(client.data.user) }, client.data.user);
+      }
+      broadcastChannels(); cb({ success: true });
+    } catch (error) { cb({ success: false, error: error.message }); }
+  }));
+
   const findChatMessage = (target, id) => {
     if (typeof id !== 'string') return null;
     if (target.scope === 'call') return target.channel.messages.find((m) => m.id === id) || null;
@@ -2282,6 +2392,7 @@ io.on('connection', (socket) => {
     const ch = typeof id === 'string' ? textChannels.get(id) : null;
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
     if (!canDeleteChannel(user, ch)) return cb({ success: false, error: 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
+    channelExtras.removeChannel('text', ch.id);
     textChannels.delete(ch.id);
     deleteTextChannelData(ch);
     saveChannels();
@@ -2310,7 +2421,7 @@ io.on('connection', (socket) => {
     const matches = [];
     for (let i = before - 1; i >= 0 && matches.length < 31; i--) {
       const msg = all[i];
-      if (normalize(msg.text).includes(needle) && normalize(msg.userName || msg.senderName).includes(person)
+      if (normalize(msg.text).includes(needle) && (normalize(msg.userName || msg.senderName).includes(person) || normalize(msg.profileName).includes(person))
         && (!Number.isFinite(since) || msg.timestamp >= since)) matches.push(msg);
     }
     cb({ success: true, messages: matches.slice(0, 30), hasMore: matches.length > 30 });
@@ -2354,13 +2465,14 @@ io.on('connection', (socket) => {
     return false;
   };
 
-  const textMessageBase = (ch) => ({
+  const textMessageBase = (ch, scope = 'text') => ({
     id: `msg-${Date.now()}-${randomUUID().slice(0, 8)}`,
     channelId: ch.id,
     senderId: socket.id,
     userId: socket.id,
     profileId: user.profileId,
-    userName: user.name,
+    userName: chatName(user, scope, ch.id),
+      profileName: user.name,
     userColor: user.color,
     userNameColor: user.nameColor || '',
     userNameColor2: user.nameColor2 || '',
@@ -2369,6 +2481,7 @@ io.on('connection', (socket) => {
   });
 
   const publishTextMessage = (ch, msg, cb) => {
+    user.lastActiveAt = Date.now();
     try {
       appendTextMessage(ch, msg);
     } catch (err) {
@@ -2436,7 +2549,7 @@ io.on('connection', (socket) => {
       try {
         file = storage.save(prepared.data, prepared.ext);
         const msg = {
-          ...textMessageBase(channel),
+          ...textMessageBase(channel, isText ? 'text' : 'call'),
           replyTo: replySnippet(isText ? { scope: 'text', ch: channel } : { scope: 'call', channel }, payload.replyTo),
           text: typeof payload.text === 'string' ? payload.text.trim().slice(0, isText ? MAX_TEXT_LENGTH : 600) : '',
           attachment: { url: `/api/${scope}-file/${file}`, name: prepared.name, mime: prepared.mime, size: prepared.data.length }
@@ -2446,7 +2559,7 @@ io.on('connection', (socket) => {
           emitText(channel, 'text-message', msg);
         } else {
           lastChatImageAt = Date.now();
-          msg.senderName = user.name;
+          msg.senderName = chatName(user, 'call', user.channelId);
           indexAssets(channel, [msg], 'voice');
           channel.messages.push(msg);
           if (channel.messages.length > 50) channel.messages.shift();
@@ -2493,8 +2606,9 @@ io.on('connection', (socket) => {
       userId: socket.id,
       profileId: user.profileId,
       replyTo: replySnippet({ scope: 'call', channel }, payload.replyTo),
-      senderName: user.name,
-      userName: user.name,
+      senderName: chatName(user, 'call', user.channelId),
+      userName: chatName(user, 'call', user.channelId),
+      profileName: user.name,
       userColor: user.color,
       userNameColor: user.nameColor || '',
       userNameColor2: user.nameColor2 || '',
@@ -2522,7 +2636,8 @@ io.on('connection', (socket) => {
     io.to(user.channelId).emit('reaction', {
       channelId: user.channelId,
       userId: socket.id,
-      userName: user.name,
+      userName: chatName(user, 'call', user.channelId),
+      profileName: user.name,
       emoji: cleanEmoji
     });
   }));
@@ -2570,7 +2685,8 @@ function leaveCurrentChannel(socket) {
 
     const leftPayload = {
       userId: socket.id,
-      userName: user.name,
+      userName: chatName(user, 'call', user.channelId),
+      profileName: user.name,
       name: user.name,
       channelId,
       users: getChannelUsersList(channelId),
@@ -2648,6 +2764,22 @@ function getLocalIPs() {
   return ips;
 }
 
+function sweepAfk(now = Date.now()) {
+  const setting = channelExtras.data.afk, destination = channels.get(setting.channelId);
+  if (!destination || destination.password || destination.access?.private || destination.isDefault) return;
+  for (const client of io.sockets.sockets.values()) {
+    const user = client.data.user;
+    if (!user?.afkSupported || !user.afkEnabled || !user.channelId || user.channelId === destination.id || !permissions.visible(user,destination)) continue;
+    if (user.isSpeaking || user.isSharing || user.isCameraOn || user.watching?.length) { user.lastActiveAt = now; continue; }
+    if (now - user.lastActiveAt < setting.minutes * 60000) continue;
+    const fromChannelId = user.channelId;
+    leaveCurrentChannel(client);
+    client.emit('afk-move', { channelId: destination.id, channelName: destination.name, fromChannelId });
+  }
+}
+const afkTimer = setInterval(sweepAfk, 10000); afkTimer.unref();
+server.on('close', () => clearInterval(afkTimer));
+
 function startServer(port = PORT, host = '0.0.0.0') {
   return new Promise((resolve) => {
     server.listen(port, host, () => {
@@ -2688,4 +2820,4 @@ if (isDirectRun) {
   }
 }
 
-export { app, server, io, channels, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
+export { app, server, io, channels, channelExtras, sweepAfk, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
