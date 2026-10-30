@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   stopWinAudio: () => ipcRenderer.invoke('stop-win-audio'),
   // Preferências (perfil, volumes por pessoa, atalhos) guardadas no app, não no link da sala
   getPrefs: () => ipcRenderer.invoke('prefs-get'),
+  getIdleSeconds: () => ipcRenderer.invoke('system-idle-seconds'),
   getAutostart: () => ipcRenderer.invoke('autostart-get'),
   setAutostart: enabled => ipcRenderer.invoke('autostart-set', enabled),
   getGameActivity: () => ipcRenderer.invoke('get-game-activity'),

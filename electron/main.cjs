@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, powerMonitor, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -716,6 +716,10 @@ function setupPermissionsAndCapture() {
 
   const localSettings = event => event.senderFrame && event.senderFrame === event.sender.mainFrame
     && (event.senderFrame.url.startsWith('telinha://app/') || event.senderFrame.url === pathToFileURL(CONNECT_PAGE).href);
+  ipcMain.handle('system-idle-seconds', event => {
+    if (!localSettings(event) || (process.platform === 'linux' && process.env.WAYLAND_DISPLAY)) return null;
+    try { return powerMonitor.getSystemIdleTime(); } catch { return null; }
+  });
   ipcMain.handle('autostart-get', event => localSettings(event) ? autostart.get() : { supported: false, enabled: false });
   ipcMain.handle('autostart-set', (event, enabled) => localSettings(event) ? autostart.set(enabled) : { supported: false, enabled: false });
   ipcMain.handle('prefs-get', () => loadPrefs());

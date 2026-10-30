@@ -33,9 +33,12 @@ import { setupDice } from './dice.js';
 import { setupStageSocial } from './stage-social.js';
 import { applyAppearance, setupPersonalization } from './personalization.js';
 import { setupTransmissionDiagnostics } from './transmission-diagnostics.js';
+import { setupChannelOrganization } from './channel-organization.js';
+import { setupChatExtras } from './chat-extras.js';
 import { setupMessageSearch } from './message-search.js';
 import { setupAccounts, accountSession, initialAccountProfile, accountProfileSnapshot } from './accounts.js';
 
+let channelOrganizer = null;
 let musicUI = null;
 let diceUI = null;
 let stageSocialUI = null;
@@ -650,6 +653,7 @@ const handleChannelsSummary = (channelsList) => {
     appState.channels.set(ch.id, {
       id: ch.id,
       name: ch.name,
+      categoryId: ch.categoryId || 'voice', position: ch.position, isAfk: ch.isAfk,
       isDefault: ch.isDefault,
       createdBy: ch.createdBy || null,
       hasPassword: Boolean(ch.hasPassword),
@@ -673,6 +677,11 @@ const handleChannelsSummary = (channelsList) => {
 
 // O servidor manda cada evento com dois nomes (compatibilidade). Escutar os dois
 // rodava tudo duas vezes: avisos repetidos e ofertas de vídeo criadas em dobro.
+socket.on('channel-layout', payload => {
+  if (!payload || !Array.isArray(payload.categories)) return;
+  appState.channelLayout = payload;
+  renderChannelsTree(); renderTextChannels(); channelOrganizer?.refresh();
+});
 socket.on('channels-list', handleChannelsSummary);
 
 socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, recentMessages, soundSeed }) => {
@@ -1331,14 +1340,9 @@ function renderChannelsTree() {
   const defaultOrder = ['geral'];
   const channelIds = Array.from(appState.channels.keys());
 
-  // Sort channels: default first in standard order, then custom by creation
-  channelIds.sort((a, b) => {
-    const idxA = defaultOrder.indexOf(a);
-    const idxB = defaultOrder.indexOf(b);
-    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-    if (idxA !== -1) return -1;
-    if (idxB !== -1) return 1;
-    return a.localeCompare(b);
+  channelIds.sort((a,b) => {
+    const first = appState.channels.get(a), second = appState.channels.get(b);
+    return (first.position ?? 1e9) - (second.position ?? 1e9) || (a === 'geral' ? -1 : b === 'geral' ? 1 : a.localeCompare(b));
   });
 
   // Ensure default channels exist in appState if not yet received
@@ -1364,7 +1368,7 @@ function renderChannelsTree() {
   channelIds.forEach((chId) => {
     const ch = appState.channels.get(chId);
     if (!ch) return;
-    if (collapsed && chId !== appState.currentChannelId) return;
+    if (collapsed && (!ch.categoryId || ch.categoryId === 'voice') && chId !== appState.currentChannelId) return;
 
     const isActive = chId === appState.currentChannelId;
     const hasUnread = appState.unreadChannels.has(chId);
@@ -1389,7 +1393,7 @@ function renderChannelsTree() {
 
     row.innerHTML = `
       <span class="channel-speaker-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : icon}</span>
-      <span class="channel-name">${escapeHtml(ch.name)}${ch.isPrivate ? ' <span class="badge-role">Restrito</span>' : ''}</span>
+      <span class="channel-name">${escapeHtml(ch.name)}${ch.isAfk ? ' <span class="badge-role">Ausentes</span>' : ''}${ch.isPrivate ? ' <span class="badge-role">Restrito</span>' : ''}</span>
       ${userCount > 0 && ch.callStartedAt ? `<span class="channel-call-timer" data-call-timer="${Number(ch.callStartedAt)}" title="Tempo ativo da call">${formatCallClock(ch.callStartedAt)}</span>` : ''}
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
@@ -1512,6 +1516,7 @@ function renderChannelsTree() {
   });
   renderStreamViewers();
   musicUI?.renderBot();
+  channelOrganizer?.decorate('voice', treeContainer);
 }
 
 function updateTopBar() {
@@ -1952,7 +1957,7 @@ function buildChatMessage(msg) {
     <div class="chat-msg-body">
       ${replyRefHtml(msg.replyTo)}
       <div class="chat-msg-header">
-        <span class="chat-author" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
+        <span class="chat-author" title="${escapeHtml(msg.profileName || msg.userName || msg.senderName)}" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
         ${msg.pinned ? `<span class="chat-pinned" title="Fixada por ${escapeHtml(msg.pinned.by || '')}">${ACTION_ICONS.pin}</span>` : ''}
       </div>
@@ -2705,10 +2710,11 @@ function linkifyText(text) {
 
 function chatAssetUrl(url) { return `${SERVER_URL}${url}?access=${encodeURIComponent(appState.assetKey || '')}`; }
 
+const IMAGE_DOWNLOAD_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>';
 function chatImageHtml(image) {
   if (!image || typeof image.url !== 'string' || !/^\/api\/(chat|text)-image\/[a-f0-9-]+\.(png|jpg|webp|gif)$/.test(image.url)) return '';
   const size = image.width && image.height ? ` width="${Number(image.width)}" height="${Number(image.height)}"` : '';
-  return `<img class="chat-image" src="${escapeHtml(chatAssetUrl(image.url))}"${size} alt="Imagem" loading="lazy" />`;
+  return `<span class="chat-image-wrap"><img class="chat-image" src="${escapeHtml(chatAssetUrl(image.url))}"${size} alt="Imagem" loading="lazy" /><a class="chat-image-download" href="${escapeHtml(chatAssetUrl(image.url))}&amp;download=1" download aria-label="Baixar imagem">${IMAGE_DOWNLOAD_SVG}<span>Baixar imagem</span></a></span>`;
 }
 
 function chatAttachmentHtml(attachment) {
@@ -2848,6 +2854,9 @@ function setupChatImages() {
     if (!img || !viewer || !viewerImg) return;
     viewerImg.removeAttribute('style');
     viewerImg.src = img.src;
+    const download = $('#image-viewer-download'); download.href = img.closest('.chat-image-wrap').querySelector('a').href; download.classList.remove('hidden');
+    viewer.dataset.chatScope = appState.textView ? 'text' : 'call'; viewer.dataset.chatChannel = appState.textView || appState.currentChannelId;
+    mountStageOverlay(viewer);
     viewer.setAttribute('aria-label', 'Imagem do chat');
     viewer.classList.remove('avatar-view');
     viewer.classList.remove('hidden');
@@ -2860,6 +2869,7 @@ function setupChatImages() {
       e.stopPropagation();
       viewerImg.style.cssText = imageCropStyle(JSON.parse(bigImg.dataset.crop || '{}'));
       viewerImg.src = bigImg.src;
+      $('#image-viewer-download').classList.add('hidden'); delete viewer.dataset.chatChannel;
       viewer.setAttribute('aria-label', 'Foto de perfil ampliada');
       viewer.classList.add('avatar-view');
       viewer.classList.remove('hidden');
@@ -2875,7 +2885,10 @@ function setupChatImages() {
   $('#modal-user-profile')?.addEventListener('click', (e) => {
     if (e.target.id === 'modal-user-profile') e.target.classList.add('hidden');
   });
-  viewer?.addEventListener('click', () => viewer.classList.add('hidden'));
+  viewer?.addEventListener('click', event => { if (!event.target.closest('.image-viewer-actions')) viewer.classList.add('hidden'); });
+  $('#image-viewer-close').addEventListener('click', () => viewer.classList.add('hidden'));
+  const hideRevokedImage = () => { if (viewer?.dataset.chatChannel && (viewer.dataset.chatScope === 'text' ? !appState.textChannels.has(viewer.dataset.chatChannel) : appState.currentChannelId !== viewer.dataset.chatChannel)) { viewer.classList.add('hidden'); viewerImg.removeAttribute('src'); $('#image-viewer-download').removeAttribute('href'); } };
+  socket.on('text-channels', hideRevokedImage); window.addEventListener('teletela-call-left', hideRevokedImage);
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     // Esc fecha primeiro a foto grande, depois o perfil
@@ -2945,7 +2958,7 @@ function renderTextChannels() {
     const active = appState.textView === ch.id;
     const unread = !active && ch.lastMessageAt > textLastSeen(ch.id);
     // Recolhido: só o canal aberto e os que têm mensagem nova
-    if (prefs.collapsedText && !active && !unread && !appState.textMentions.has(ch.id)) continue;
+    if (prefs.collapsedText && (!ch.categoryId || ch.categoryId === 'text') && !active && !unread && !appState.textMentions.has(ch.id)) continue;
     li.className = `channel-item ${active ? 'channel-active' : ''} ${unread ? 'channel-unread' : ''}`;
     li.dataset.textChannelId = ch.id;
     li.innerHTML = `
@@ -2977,6 +2990,7 @@ function renderTextChannels() {
     });
     tree.appendChild(li);
   }
+  channelOrganizer?.decorate('text', tree);
   renderServerHome();
 }
 
@@ -7812,6 +7826,9 @@ function initApp() {
   setupChatAndReactions();
   setupChatImages();
   setupTextChannels();
+  channelOrganizer = setupChannelOrganization({ socket, state: appState, prefs, savePrefs, showToast, mountStageOverlay, renderVoice: renderChannelsTree, renderText: renderTextChannels });
+  channelOrganizer.refresh();
+  setupChatExtras({ socket, state: appState, prefs, savePrefs, showToast, mountStageOverlay, switchChannel });
   setupMessageSearch({ socket, appState, showToast, mountStageOverlay });
   setupCategoryCollapse();
   setupChatMessageActions();

@@ -185,14 +185,33 @@ Na branch `melhoria/inicializacao-busca-e-diagnostico`:
   Mostra resolução, FPS, taxa de vídeo, perda e latência reais enquanto transmite ou assiste.
   Via SFU, mede o trecho entre você e o servidor. Dados ausentes aparecem como indisponíveis.
 
+Na branch **`melhoria/categorias-apelidos-e-ausentes`**, também em teste local:
+
+- **Categorias e ordem:** quem gerencia canais usa o botão **Organizar categorias e
+  ausentes**, no cabeçalho da lista. Dá para renomear “Canais de Voz”/“Canais de Texto” e
+  criar grupos como “RPG” e “Jogos”. Arraste a alça pontilhada do canal para mudar a posição
+  ou solte no título de um grupo; clicar na alça abre uma alternativa para teclado/celular.
+  A ordem muda para todos; as permissões continuam por canal.
+- **Apelido por chat:** botão **Meu apelido neste chat**, acima do campo de mensagem.
+  Não muda seu nome de perfil; vazio restaura o nome normal. Vale nas próximas mensagens
+  e, em canais de voz, também na lista de participantes. O histórico antigo mantém o nome
+  usado ao enviar; passar o mouse no autor mostra o nome original.
+- **Baixar imagens:** clique em **Baixar imagem** abaixo dela ou abra a imagem e use o
+  botão no canto. Downloads também respeitam o acesso aos canais privados.
+- **Ausentes:** no painel de organização, escolha/crie um canal público sem senha e o
+  tempo de inatividade. Começa desligado. Falar, transmitir ou assistir mantém você na call.
+  Em **Configurações → Som**, você pode desligar o movimento automático só para você.
+  No Wayland/navegador, a atividade conta dentro do Teletela; no Windows/X11, também fora
+  da janela. É preciso escolher um canal manualmente para voltar de Ausentes.
+
 A branch **`experimento/personalizacao-local`** acrescenta um teste de **Personalização**
 em Configurações → Aparência, mantendo as melhorias anteriores como base. Escolha uma cor
 pronta ou própria, envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade.
 Tudo fica neste aparelho, funciona com os três temas e continua após reabrir.
 **Restaurar personalização** remove o fundo e a cor próprios, preservando tema e perfil.
 Para experimentar só no seu PC, selecione essa branch e rode `npm run app`.
-Para voltar às melhorias sem personalização, use `melhoria/inicializacao-busca-e-diagnostico`.
-Nenhuma dessas branches foi publicada.
+Para voltar às melhorias sem personalização, use `melhoria/categorias-apelidos-e-ausentes`.
+Esta branch também inclui categorias, apelidos, downloads e ausentes. Nenhuma dessas branches foi publicada.
 
 Para testar a busca antes do deploy, suba um servidor local com dados separados:
 `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-melhorias npm start`.

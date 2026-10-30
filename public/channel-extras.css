@@ -1,0 +1,22 @@
+#modal-chat-nickname, #modal-channel-organization, #modal-channel-move { z-index: 1750; }
+#modal-channel-organization .tools-form { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--border-subtle); }
+.category-editor { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px; background: var(--bg-secondary); border-radius: var(--radius-md); }
+.category-editor input { flex: 1; min-width: 120px; }
+.category-editor small { color: var(--text-muted); }
+.channel-category { list-style: none; }
+.custom-category-header { width: 100%; text-align: left; }
+.channel-order-handle { display: flex; flex: 0 0 18px; padding: 0; width: 18px; color: var(--text-muted); cursor: grab; }
+.channel-order-handle .icon-svg { width: 16px; height: 18px; }
+.channel-order-target { outline: 2px solid var(--accent-brand); outline-offset: -2px; }
+.channel-order-handle:focus-visible, .chat-nickname-button:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 2px; }
+.chat-nickname-button { display: flex; gap: 6px; align-items: center; padding: 6px 18px; font-size: 12px; color: var(--text-muted); text-align: left; }
+.chat-nickname-button .icon-svg { width: 14px; height: 14px; }
+.chat-image-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.chat-image-download { display: inline-flex; gap: 6px; align-items: center; color: var(--text-link); font-size: 12px; text-decoration: none; }
+.chat-image-download .icon-svg { width: 16px; height: 16px; }
+.image-viewer-actions { position: absolute; top: 20px; right: 20px; display: flex; gap: 10px; z-index: 2; }
+.image-viewer-actions a { text-decoration: none; background: var(--bg-primary); color: var(--text-normal); }
+#modal-chat-nickname .form-input { width: 100%; margin-top: 8px; }
+#modal-chat-nickname p { margin-bottom: 12px; }
+#modal-channel-organization .personal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 760px) { .channel-order-handle { width: 26px; flex-basis: 26px; min-height: 36px; align-items: center; justify-content: center; } .chat-nickname-button { min-height: 36px; } }

@@ -39,7 +39,7 @@ fi
 
 echo "== Empacotando o servidor (sem as dependências do app desktop)"
 mkdir -p "$stage/app"
-cp -r server.js permission-store.js account-store.js accounts-protocol.js dice-store.js package.json package-lock.json public music "$stage/app/"
+cp -r server.js channel-extras.js permission-store.js account-store.js accounts-protocol.js dice-store.js package.json package-lock.json public music "$stage/app/"
 mkdir -p "$stage/app/scripts"
 cp scripts/configurar-dono.mjs "$stage/app/scripts/"
 (cd "$stage/app" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --silent)
