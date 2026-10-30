@@ -176,6 +176,7 @@ Na branch `melhoria/inicializacao-busca-e-diagnostico`:
 - **Abrir com o PC:** em Configurações → Aparência, marque **Abrir o Teletela ao iniciar
   o PC**. Disponível no Windows instalado e Linux; desligado por padrão e sem entrar na call.
   No Linux, mantenha o AppImage numa pasta fixa; se mudar de lugar, reative a opção.
+  No Hyprland, configura também o início da sessão, com backup e remoção ao desmarcar.
 - **Buscar mensagens:** use a lupa no chat (também no cabeçalho do celular), escolha o
   canal e filtre por texto, pessoa ou data inicial. **Mais resultados** carrega os anteriores;
   **Ver contexto** mostra as mensagens ao redor. Canais de texto consultam todo o histórico

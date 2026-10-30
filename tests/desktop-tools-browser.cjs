@@ -23,7 +23,9 @@ let failPrefs = false;
 let backend; const windows = [], errors = [];
 const timeout = setTimeout(() => { console.error('Tempo esgotado'); app.exit(1); }, 65000);
 app.whenReady().then(async () => {
-  const autostart = require('../electron/autostart.cjs').createAutostart({ app, env: { XDG_CONFIG_HOME: path.join(directory, 'config') } });
+  fs.mkdirSync(path.join(directory, 'config/hypr'), { recursive: true });
+  fs.writeFileSync(path.join(directory, 'config/hypr/hyprland.conf'), 'exec-once = waybar\n');
+  const autostart = require('../electron/autostart.cjs').createAutostart({ app, env: { XDG_CONFIG_HOME: path.join(directory, 'config'), XDG_CURRENT_DESKTOP: 'Hyprland' } });
   ipcMain.handle('autostart-get', () => autostart.get()); ipcMain.handle('autostart-set', (_event, enabled) => autostart.set(enabled));
   const preferences = new Map();
   ipcMain.handle('prefs-get', event => preferences.get(event.sender.id) || {});
@@ -48,6 +50,8 @@ app.whenReady().then(async () => {
   await until(first, '!document.querySelector("#modal-settings").classList.contains("hidden")'); await pause(200);
   await fs.promises.writeFile('/tmp/teletela-inicializacao.png', (await first.webContents.capturePage()).toPNG());
   await click(first, '#check-autostart'); await until(first, '!document.querySelector("#check-autostart").disabled && !document.querySelector("#check-autostart").checked'); assert(!autostart.get().enabled);
+  assert.equal(fs.readFileSync(path.join(directory,'config/hypr/hyprland.conf'),'utf8'),'exec-once = waybar\n');
+
   if (process.env.TEST_PERSONALIZATION === '1') {
     await click(first, '[data-personal-accent="#047857"]');
     await until(first, 'document.documentElement.style.getPropertyValue("--accent-brand") === "#047857"');

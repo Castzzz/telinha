@@ -823,7 +823,17 @@ async function createWindow() {
   });
 }
 
+// Evita abrir duas janelas se o ambiente disparar tanto XDG quanto exec-once.
+const hasInstanceLock = app.requestSingleInstanceLock();
+if (!hasInstanceLock) app.quit();
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show(); mainWindow.focus();
+});
+
 app.whenReady().then(() => {
+  if (!hasInstanceLock) return;
   handleAppProtocol();
   setupPermissionsAndCapture();
   setupLauncherIpc();

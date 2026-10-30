@@ -40,3 +40,26 @@ test('falha ao gravar retorna o estado real; versão portátil não altera o sis
   const portable = createAutostart({ app: { isPackaged: true }, platform: 'win32', env: { PORTABLE_EXECUTABLE_FILE: '/tmp/app.exe' } });
   assert.equal(portable.set(true).supported, false);
 });
+
+test('Hyprland: instala exec-once reversível, preserva symlink e configuração e escapa argumentos do shell', t => {
+  const { execFileSync } = createRequire(import.meta.url)('node:child_process');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'teletela-hyprland-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(home, 'hypr'));
+  const original = 'monitor = ,preferred,auto,1\nexec-once = waybar\n', real = path.join(home, 'original.conf'), link = path.join(home, 'hypr/hyprland.conf');
+  fs.writeFileSync(real, original); fs.symlinkSync(real, link);
+  const output = path.join(home, 'argumento'), executable = path.join(home, "app ' teste");
+  fs.writeFileSync(executable, '#!/bin/sh\nprintf "%s" "$1" > ' + "'" + output + "'\n", { mode: 0o700 });
+  const entryPath = 'nome com espaço e $HOME e `comando`';
+  const manager = createAutostart({ app: { isPackaged: false }, platform: 'linux', env: { XDG_CURRENT_DESKTOP: 'Hyprland', XDG_CONFIG_HOME: home }, executable, home, entryPath });
+  assert.equal(manager.set(true).enabled, true); assert(fs.lstatSync(link).isSymbolicLink());
+  assert.match(fs.readFileSync(real, 'utf8'), /exec-once = \/bin\/sh/);
+  assert.equal(fs.readFileSync(real + '.teletela-backup', 'utf8'), original);
+  execFileSync('/bin/sh', [path.join(home, 'autostart/telinha-hyprland.sh')]);
+  assert.equal(fs.readFileSync(output, 'utf8'), entryPath, 'shell não expande conteúdo dos caminhos');
+  manager.set(true); assert.equal(fs.readFileSync(real, 'utf8').split('# >>> Teletela').length, 2, 'não duplica blocos');
+  fs.appendFileSync(real, 'general { border_size = 2 }\n');
+  assert.equal(manager.set(false).enabled, false);
+  assert.equal(fs.readFileSync(real, 'utf8'), original + 'general { border_size = 2 }\n');
+  assert(fs.lstatSync(link).isSymbolicLink());
+});
