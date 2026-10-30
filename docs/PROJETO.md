@@ -1236,7 +1236,7 @@ Referência: [Hyprland: exec-once](https://wiki.hypr.land/0.53.0/Configuring/Key
 ### Experimento de personalização local (30/10/2026)
 
 Branch `experimento/personalizacao-local`, derivada do commit das melhorias de
-inicialização/busca/diagnóstico. A branch dessas melhorias não contém o experimento;
+inicialização/busca/diagnóstico. Inicialmente a personalização ficou separada;
 `main` permanece como estava. Sem release/deploy ou alteração de versão.
 
 - `public/personalization.js` / `.css`: seção Personalização em Aparência, seis cores
@@ -1262,8 +1262,8 @@ Todos os dados e a entrada de autostart desses testes ficam em diretórios tempo
 
 ### Categorias, ordem, apelidos, download e ausentes (30/10/2026, teste local)
 
-Branch `melhoria/categorias-apelidos-e-ausentes`, baseada nas melhorias anteriores, sem
-incluir o experimento de personalização e sem release/deploy. Os dados antigos continuam
+Branch `melhoria/categorias-apelidos-e-ausentes`, baseada nas melhorias anteriores. A
+personalização foi integrada posteriormente a pedido do dono, sem release/deploy. Os dados antigos continuam
 válidos: os canais começam nos grupos padrão até alguém organizar.
 
 - `channel-extras.js` persiste `channel-extras.json` dentro de `TELINHA_DATA_DIR`, via
@@ -1324,8 +1324,9 @@ real de PNG, movimento para Ausentes e interface nos três temas/em 390 px.
 Referência para inatividade nativa: [Electron powerMonitor](https://www.electronjs.org/docs/latest/api/power-monitor#powermonitorgetsystemidletime).
 
 As melhorias de categorias/apelidos/ausentes também foram integradas na branch
-`experimento/personalizacao-local` para testar tudo junto, mantendo o experimento fora
-da branch `melhoria/categorias-apelidos-e-ausentes` e da `main`.
+`experimento/personalizacao-local` para testar tudo junto. Depois, a pedido do dono,
+a personalização também foi integrada na branch `melhoria/categorias-apelidos-e-ausentes`.
+A `main` permanece sem essas mudanças.
 
 
 #### Ajuste dos apelidos para voz
@@ -1340,3 +1341,12 @@ Electron: menu do próprio participante, opção oculta no perfil alheio, cartã
 nome recebido pela outra pessoa e persistência ao recarregar/entrar na call novamente.
 Criação/nomes/ordem das categorias exigem deploy do servidor; o desktop instalado também
 precisa de release para receber a interface. O teste local usa servidor e interface novos.
+
+
+### Atualizações reunidas (30/10/2026)
+
+A pedido do dono, `experimento/personalizacao-local` foi integrada por fast-forward em
+`melhoria/categorias-apelidos-e-ausentes`, que ficou selecionada para os testes de tudo junto.
+Inclui inicialização com o PC, busca, diagnóstico de vídeo, categorias/ordenação, apelido
+apenas na voz, downloads de imagens, ausentes e personalização. Nenhuma branch foi apagada;
+a `main` não foi alterada e não houve push, release ou deploy.

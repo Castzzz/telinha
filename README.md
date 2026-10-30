@@ -205,14 +205,14 @@ Na branch **`melhoria/categorias-apelidos-e-ausentes`**, também em teste local:
   No Wayland/navegador, a atividade conta dentro do Teletela; no Windows/X11, também fora
   da janela. É preciso escolher um canal manualmente para voltar de Ausentes.
 
-A branch **`experimento/personalizacao-local`** acrescenta um teste de **Personalização**
+A branch **`melhoria/categorias-apelidos-e-ausentes`** reúne as atualizações, incluindo **Personalização**
 em Configurações → Aparência, mantendo as melhorias anteriores como base. Escolha uma cor
 pronta ou própria, envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade.
 Tudo fica neste aparelho, funciona com os três temas e continua após reabrir.
 **Restaurar personalização** remove o fundo e a cor próprios, preservando tema e perfil.
 Para experimentar só no seu PC, selecione essa branch e rode `npm run app`.
-Para voltar às melhorias sem personalização, use `melhoria/categorias-apelidos-e-ausentes`.
-Esta branch também inclui categorias, apelidos, downloads e ausentes. Nenhuma dessas branches foi publicada.
+A antiga branch `experimento/personalizacao-local` foi integrada nesta branch.
+Ela inclui inicialização com o PC, busca, diagnóstico, categorias, apelidos de voz, downloads e ausentes. Ainda sem release ou deploy.
 
 Para testar a busca antes do deploy, suba um servidor local com dados separados:
 `PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-melhorias npm start`.
