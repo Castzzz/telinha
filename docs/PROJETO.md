@@ -12,7 +12,7 @@ dados de RPG, início/ícones renovados, chat central e contas opcionais. O APK 
 a atualização e permite alternar câmera frontal/traseira. Magic fica na branch separada
 `experimento/magic-no-teletela`; múltiplos servidores ficam para depois.
 
-**Atualização 4.2.0 em preparação (30/10/2026, autorizada pelo dono):** inicialização
+**Versão 4.2.0 publicada (30/10/2026):** inicialização
 com o PC, busca, diagnóstico, categorias/ordenação, apelido só em voz pelo próprio perfil,
 download de imagens, ausentes e personalização. O APK passa a 4.2.0/código 9. Os registros
 abaixo sobre branches e testes locais descrevem as etapas anteriores à publicação.
@@ -1355,3 +1355,31 @@ A pedido do dono, `experimento/personalizacao-local` foi integrada por fast-forw
 Inclui inicialização com o PC, busca, diagnóstico de vídeo, categorias/ordenação, apelido
 apenas na voz, downloads de imagens, ausentes e personalização. Nenhuma branch foi apagada;
 a `main` não foi alterada e não houve push, release ou deploy.
+
+
+### Publicação da 4.2.0 concluída (30/10/2026)
+
+Release pública [v4.2.0](https://github.com/Castzzz/telinha/releases/tag/v4.2.0), marcada como
+latest e sem pré-release. A tag aponta para `b94a8350357847a153019399e7984a4f94b82c1c`,
+integrado por fast-forward e enviado à `main`. Inclui as duas frentes reunidas, com
+personalização, e o ajuste final de apelido somente na voz pelo próprio perfil.
+
+- Desktop: Windows Setup/Portátil e Linux AppImage/tar.gz, `latest.yml`, `latest-linux.yml`
+  e blockmap do Setup. APK Android 4.2.0, código 9, com a assinatura da 4.1.0 preservada.
+- Pacotes gerados com `npm run dist -- --publish never` e `npm run build:android`. A release
+  ficou em rascunho até os oito arquivos serem enviados e verificados; depois foi publicada
+  como latest. Todos os tamanhos/SHA-256 no GitHub conferem com os arquivos locais. Os dois
+  manifests têm versão 4.2.0, tamanhos/SHA-512 válidos e conteúdo público idêntico ao local.
+- Pacotes Linux/Windows e APK contêm os módulos novos e os nove sons privados de entrada.
+  `public/sounds/` continua fora do Git. Tar.gz validado; o executável Linux empacotado abriu
+  a tela inicial e ativou/desativou autostart em configuração temporária do Hyprland.
+- Validação: runner (62), testes adicionais incluindo permissões, identidade, busca,
+  autostart, personalização e métricas (108), integração m4, interfaces de personalização
+  e categorias com duas pessoas, build/lint Android e popup de novidades vindo da 4.1.0.
+- Backups íntegros antes de alterar a VM: `~/Teletela-backups/teletela-dados-2026-10-30_20-00-49.tar.gz`
+  e `~/Teletela-backups/teletela-dados-2026-10-30_20-05-14.tar.gz` (o segundo foi feito pelo deploy).
+- Deploy com Node `v24.22.1` e Caddy `2.11.7` mantidos. Serviços Node, SFU e Caddy ativos;
+  `/api/health` saudável. Versão instalada 4.2.0; hashes de `server.js`, `channel-extras.js`
+  e `public/app.js` iguais aos locais. Segredos, propriedade, contas e dados preservados.
+
+A `main` ficou selecionada após a publicação. As branches de desenvolvimento foram mantidas.
