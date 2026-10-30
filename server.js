@@ -478,9 +478,10 @@ function deleteTextChannelData(ch) {
 }
 
 function getTextChannelsSummary(viewer = null) {
+  const positions = visiblePlacements('text', viewer);
   return channelExtras.ordered('text', [...textChannels.values()]).filter(ch => permissions.visible(viewer, ch))
     .map(ch => ({ id: ch.id, name: ch.name, description: ch.description, createdBy: ch.createdBy, createdAt: ch.createdAt,
-      ...channelExtras.placement('text', ch.id), lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
+      ...positions['text:' + ch.id], lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
       canManageAccess: permissions.has(viewer, 'manageChannels') }));
 }
 function broadcastTextChannels() {
@@ -495,6 +496,14 @@ loadSavedChannels();
 loadTextStorage();
 const channelExtras = new ChannelExtras(DATA_DIR);
 const chatName = (user, scope, id) => channelExtras.nickname(user.accessId, scope, id) || user.name;
+function visiblePlacements(type, viewer) {
+  const ranks = new Map(), map = type === 'voice' ? channels : textChannels;
+  return Object.fromEntries(channelExtras.ordered(type, map.values()).filter(ch => permissions.visible(viewer, ch)).map(ch => {
+    const { categoryId } = channelExtras.placement(type, ch.id), position = ranks.get(categoryId) || 0;
+    ranks.set(categoryId, position + 1);
+    return [`${type}:${ch.id}`, { categoryId, position }];
+  }));
+}
 function layoutFor(user) {
   const canManage = permissions.has(user, 'manageChannels');
   const categories = channelExtras.categories().filter(category => {
@@ -504,7 +513,7 @@ function layoutFor(user) {
   });
   const afk = channels.get(channelExtras.data.afk.channelId);
   return { categories, canManage, afk: { channelId: afk && permissions.visible(user, afk) ? afk.id : '', minutes: channelExtras.data.afk.minutes },
-    placements: Object.fromEntries(['voice','text'].flatMap(type => [...(type === 'voice' ? channels : textChannels).values()].filter(ch => permissions.visible(user, ch)).map(ch => [`${type}:${ch.id}`, channelExtras.placement(type,ch.id)]))) };
+    placements: { ...visiblePlacements('voice', user), ...visiblePlacements('text', user) } };
 }
 function broadcastLayout() { for (const client of io.sockets.sockets.values()) client.emit('channel-layout', layoutFor(client.data.user)); }
 
@@ -854,7 +863,7 @@ function applyProfile(user, raw) {
 }
 
 function getChannelsSummary(viewer = null) {
-  const list = [];
+  const list = [], positions = visiblePlacements('voice', viewer);
   for (const channel of channelExtras.ordered('voice', channels.values())) {
     if (!permissions.visible(viewer, channel)) continue;
     const userList = Array.from(channel.users.values()).map(publicUser);
@@ -863,7 +872,7 @@ function getChannelsSummary(viewer = null) {
     list.push({
       id: channel.id,
       name: channel.name,
-      ...channelExtras.placement('voice', channel.id),
+      ...positions['voice:' + channel.id],
       isAfk: channelExtras.data.afk.channelId === channel.id,
       isDefault: channel.isDefault,
       createdBy: channel.createdBy,

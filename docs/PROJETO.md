@@ -1248,7 +1248,8 @@ válidos: os canais começam nos grupos padrão até alguém organizar.
   os grupos personalizados podem ser criados, reordenados e apagados quando vazios.
   Os grupos padrão permanecem no começo de cada seção. Categorias não acrescentam ACL:
   o acesso continua por canal. Categorias que só contêm canais invisíveis não são enviadas
-  a quem não vê nenhum deles, inclusive o dono. Listas de posições só incluem canais visíveis.
+  a quem não vê nenhum deles, inclusive o dono. Listas de posições só incluem canais visíveis,
+  numerados sem lacunas para não denunciar a quantidade de canais ocultos.
 - `category-save`, `category-delete`, `category-move`, `channel-move` e `afk-settings`
   exigem `manageChannels`, com máximo de 30 operações por socket em 10 segundos.
   `channel-layout` comunica categorias/posições/ausentes e capacidade de gerenciamento.
