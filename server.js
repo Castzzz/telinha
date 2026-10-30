@@ -2018,6 +2018,7 @@ io.on('connection', (socket) => {
       return ch && permissions.visible(user, ch) ? { scope: 'text', ch } : null;
     }
     const channel = user.channelId ? channels.get(user.channelId) : null;
+    if (payload.channelId && payload.channelId !== user.channelId) return null;
     return channel ? { scope: 'call', channel } : null;
   };
   const findChatMessage = (target, id) => {
@@ -2287,6 +2288,43 @@ io.on('connection', (socket) => {
     emitText(ch, 'text-channel-deleted', { channelId: ch.id, channelName: ch.name, by: user.name });
     broadcastTextChannels();
     cb({ success: true });
+  }));
+
+  // Busca no histórico consolidado, com as mesmas permissões de leitura do chat.
+  let lastSearchAt = 0;
+  socket.on('message-search', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback), payload = safeObject(raw);
+    const target = chatTarget(payload);
+    if (!target) return cb({ success: false, error: 'Você não tem acesso a esse canal.' });
+    if (Date.now() - lastSearchAt < 700) return cb({ success: false, error: 'Espere um instante antes de buscar novamente.' });
+    lastSearchAt = Date.now();
+    const query = typeof payload.query === 'string' ? payload.query.trim().slice(0, 160) : '';
+    const author = typeof payload.author === 'string' ? payload.author.trim().slice(0, 80) : '';
+    if (!query && !author) return cb({ success: false, error: 'Digite um texto ou o nome de uma pessoa.' });
+    const since = typeof payload.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.since) ? Date.parse(payload.since + 'T00:00:00Z') : NaN;
+    const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
+    const all = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const before = typeof payload.before === 'string' ? all.findIndex(m => m.id === payload.before) : all.length;
+    if (before < 0) return cb({ success: false, error: 'O histórico mudou. Faça a busca novamente.' });
+    const needle = normalize(query), person = normalize(author);
+    const matches = [];
+    for (let i = before - 1; i >= 0 && matches.length < 31; i--) {
+      const msg = all[i];
+      if (normalize(msg.text).includes(needle) && normalize(msg.userName || msg.senderName).includes(person)
+        && (!Number.isFinite(since) || msg.timestamp >= since)) matches.push(msg);
+    }
+    cb({ success: true, messages: matches.slice(0, 30), hasMore: matches.length > 30 });
+  }));
+
+  socket.on('message-context', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback), payload = safeObject(raw), target = chatTarget(payload);
+    if (!target) return cb({ success: false, error: 'Você não tem acesso a esse canal.' });
+    if (Date.now() - lastSearchAt < 700) return cb({ success: false, error: 'Espere um instante e tente novamente.' });
+    lastSearchAt = Date.now();
+    const all = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const index = all.findIndex(m => m.id === payload.messageId);
+    if (index < 0) return cb({ success: false, error: 'Essa mensagem não está mais disponível.' });
+    cb({ success: true, messages: all.slice(Math.max(0, index - 3), index + 4) });
   }));
 
   // Histórico: sem "before", as últimas; com "before" (id de mensagem), as anteriores a ela

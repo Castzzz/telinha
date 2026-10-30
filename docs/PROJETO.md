@@ -1175,3 +1175,42 @@ conferidos versão, build/lint, conteúdo dos pacotes, hashes/tamanhos e links d
 Os artefatos foram gerados com `npm run dist -- --publish never` e `npm run build:android`.
 O release foi preparado como rascunho, recebeu os oito arquivos e só depois foi publicado
 como latest, com notas em português. Assim não houve uma versão pública com assets pela metade.
+
+### Inicialização, busca e diagnóstico (30/10/2026, ainda sem publicação)
+
+Branch `melhoria/inicializacao-busca-e-diagnostico`:
+
+- `electron/autostart.cjs`: opção desligada por padrão em Configurações → Aparência.
+  Consulta o estado do sistema; Windows usa `get/setLoginItemSettings` e Linux usa
+  `$XDG_CONFIG_HOME/autostart/telinha.desktop` (ou `~/.config/autostart`). AppImage aponta
+  para `APPIMAGE`, nunca para o mount temporário. No desenvolvimento aponta para o Electron
+  do sistema e `electron/main.cjs`. Portátil Windows mostra a limitação. Não depende do
+  perfil nem do servidor e não entra na call. Mover o AppImage exige reativar a opção.
+  A ponte aceita somente a interface instalada e a tela inicial, na frame principal.
+- `public/message-search.js`: lupa no chat e cabeçalho móvel; texto, autor e data inicial
+  (limite em UTC), sem diferença de acento/maiúscula. Busca por canal, páginas de 30 do mais
+  novo para o antigo. “Ver contexto” mostra até três mensagens de cada lado, sem alterar
+  o cache paginado do chat. Eventos `message-search` e `message-context` checam acesso
+  no servidor antes de ler arquivos e compartilham limite de uma consulta por 700 ms/socket.
+  Usa o JSONL consolidado (edições e exclusões aplicadas), inclusive além das 250 mensagens
+  em memória, até a retenção existente de 50 mil/canal. O chat da call continua efêmero,
+  limitado às 50 mensagens da call atual. Resultados são limpos ao perder acesso/desconectar.
+  Não há migração de dados nem índice adicional; a leitura é síncrona, como a paginação
+  existente, limitada ao canal escolhido.
+- `public/transmission-diagnostics.js`: painel no palco e Configurações → Transmissão.
+  `getStats()` a cada 2 segundos apenas com o painel aberto; tela, extras e câmera,
+  envio/recepção P2P e SFU. Taxa usa delta de bytes de vídeo; recepção calcula perdas por
+  intervalo, envio usa perda informada pelo destino. Codec RTX não é contado como vídeo.
+  Dados ausentes ficam indisponíveis; reset de contador não gera valores negativos.
+  No SFU mede apenas o trecho local↔SFU, não a conexão inteira entre os amigos.
+  Não abre captura, muda bitrate nem coleta IP/candidatos.
+
+Validação: `npm test` (62), suítes m1/m2/m3 + autostart/métricas (84), integração m4,
+`node --test tests/message-search.test.js` e Electron do sistema executando
+`tests/desktop-tools-browser.cjs` (autostart em diretório temporário, reabertura, busca além
+ do cache, contexto, três temas/celular e envio/recepção WebRTC reais). A integração nativa
+no Windows e o login real após reiniciar o PC ainda precisam de conferência nesse sistema.
+
+Referências: [Electron: login items](https://www.electronjs.org/docs/latest/api/app#appsetloginitemsettingssettings-macos-windows),
+[Desktop Entry: Exec](https://specifications.freedesktop.org/desktop-entry/latest/exec-variables.html),
+[estatísticas WebRTC](https://www.w3.org/TR/webrtc-stats/).

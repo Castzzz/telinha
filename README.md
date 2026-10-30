@@ -169,6 +169,25 @@ A versão **4.1.0** traz miniplayer, cinema, dados de RPG, conta opcional, priva
 inclusive para o dono, início/ícones renovados, chat central com transmissão reduzida e
 troca de câmera frontal/traseira no Android. O APK acompanha essa atualização.
 
+## Em teste local, ainda sem publicação
+
+Na branch `melhoria/inicializacao-busca-e-diagnostico`:
+
+- **Abrir com o PC:** em Configurações → Aparência, marque **Abrir o Teletela ao iniciar
+  o PC**. Disponível no Windows instalado e Linux; desligado por padrão e sem entrar na call.
+  No Linux, mantenha o AppImage numa pasta fixa; se mudar de lugar, reative a opção.
+- **Buscar mensagens:** use a lupa no chat (também no cabeçalho do celular), escolha o
+  canal e filtre por texto, pessoa ou data inicial. **Mais resultados** carrega os anteriores;
+  **Ver contexto** mostra as mensagens ao redor. Canais de texto consultam todo o histórico
+  salvo; o chat da call só guarda as últimas 50 mensagens. Canais privados respeitam o acesso.
+- **Diagnóstico das transmissões:** botão de gráfico no palco ou Configurações → Transmissão.
+  Mostra resolução, FPS, taxa de vídeo, perda e latência reais enquanto transmite ou assiste.
+  Via SFU, mede o trecho entre você e o servidor. Dados ausentes aparecem como indisponíveis.
+
+Para testar a busca antes do deploy, suba um servidor local com dados separados:
+`PORT=3999 TELINHA_DATA_DIR=/tmp/teletela-teste-melhorias npm start`.
+Abra `npm run app` e entre no endereço `http://127.0.0.1:3999` pela tela inicial.
+
 ## 🎮 Como usar
 
 | Quero… | Como |

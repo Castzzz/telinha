@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="stage-social.css" />
   <link rel="stylesheet" href="dice.css" />
   <link rel="stylesheet" href="accounts.css" />
+  <link rel="stylesheet" href="tools.css">
 </head>
 <body class="theme-discord">
 
@@ -30,6 +31,7 @@
     <div class="mobile-header-copy"><strong id="mobile-page-title">Teletela</strong><span id="mobile-page-subtitle">Seu ponto de encontro</span></div>
     <button type="button" id="mobile-create-channel" class="mobile-icon-button" aria-label="Criar canal"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     <button type="button" id="mobile-open-chat" class="mobile-icon-button" aria-label="Abrir chat da call"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5z"/></svg></button>
+    <button type="button" class="mobile-icon-button" data-mobile-proxy="btn-chat-search" aria-label="Buscar mensagens"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg></button>
     <button type="button" id="mobile-open-pins" class="mobile-icon-button hidden" data-mobile-proxy="btn-chat-pins" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
     <button type="button" id="mobile-call-more" class="mobile-icon-button" aria-label="Opções da chamada" aria-haspopup="dialog"><svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
   </header>
@@ -326,6 +328,7 @@
         <div class="stage-controls-right">
           <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
           <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
+          <button type="button" id="btn-stage-diagnostics" class="btn-control-icon" title="Diagnóstico das transmissões" aria-label="Diagnóstico das transmissões"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V7"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
           <button id="btn-stage-pip" class="btn-control-icon hidden" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon hidden" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
@@ -343,6 +346,7 @@
           <span class="chat-hash">💬</span>
           <span id="chat-channel-label">#geral-chat</span>
         </div>
+        <button type="button" id="btn-chat-search" class="btn-icon-close" title="Buscar mensagens" aria-label="Buscar mensagens"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg></button>
         <button id="btn-chat-pins" class="btn-icon-close btn-chat-pins hidden" title="Mensagens fixadas" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
         <button id="btn-chat-back-voice" class="btn-chat-back hidden" title="Voltar pro chat da call">🔊 Chat da call</button>
         <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
@@ -435,6 +439,30 @@
   </div>
 
   <!-- Perfil grande de alguém (clique na foto no popup ou no chat) -->
+  <div id="modal-transmission-diagnostics" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="transmission-diagnostics-title">
+    <div class="modal-card tools-modal">
+      <div class="modal-header"><h3 id="transmission-diagnostics-title">Diagnóstico das transmissões</h3><button type="button" class="modal-close-btn" data-close-modal="modal-transmission-diagnostics" aria-label="Fechar">✕</button></div>
+      <p>Qualidade medida nesta conexão, atualizada a cada 2 segundos. Via SFU, os números descrevem o trecho entre você e o servidor.</p>
+      <div id="transmission-diagnostics-results" class="tools-results"></div>
+      <p id="transmission-diagnostics-status" role="status"></p>
+    </div>
+  </div>
+
+  <div id="modal-message-search" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="message-search-title">
+    <div class="modal-card tools-modal">
+      <div class="modal-header"><h3 id="message-search-title">Buscar mensagens</h3><button type="button" class="modal-close-btn" data-close-modal="modal-message-search" aria-label="Fechar">✕</button></div>
+      <form id="message-search-form" class="tools-form">
+        <label>Canal<select id="message-search-channel" class="form-select"></select></label>
+        <label>Texto<input id="message-search-query" class="form-input" maxlength="160" type="search" placeholder="O que você quer encontrar?"></label>
+        <div class="tools-fields"><label>Pessoa<input id="message-search-author" class="form-input" maxlength="80" placeholder="Nome de quem enviou"></label><label>A partir de<input id="message-search-since" class="form-input" type="date"></label></div>
+        <button class="btn-primary" type="submit" id="message-search-submit">Buscar</button>
+      </form>
+      <p id="message-search-status" role="status">Busque no histórico salvo dos canais de texto. Na call, só as últimas 50 mensagens ficam disponíveis.</p>
+      <div id="message-search-results" class="tools-results"></div>
+      <button type="button" class="btn-secondary hidden" id="message-search-more">Mais resultados</button>
+    </div>
+  </div>
+
   <div id="modal-channel-settings" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="channel-settings-title">
     <div class="modal-card channel-settings-modal">
       <div class="modal-header"><h3 id="channel-settings-title">Configurações do canal</h3><button type="button" class="modal-close-btn" data-close-modal="modal-channel-settings" aria-label="Fechar">✕</button></div>
@@ -944,6 +972,10 @@
 
           <section class="settings-section" data-settings-section="aparencia">
             <h4 class="settings-section-title">Aparência</h4>
+            <div class="form-group hidden" id="autostart-setting">
+              <label class="checkbox-label"><input type="checkbox" id="check-autostart"> Abrir o Teletela ao iniciar o PC</label>
+              <small id="autostart-status" role="status">Abre o aplicativo quando você entra no computador, sem entrar na call.</small>
+            </div>
             <!-- Tema -->
             <div class="form-group">
               <label for="select-theme">Tema</label>
@@ -1115,6 +1147,7 @@
           </section>
           <section class="settings-section hidden" data-settings-section="transmissao">
             <h4 class="settings-section-title">Transmissão</h4>
+            <div class="form-group"><button type="button" class="btn-secondary" id="btn-settings-diagnostics">Diagnóstico das transmissões</button><small>Veja a qualidade real enquanto transmite ou assiste.</small></div>
             <!-- Esconder a própria transmissão -->
             <div class="form-group">
               <label class="hotkey-global">

@@ -31,6 +31,8 @@ import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
 import { setupDice } from './dice.js';
 import { setupStageSocial } from './stage-social.js';
+import { setupTransmissionDiagnostics } from './transmission-diagnostics.js';
+import { setupMessageSearch } from './message-search.js';
 import { setupAccounts, accountSession, initialAccountProfile, accountProfileSnapshot } from './accounts.js';
 
 let musicUI = null;
@@ -1194,6 +1196,7 @@ function leaveCallLocally() {
   if (!oldChannelId) return;
   onWebRTCChannelChange(oldChannelId, null);
   appState.currentChannelId = null;
+  window.dispatchEvent(new Event('teletela-call-left'));
   appState.channels.get(oldChannelId)?.users.delete(appState.myId);
 
   const params = new URLSearchParams(window.location.search);
@@ -3558,6 +3561,26 @@ function selectSettingsTab(name) {
   $('#modal-settings .settings-panels').scrollTop = 0;
   if (isProfile && !profileDraft) resetProfileDraft();
   if (['microfone', 'som', 'transmissao'].includes(name)) populateSettingsDevices();
+}
+
+async function setupAutostart() {
+  if (!window.electronAPI?.getAutostart) return;
+  const group = $('#autostart-setting'), input = $('#check-autostart'), status = $('#autostart-status');
+  const refresh = state => {
+    group.classList.remove('hidden');
+    input.checked = state.enabled === true;
+    input.disabled = !state.supported;
+    status.textContent = state.error || 'Abre o aplicativo quando você entra no computador, sem entrar na call.';
+  };
+  try { refresh(await window.electronAPI.getAutostart()); }
+  catch { refresh({ error: 'Não consegui consultar a inicialização automática.' }); }
+  input.addEventListener('change', async () => {
+    const previous = !input.checked;
+    input.disabled = true;
+    try { refresh(await window.electronAPI.setAutostart(input.checked)); }
+    catch { refresh({ supported: true, enabled: previous, error: 'Não consegui alterar essa opção. Tente novamente.' }); }
+  });
+  $('#btn-open-settings')?.addEventListener('click', () => window.electronAPI.getAutostart().then(refresh).catch(() => {}));
 }
 
 function openSettings(name = $('.settings-tab.active')?.dataset.settingsTab || 'aparencia') {
@@ -7787,6 +7810,7 @@ function initApp() {
   setupChatAndReactions();
   setupChatImages();
   setupTextChannels();
+  setupMessageSearch({ socket, appState, showToast, mountStageOverlay });
   setupCategoryCollapse();
   setupChatMessageActions();
   setupRoomPassword();
@@ -7805,6 +7829,19 @@ function initApp() {
   setupMasterVolume();
   setupMicGain();
   setupThemeSelect();
+  setupAutostart();
+  setupTransmissionDiagnostics({ mountStageOverlay, getConnections: () => {
+    const list = [];
+    const add = (pc, label, direction, route) => { if (pc && pc.connectionState !== 'closed') list.push({ pc, label, direction, route }); };
+    const name = id => appState.channels.get(appState.currentChannelId)?.users.get(id)?.name || 'Amigo';
+    add(appState.sfuPublisher?.pc, 'Sua tela', 'outbound', 'SFU');
+    add(appState.sfuCameraPublisher?.pc, 'Sua câmera', 'outbound', 'SFU');
+    for (const [n, entry] of appState.extraScreens) add(entry.publisher?.pc, `Sua tela ${n}`, 'outbound', 'SFU');
+    for (const [key, session] of appState.sfuViewers) add(session.pc, streamLabel(key), 'inbound', 'SFU');
+    for (const [key, pc] of appState.screenPeersIn) add(pc, streamLabel(key), 'inbound', 'Direta');
+    for (const [key, pc] of appState.screenPeersOut) add(pc, `Enviando ${streamKind(key) === 'camera' ? 'câmera' : 'tela'} para ${name(streamOwner(key))}`, 'outbound', 'Direta');
+    return list;
+  } });
   setupPerformanceSelect();
   setupGameActivity();
   setupAdminSettings();

@@ -60,6 +60,7 @@ const { createPreferences } = require('./preferences.cjs');
 const preferences = createPreferences(app.getPath('userData'));
 const loadPrefs = preferences.load;
 const savePrefs = preferences.save;
+const autostart = require('./autostart.cjs').createAutostart({ app });
 
 // Atalhos que funcionam mesmo com o Telinha em segundo plano (ex: mutar no meio do jogo)
 // Teclas sozinhas que o globalShortcut não aceita (Ctrl da direita, Shift, Alt...): quem
@@ -713,6 +714,10 @@ function setupPermissionsAndCapture() {
     return { ok: true };
   });
 
+  const localSettings = event => event.senderFrame && event.senderFrame === event.sender.mainFrame
+    && (event.senderFrame.url.startsWith('telinha://app/') || event.senderFrame.url === pathToFileURL(CONNECT_PAGE).href);
+  ipcMain.handle('autostart-get', event => localSettings(event) ? autostart.get() : { supported: false, enabled: false });
+  ipcMain.handle('autostart-set', (event, enabled) => localSettings(event) ? autostart.set(enabled) : { supported: false, enabled: false });
   ipcMain.handle('prefs-get', () => loadPrefs());
   ipcMain.handle('get-game-activity', async () => {
     // Evita reler e decodificar fotos/GIFs do prefs.json a cada consulta de jogo.

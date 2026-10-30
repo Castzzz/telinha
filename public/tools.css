@@ -1,0 +1,14 @@
+#modal-message-search, #modal-transmission-diagnostics { z-index: 1700; }
+.tools-modal { width: min(760px, calc(100vw - 24px)); max-width: 760px; max-height: calc(100dvh - 32px); overflow-y: auto; }
+.tools-form { display: grid; gap: 12px; }
+.tools-form label { display: grid; gap: 6px; min-width: 0; }
+.tools-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.tools-results { display: grid; gap: 12px; }
+.search-result, .diagnostic-card { padding: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-secondary); overflow-wrap: anywhere; }
+.search-result time { display: block; font-size: 12px; color: var(--text-muted); }
+.search-result p { white-space: pre-wrap; }
+.search-context { margin-top: 12px; display: grid; gap: 6px; }
+.search-match { border-color: var(--accent-brand); }
+.diagnostic-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; }
+.diagnostic-card dd { margin: 0; text-align: right; }
+@media (max-width: 480px) { .tools-fields { grid-template-columns: 1fr; } }
