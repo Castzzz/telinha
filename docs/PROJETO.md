@@ -1214,3 +1214,21 @@ no Windows e o login real após reiniciar o PC ainda precisam de conferência ne
 Referências: [Electron: login items](https://www.electronjs.org/docs/latest/api/app#appsetloginitemsettingssettings-macos-windows),
 [Desktop Entry: Exec](https://specifications.freedesktop.org/desktop-entry/latest/exec-variables.html),
 [estatísticas WebRTC](https://www.w3.org/TR/webrtc-stats/).
+
+
+#### Hyprland e janela única
+
+A sessão local do dono usa Hyprland sem gerenciador XDG de autostart identificado.
+Ao marcar a opção nessa sessão, o app também adiciona um bloco próprio `exec-once` em
+`$XDG_CONFIG_HOME/hypr/hyprland.conf`, com backup inicial `.teletela-backup`. O comando
+chama um script próprio `autostart/telinha-hyprland.sh`; os argumentos têm escape de shell.
+A configuração e seus symlinks são preservados; desmarcar remove só esse bloco/script e
+mantém alterações posteriores do usuário. Configuração padrão ausente é informada na tela.
+Não dispara o aplicativo na hora: vale no próximo login. Outros ambientes usam apenas XDG.
+O app usa `requestSingleInstanceLock` para que disparos duplicados foquem a janela aberta.
+
+O teste de autostart cobre instalação/remoção, reativação sem duplicar blocos, symlink,
+backup e execução de argumentos contendo espaços e caracteres especiais. O teste de
+interface usa um `hyprland.conf` temporário e verifica a restauração exata ao desmarcar.
+A configuração real deste PC não foi alterada nos testes.
+Referência: [Hyprland: exec-once](https://wiki.hypr.land/0.53.0/Configuring/Keywords/).
