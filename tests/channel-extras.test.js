@@ -14,6 +14,7 @@ test('categorias, ordem, apelidos, imagens privadas e ausência usam servidor re
   t.after(async()=>{for(const socket of clients)socket.disconnect();await new Promise(resolve=>backend.io.close(resolve));fs.rmSync(data,{recursive:true,force:true});});
   async function connect(){const socket=client('http://127.0.0.1:'+server.address().port,{transports:['websocket'],reconnection:false});clients.push(socket);await new Promise(resolve=>socket.once('connect',resolve));return socket;}
   const owner=await connect(),guest=await connect(),outsider=await connect();
+  let guestLayout; guest.on('channel-layout',value=>{guestLayout=value;});
   const emit=(socket,event,payload)=>socket.timeout(3000).emitWithAck(event,payload);
   const join=(socket,id,name)=>emit(socket,'join-channel',{channelId:id,profile:{name,profileId:'perfil-extras-'+name},isMicOn:false});
   await join(owner,'geral','Dono');await join(guest,'geral','Amigo');await join(outsider,'geral','Visitante');
@@ -41,7 +42,8 @@ test('categorias, ordem, apelidos, imagens privadas e ausência usam servidor re
   assert((await emit(guest,'chat-nickname-set',{scope:'text',channelId:talk,nickname:''})).success);
   const privateChannel=(await emit(owner,'create-text-channel',{name:'Segredos',access:{private:true,members:[backend.io.sockets.sockets.get(owner.id).data.user.accessId],roles:[]}})).channelId;
   assert.equal((await emit(guest,'chat-nickname-set',{scope:'text',channelId:privateChannel,nickname:'Intruso'})).success,false);
-  assert.equal((await emit(owner,'channel-move',{type:'text',channelId:privateChannel,categoryId:text.categoryId})).success,true);
+  assert.equal((await emit(owner,'channel-move',{type:'text',channelId:privateChannel,categoryId:text.categoryId,beforeId:talk})).success,true);
+  await wait(30); assert.equal(guestLayout.placements['text:'+talk].position,0,'posição visível não denuncia canais ocultos'); assert.equal(guestLayout.placements['text:'+privateChannel],undefined);
   const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1cAAAAASUVORK5CYII=';
   const got=new Promise(resolve=>owner.once('text-message',resolve));assert((await emit(owner,'text-image',{channelId:privateChannel,mime:'image/png',data:Buffer.from(png,'base64'),width:1,height:1})).success);
   const image=(await got).image,base='http://127.0.0.1:'+server.address().port;
