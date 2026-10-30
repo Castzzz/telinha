@@ -31,13 +31,22 @@ app.whenReady().then(async()=>{
  await click(owner,'#channel-mesa .channel-order-handle');await js(owner,"document.querySelector('#channel-move-category').value='voice';document.querySelector('#channel-move-category').dispatchEvent(new Event('change'));document.querySelector('#channel-move-before').value='geral';document.querySelector('#channel-move-form').requestSubmit();void 0");
  await until(guest,'document.querySelector("#channels-tree").firstElementChild?.dataset.channelId === "mesa"');
  for(const win of [owner,guest])await click(win,'[data-text-channel-id=aventura] .channel-row');
- await click(guest,'#btn-chat-nickname');await until(guest,'!document.querySelector("#modal-chat-nickname").classList.contains("hidden")');
- await js(guest,"document.querySelector('#chat-nickname-input').value='Mago';document.querySelector('#chat-nickname-form').requestSubmit();void 0");await until(guest,'document.querySelector("#modal-chat-nickname").classList.contains("hidden")');
- await js(guest,"document.querySelector('#chat-input').value='Bola de fogo';document.querySelector('#chat-form').requestSubmit();void 0");await until(owner,'document.querySelector(".chat-author")?.textContent === "Mago"');
- assert(await js(owner,'document.querySelector(".chat-author").title === "Amigo"'));
- await new Promise(resolve=>{guest.webContents.once('did-finish-load',resolve);guest.webContents.reload();});await until(guest,'Boolean(window.appState?.myId && document.querySelector("[data-text-channel-id=aventura]"))');
- await js(guest,"document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");await click(guest,'[data-text-channel-id=aventura] .channel-row');await click(guest,'#btn-chat-nickname');await until(guest,'document.querySelector("#chat-nickname-input").value === "Mago"');await click(guest,'[data-close-modal=modal-chat-nickname]');
-
+ assert(await js(guest,'!document.querySelector("#btn-chat-nickname")'),'Compositor não deve oferecer apelido');
+ await js(guest,"document.querySelector('#chat-input').value='Bola de fogo';document.querySelector('#chat-form').requestSubmit();void 0");await until(owner,'document.querySelector(".chat-author")?.textContent === "Amigo"');
+ for(const win of [owner,guest]){await click(win,'#channel-geral .channel-row');await until(win,"appState.currentChannelId==='geral'");}
+ const guestId=await js(guest,'appState.myId'),ownerId=await js(owner,'appState.myId');
+ const self=()=>js(guest,`document.querySelector('.channel-user[data-user-id="'+appState.myId+'"]').click();void 0`);
+ await click(guest,`.channel-user[data-user-id="${ownerId}"]`);assert(await js(guest,'document.querySelector("#user-popover-nickname").classList.contains("hidden")'));
+ await self();await until(guest,'!document.querySelector("#user-popover-nickname").classList.contains("hidden")');
+ await pause(100);await fs.promises.writeFile('/tmp/teletela-apelido-perfil.png',(await guest.webContents.capturePage()).toPNG());
+ await click(guest,'#user-popover-nickname');await until(guest,'!document.querySelector("#modal-chat-nickname").classList.contains("hidden")');
+ await js(guest,"document.querySelector('#chat-nickname-input').value='Guerreiro';document.querySelector('#chat-nickname-form').requestSubmit();void 0");await until(guest,'document.querySelector("#modal-chat-nickname").classList.contains("hidden")');
+ await until(owner,`document.querySelector('.channel-user[data-user-id="${guestId}"]').textContent.includes('Guerreiro')`);
+ await new Promise(resolve=>{guest.webContents.once('did-finish-load',resolve);guest.webContents.reload();});await until(guest,'Boolean(window.appState?.myId && document.querySelector("#channel-geral"))');
+ await js(guest,"document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");await click(guest,'#channel-geral .channel-row');await until(guest,"appState.currentChannelId==='geral'");
+ await self();await click(guest,'#user-popover-nickname');await until(guest,'document.querySelector("#chat-nickname-input").value === "Guerreiro"');await click(guest,'[data-close-modal=modal-chat-nickname]');
+ await self();await click(guest,'#user-popover-avatar');await until(guest,'!document.querySelector("#modal-user-profile").classList.contains("hidden")');assert(await js(guest,'!document.querySelector("#profile-card-nickname").classList.contains("hidden")'));await click(guest,'#profile-card-nickname');await until(guest,'!document.querySelector("#modal-chat-nickname").classList.contains("hidden")');await click(guest,'[data-close-modal=modal-chat-nickname]');
+ for(const win of [owner,guest])await click(win,'[data-text-channel-id=aventura] .channel-row');
  const png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jN1cAAAAASUVORK5CYII=';
  await js(guest,`(()=>{const bytes=Uint8Array.from(atob('${png}'),c=>c.charCodeAt(0));const data=new DataTransfer();data.items.add(new File([bytes],'teste.png',{type:'image/png'}));document.querySelector('#chat-input').dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:data}));})()`);
  await until(owner,'Boolean(document.querySelector(".chat-image"))');await click(owner,'.chat-image');await until(owner,'!document.querySelector("#image-viewer").classList.contains("hidden")');
@@ -54,5 +63,5 @@ app.whenReady().then(async()=>{
  owner.setSize(390,844);await pause(200);assert(await js(owner,'document.querySelector("#modal-channel-organization .modal-card").getBoundingClientRect().width<=innerWidth'));
  await fs.promises.writeFile('/tmp/teletela-organizacao-mobile.png',(await owner.webContents.capturePage()).toPNG());
  assert(!errors.length,errors.join('\n'));
- console.log('Interface: categoria compartilhada, arrastar canal entre grupos/posições, mover por formulário, apelido por chat, download real de PNG e entrada automática em Ausentes passaram. Três temas e celular conferidos.');
+ console.log('Interface: categoria compartilhada, arrastar canal entre grupos/posições, mover por formulário, apelido apenas no próprio perfil da call, download real de PNG e entrada automática em Ausentes passaram. Três temas e celular conferidos.');
 }).catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{clearTimeout(timeout);for(const win of windows)if(!win.isDestroyed())win.destroy();if(backend)await new Promise(resolve=>backend.io.close(resolve));fs.rmSync(directory,{recursive:true,force:true});app.exit(process.exitCode||0);});

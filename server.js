@@ -495,7 +495,7 @@ function emitText(ch, event, data, except = null) {
 loadSavedChannels();
 loadTextStorage();
 const channelExtras = new ChannelExtras(DATA_DIR);
-const chatName = (user, scope, id) => channelExtras.nickname(user.accessId, scope, id) || user.name;
+const chatName = (user, scope, id) => (scope === 'call' ? channelExtras.nickname(user.accessId, scope, id) : '') || user.name;
 function visiblePlacements(type, viewer) {
   const ranks = new Map(), map = type === 'voice' ? channels : textChannels;
   return Object.fromEntries(channelExtras.ordered(type, map.values()).filter(ch => permissions.visible(viewer, ch)).map(ch => {
@@ -2121,12 +2121,12 @@ io.on('connection', (socket) => {
   const nicknameWrites = [];
   socket.on('chat-nickname-get', safeHandler((raw, callback) => {
     const payload = safeObject(raw), cb = safeCallback(callback);
-    if (!['call','text'].includes(payload.scope) || typeof payload.channelId !== 'string' || !chatTarget(payload)) return cb({ success: false, error: 'Chat indisponível.' });
+    if (payload.scope !== 'call' || typeof payload.channelId !== 'string' || !chatTarget(payload)) return cb({ success: false, error: 'Chat indisponível.' });
     cb({ success: true, nickname: channelExtras.nickname(user.accessId,payload.scope,payload.channelId), profileName: user.name });
   }));
   socket.on('chat-nickname-set', safeHandler((raw, callback) => {
     const payload = safeObject(raw), cb = safeCallback(callback);
-    if (!['call','text'].includes(payload.scope) || !chatTarget(payload) || typeof payload.channelId !== 'string') return cb({ success: false, error: 'Chat indisponível.' });
+    if (payload.scope !== 'call' || !chatTarget(payload) || typeof payload.channelId !== 'string') return cb({ success: false, error: 'Chat indisponível.' });
     try {
       const now = Date.now(); while (nicknameWrites.length && now - nicknameWrites[0] > 10000) nicknameWrites.shift();
       if (nicknameWrites.length >= 10) throw new Error('Aguarde antes de mudar o apelido novamente.');

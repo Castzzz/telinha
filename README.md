@@ -192,10 +192,11 @@ Na branch **`melhoria/categorias-apelidos-e-ausentes`**, também em teste local:
   criar grupos como “RPG” e “Jogos”. Arraste a alça pontilhada do canal para mudar a posição
   ou solte no título de um grupo; clicar na alça abre uma alternativa para teclado/celular.
   A ordem muda para todos; as permissões continuam por canal.
-- **Apelido por chat:** botão **Meu apelido neste chat**, acima do campo de mensagem.
-  Não muda seu nome de perfil; vazio restaura o nome normal. Vale nas próximas mensagens
-  e, em canais de voz, também na lista de participantes. O histórico antigo mantém o nome
-  usado ao enviar; passar o mouse no autor mostra o nome original.
+- **Apelido no canal de voz:** entre numa call, clique no seu próprio perfil na lista ou
+  nos participantes e escolha **Trocar apelido neste chat**. Também aparece no seu perfil
+  ampliado. Vale só naquele canal de voz, incluindo o chat da call; não muda o nome do
+  perfil. Nos canais de texto, as novas mensagens usam seu nome normal. O histórico antigo
+  mantém o nome usado ao enviar. Deixe o apelido vazio para restaurar seu nome de perfil.
 - **Baixar imagens:** clique em **Baixar imagem** abaixo dela ou abra a imagem e use o
   botão no canto. Downloads também respeitam o acesso aos canais privados.
 - **Ausentes:** no painel de organização, escolha/crie um canal público sem senha e o
