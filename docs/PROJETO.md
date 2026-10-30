@@ -12,6 +12,11 @@ dados de RPG, início/ícones renovados, chat central e contas opcionais. O APK 
 a atualização e permite alternar câmera frontal/traseira. Magic fica na branch separada
 `experimento/magic-no-teletela`; múltiplos servidores ficam para depois.
 
+**Atualização 4.2.0 em preparação (30/10/2026, autorizada pelo dono):** inicialização
+com o PC, busca, diagnóstico, categorias/ordenação, apelido só em voz pelo próprio perfil,
+download de imagens, ausentes e personalização. O APK passa a 4.2.0/código 9. Os registros
+abaixo sobre branches e testes locais descrevem as etapas anteriores à publicação.
+
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
 > chaves de preferências). Veja [Nomes que não podem mudar](#nomes-que-não-podem-mudar).

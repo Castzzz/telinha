@@ -659,11 +659,23 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 4.1.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 4.2.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Abrir com o PC:</strong> ative em Configurações → Aparência para iniciar o Teletela ao entrar no computador, sem entrar na call automaticamente.</li>
+          <li><strong>Busca no histórico:</strong> use a lupa do chat para procurar por texto, pessoa ou data, carregar mais resultados e ver as mensagens ao redor.</li>
+          <li><strong>Categorias e canais na sua ordem:</strong> quem gerencia canais pode criar grupos, renomear os títulos e arrastar a alça de um canal para reorganizar a lista de todos. Clicar na alça abre a opção para teclado e celular.</li>
+          <li><strong>Apelido por canal de voz:</strong> entre numa call, clique no seu próprio perfil e escolha <em>Trocar apelido neste chat</em>. Seu perfil e os canais de texto continuam com o nome normal.</li>
+          <li><strong>Baixar imagens:</strong> use o botão abaixo da imagem ou na visualização ampliada. Canais privados continuam respeitando quem tem acesso.</li>
+          <li><strong>Canal de ausentes:</strong> quem gerencia canais escolhe o destino e o tempo. Falar, transmitir ou assistir mantém você na call. Cada pessoa pode desativar a movimentação automática em Som.</li>
+          <li><strong>Diagnóstico das transmissões:</strong> botão de gráfico no palco ou Configurações → Transmissão mostra resolução, FPS, taxa de vídeo, perda e latência.</li>
+          <li><strong>Personalização:</strong> escolha uma cor de destaque e uma imagem de fundo em Configurações → Aparência. Ajuste a intensidade ou restaure o padrão; tudo fica só no seu aparelho.</li>
+        </ul>
+        <div id="whats-new-4-1-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 4.1.0</h4>
         <ul class="whats-new-list">
           <li><strong>Música e cinema no palco:</strong> miniplayer com pausar/pular e faixa de participantes com fotos e indicadores separados. Recolhida, ela some após três segundos e reaparece com interação. Reações clicáveis também em tela cheia.</li>
           <li><strong>Chat no centro:</strong> canais de texto ocupam a área principal, com a transmissão numa prévia menor. O chat da call continua lateral e pode ser redimensionado.</li>
@@ -674,6 +686,7 @@
           <li><strong>Câmera do celular:</strong> com a câmera ligada, use <em>Virar</em> ou <em>⋯ → Virar câmera</em> para alternar frontal e traseira.</li>
           <li><strong>Interface:</strong> início e ícones renovados, com o nome do dono sem coroinha. As permissões de proprietário continuam iguais.</li>
         </ul>
+        </div>
         <div id="whats-new-4-0-0" class="whats-new-older hidden">
           <h4>E o que chegou na 4.0.0</h4>
         <ul class="whats-new-list">
@@ -1012,7 +1025,7 @@
 
             <div class="personalization-controls">
               <h5>Personalização</h5>
-              <p>Teste sua combinação. Só muda a aparência neste aparelho.</p>
+              <p>Escolha sua combinação. Só muda a aparência neste aparelho.</p>
               <div class="personal-field">
                 <label for="personal-accent">Cor de destaque</label>
                 <div class="personal-presets" role="group" aria-label="Cores de destaque">
