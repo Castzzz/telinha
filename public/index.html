@@ -374,7 +374,6 @@
       <div id="mention-suggest" class="mention-suggest hidden" role="listbox" aria-label="Marcar alguém"></div>
 
       <!-- CHAT INPUT FORM -->
-      <button type="button" id="btn-chat-nickname" class="chat-nickname-button" title="Mudar meu apelido só neste chat"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg>Meu apelido neste chat</button>
       <form id="chat-form" class="chat-form">
         <div class="chat-composer">
           <input
@@ -452,8 +451,8 @@
   </div>
 
   <div id="modal-chat-nickname" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="chat-nickname-title">
-    <div class="modal-card"><div class="modal-header"><h3 id="chat-nickname-title">Meu apelido neste chat</h3><button type="button" class="modal-close-btn" data-close-modal="modal-chat-nickname" aria-label="Fechar">✕</button></div>
-      <p id="chat-nickname-profile"></p><p>Vale só neste chat. As mensagens antigas mantêm o nome usado ao enviar.</p>
+    <div class="modal-card"><div class="modal-header"><h3 id="chat-nickname-title">Trocar apelido neste chat</h3><button type="button" class="modal-close-btn" data-close-modal="modal-chat-nickname" aria-label="Fechar">✕</button></div>
+      <p id="chat-nickname-profile"></p><p>Vale só neste canal de voz. As mensagens antigas mantêm o nome usado ao enviar.</p>
       <form id="chat-nickname-form"><label for="chat-nickname-input">Apelido</label><input id="chat-nickname-input" class="form-input" maxlength="25" placeholder="Vazio para usar seu nome de perfil"><div class="modal-actions"><button type="button" class="btn-secondary" id="chat-nickname-reset">Usar nome do perfil</button><button type="submit" id="chat-nickname-save" class="btn-primary">Salvar apelido</button></div></form>
     </div>
   </div>
@@ -519,6 +518,7 @@
         <p class="profile-card-bio" id="profile-card-bio"></p>
         <div id="profile-card-activity"></div>
         <div class="profile-card-meta" id="profile-card-meta"></div>
+        <button type="button" class="btn-secondary hidden" id="profile-card-nickname" data-call-nickname>Trocar apelido neste chat</button>
       </div>
     </div>
   </div>
@@ -1336,6 +1336,7 @@
       </div>
     </div>
     <div class="user-popover-menu user-popover-footer">
+      <button type="button" class="popover-menu-item hidden" id="user-popover-nickname" data-call-nickname><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg> Trocar apelido neste chat</button>
       <button type="button" class="popover-menu-item hidden" id="user-popover-edit-self"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg> Editar meu perfil</button>
       <button type="button" class="popover-menu-item" id="user-popover-reconnect"
         title="Use se você parou de ouvir essa pessoa"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg> Reconectar a voz</button>

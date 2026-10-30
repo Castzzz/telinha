@@ -4129,6 +4129,7 @@ function openUserPopover(userId, anchorEvent) {
   $('#user-popover-actions')?.classList.toggle('hidden', isMe);
   $('#user-popover-reconnect')?.classList.toggle('hidden', isMe);
   $('#user-popover-edit-self')?.classList.toggle('hidden', !isMe);
+  $('#user-popover-nickname').classList.toggle('hidden', !isMe || !appState.currentChannelId);
   if (!isMe) renderUserPopoverVolume();
   $('#user-popover-kick')?.classList.toggle('hidden', isMe || !hasPermission(appState, 'kickMembers') || !u.channelId);
   const adminRow = $('#user-popover-admin');
@@ -4192,6 +4193,7 @@ function openProfileCard(userId) {
   $('#profile-card-activity').innerHTML = userActivityHtml(u);
   const ch = appState.channels.get(u.channelId);
   $('#profile-card-meta').textContent = ch ? `🔊 Na call: ${ch.name}` : '';
+  $('#profile-card-nickname').classList.toggle('hidden', !isMe || !appState.currentChannelId);
   $('#modal-user-profile').classList.remove('hidden');
 }
 
@@ -7826,7 +7828,7 @@ function initApp() {
   setupTextChannels();
   channelOrganizer = setupChannelOrganization({ socket, state: appState, prefs, savePrefs, showToast, mountStageOverlay, renderVoice: renderChannelsTree, renderText: renderTextChannels });
   channelOrganizer.refresh();
-  setupChatExtras({ socket, state: appState, prefs, savePrefs, showToast, mountStageOverlay, switchChannel });
+  setupChatExtras({ socket, state: appState, prefs, savePrefs, showToast, mountStageOverlay, switchChannel, closeUserPopover });
   setupMessageSearch({ socket, appState, showToast, mountStageOverlay });
   setupCategoryCollapse();
   setupChatMessageActions();

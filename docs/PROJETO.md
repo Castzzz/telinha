@@ -1261,9 +1261,12 @@ válidos: os canais começam nos grupos padrão até alguém organizar.
   para colocar no final. Um clique abre os seletores de categoria/posição, também para
   teclado e celular. O controle no cabeçalho da lista abre nomes, categorias e ausentes.
   Recolhimento das categorias personalizadas fica local em `collapsedCategories`.
-- `chat-nickname-get` / `chat-nickname-set` validam o chat e o acesso, e alteram somente o
-  apelido da própria identidade (máximo 25 caracteres, até 10 mudanças/10 s por socket).
-  Texto usa o apelido nas novas mensagens; voz usa também nos participantes da call.
+- `chat-nickname-get` / `chat-nickname-set` aceitam somente `scope: 'call'` no canal de voz
+  atual e alteram somente o apelido da própria identidade (máximo 25 caracteres, até 10
+  mudanças/10 s por socket). A opção **Trocar apelido neste chat** aparece no próprio perfil
+  da call, no popup e no cartão ampliado, apenas enquanto está em voz. Não fica no compositor.
+  O apelido vale nos participantes e no chat da call. Canais de texto usam o nome de perfil;
+  valores antigos `text:<id>` ficam inativos e não podem mais ser consultados/alterados pelo protocolo do chat.
   As mensagens guardam `profileName` para identificar o nome original no tooltip e na busca.
   Histórico não é reescrito; o nome do perfil/conta permanece igual. Apagar o canal limpa
   seu apelido e posição; vazio volta ao nome do perfil. Conta opcional preserva o accessId,
@@ -1292,3 +1295,17 @@ ordem compartilhada por drag/drop e formulário, apelido preservado ao recarrega
 real de PNG, movimento para Ausentes e interface nos três temas/em 390 px.
 
 Referência para inatividade nativa: [Electron powerMonitor](https://www.electronjs.org/docs/latest/api/power-monitor#powermonitorgetsystemidletime).
+
+
+#### Ajuste dos apelidos para voz
+
+A pedido do dono, os apelidos passaram a existir só em voz. Mensagens antigas de texto não
+são reescritas; novas mensagens de texto ignoram qualquer apelido de teste anteriormente
+salvo. O perfil global/conta permanece igual. Com uma conversa de texto aberta durante a
+call, clicar no próprio perfil continua alterando o apelido do canal de voz atual.
+
+Conferido com servidor real (nega get/set para texto e ignora valor antigo) e duas janelas
+Electron: menu do próprio participante, opção oculta no perfil alheio, cartão ampliado,
+nome recebido pela outra pessoa e persistência ao recarregar/entrar na call novamente.
+Criação/nomes/ordem das categorias exigem deploy do servidor; o desktop instalado também
+precisa de release para receber a interface. O teste local usa servidor e interface novos.
