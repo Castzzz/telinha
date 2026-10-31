@@ -35,6 +35,7 @@ import { applyAppearance, setupPersonalization } from './personalization.js';
 import { setupTransmissionDiagnostics } from './transmission-diagnostics.js';
 import { setupChannelOrganization } from './channel-organization.js';
 import { setupChatExtras } from './chat-extras.js';
+import { createDailyCallClocks, formatCallDuration } from './call-time.js';
 import { setupMessageSearch } from './message-search.js';
 import { setupAccounts, accountSession, initialAccountProfile, accountProfileSnapshot } from './accounts.js';
 
@@ -390,6 +391,19 @@ const socket = io(SERVER_URL, {
   reconnectionDelayMax: 5000,
   timeout: 20000
 });
+
+const dailyCallClocks = createDailyCallClocks();
+// Registra a chegada com relógio monotônico; a hora do PC não altera o total do servidor.
+socket.on('channels-list', list => { if (Array.isArray(list)) dailyCallClocks.replace(list.flatMap(channel => channel.users || [])); });
+socket.on('channel-state', payload => { dailyCallClocks.user(payload?.me); for (const user of payload?.users || []) dailyCallClocks.user(user); });
+socket.on('user-joined', payload => { dailyCallClocks.user(payload?.user); for (const user of payload?.users || []) dailyCallClocks.user(user); });
+socket.on('user-profile-updated', payload => dailyCallClocks.user(payload?.user));
+socket.on('daily-call-times', times => {
+  if (!Array.isArray(times)) return;
+  for (const item of times) dailyCallClocks.remember(item.userId, item.time);
+  renderDailyCallTimers();
+});
+socket.on('disconnect', () => { dailyCallClocks.freeze(); renderDailyCallTimers(); });
 
 let connectionProbeTimer = null;
 let connectionProbeRun = 0;
@@ -3934,7 +3948,16 @@ function formatCallClock(startedAt, now = Date.now()) {
   return h > 0 ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
+function renderDailyCallTimers() {
+  for (const element of $$('[data-daily-call-user]')) {
+    const elapsed = dailyCallClocks.elapsed(element.dataset.dailyCallUser);
+    if (elapsed !== null) element.textContent = formatCallDuration(elapsed);
+  }
+}
+
 function userCallTimerHtml(user) {
+  const elapsed = dailyCallClocks.elapsed(user?.id);
+  if (elapsed !== null) return `<span class="user-call-timer" data-daily-call-user="${escapeHtml(user.id)}" title="Tempo em calls hoje · zera à meia-noite de Brasília">${formatCallDuration(elapsed)}</span>`;
   const start = Number(user?.voiceJoinedAt || user?.joinedAt || Date.now());
   return `<span class="user-call-timer" data-call-timer="${start}" title="Tempo na call">${formatCallClock(start)}</span>`;
 }
@@ -4060,6 +4083,7 @@ function setupGameActivity() {
   setInterval(() => {
     if (document.hidden) return;
     const now = Date.now();
+    renderDailyCallTimers();
     for (const el of $$('[data-call-timer]')) {
       const prefix = el.classList.contains('lounge-call-timer') ? '⏱ ' : '';
       el.textContent = `${prefix}${formatCallClock(Number(el.dataset.callTimer), now)}`;

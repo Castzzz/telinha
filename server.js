@@ -5,6 +5,7 @@
 
 import express from 'express';
 import { ChannelExtras } from './channel-extras.js';
+import { DailyCallStore } from './daily-call-store.js';
 import http from 'node:http';
 import { Server } from 'socket.io';
 import path from 'node:path';
@@ -43,6 +44,7 @@ const ADMIN_KEY = process.env.ADMIN_KEY || '';
 const OWNER_KEY = process.env.OWNER_KEY || '';
 const permissions = new PermissionStore(DATA_DIR);
 const accounts = new AccountStore(DATA_DIR);
+const dailyCalls = new DailyCallStore(DATA_DIR);
 const accountLimit = createAccountLimiter();
 
 function verifiedProfileKey(socket) {
@@ -741,7 +743,8 @@ function publicUser(u) {
     isSpeaking: u.isSpeaking,
     streamQuality: u.streamQuality,
     joinedAt: u.joinedAt,
-    voiceJoinedAt: u.voiceJoinedAt || u.joinedAt
+    voiceJoinedAt: u.voiceJoinedAt || u.joinedAt,
+    dailyCallTime: u.channelId ? dailyCalls.snapshot(u.accessId) : null
   };
 }
 
@@ -862,11 +865,11 @@ function applyProfile(user, raw) {
   return changed;
 }
 
-function getChannelsSummary(viewer = null) {
+function getChannelsSummary(viewer = null, presence = null) {
   const list = [], positions = visiblePlacements('voice', viewer);
   for (const channel of channelExtras.ordered('voice', channels.values())) {
     if (!permissions.visible(viewer, channel)) continue;
-    const userList = Array.from(channel.users.values()).map(publicUser);
+    const userList = presence?.get(channel.id) || Array.from(channel.users.values()).map(publicUser);
     const sharers = userList.filter(u => u.isSharing).map(u => u.name);
 
     list.push({
@@ -897,9 +900,11 @@ function getChannelUsersList(channelId) {
 }
 
 function broadcastChannels() {
+  // Os usuários são iguais para todos os espectadores autorizados; evita recalcular cada relógio por destinatário.
+  const presence = new Map([...channels.values()].map(channel => [channel.id, [...channel.users.values()].map(publicUser)]));
   broadcastLayout();
   for (const socket of io.sockets.sockets.values()) {
-    const list = getChannelsSummary(socket.data.user);
+    const list = getChannelsSummary(socket.data.user, presence);
     socket.emit('channels-list', list);
     socket.emit('channels-summary', list);
   }
@@ -957,6 +962,7 @@ function cleanPermissionMembers(mode = 'dedup') {
     referencedIds,
     mode,
     onMerge(oldId, newId) {
+      dailyCalls.merge(oldId, newId);
       for (const ch of [...channels.values(), ...textChannels.values()]) {
         for (const field of ['access', 'writeAccess']) {
           const list = ch[field]?.members;
@@ -1804,6 +1810,7 @@ io.on('connection', (socket) => {
     user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
+    dailyCalls.join(user.accessId, socket.id);
     user.watching = [];
     channel.users.set(socket.id, user);
 
@@ -2682,6 +2689,7 @@ function leaveCurrentChannel(socket) {
   if (!user || !user.channelId) return;
   if (SFU_SECRET) revokeSfuMedia(user.mediaId);
 
+  dailyCalls.leave(socket.id);
   const channelId = user.channelId;
   const soundSeed = callSoundSeed();
   const channel = channels.get(channelId);
@@ -2789,9 +2797,22 @@ function sweepAfk(now = Date.now()) {
 const afkTimer = setInterval(sweepAfk, 10000); afkTimer.unref();
 server.on('close', () => clearInterval(afkTimer));
 
+function syncDailyCallTimes() {
+  dailyCalls.checkpoint();
+  for (const channel of channels.values()) {
+    if (!channel.users.size) continue;
+    const times = [...channel.users.values()].map(user => ({ userId: user.id, time: dailyCalls.snapshot(user.accessId) }));
+    for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('daily-call-times', times);
+  }
+}
+const dailyCallTimer = setInterval(syncDailyCallTimes, 30000); dailyCallTimer.unref();
+const saveDailyCallsOnExit = () => dailyCalls.checkpoint();
+server.on('close', () => { clearInterval(dailyCallTimer); dailyCalls.checkpoint(); process.off('exit', saveDailyCallsOnExit); });
+
 function startServer(port = PORT, host = '0.0.0.0') {
   return new Promise((resolve) => {
     server.listen(port, host, () => {
+      process.once('exit', saveDailyCallsOnExit);
       ensureLinuxSystemAudioSource();
       const ips = getLocalIPs();
       console.log('\n=======================================================');
@@ -2816,17 +2837,15 @@ const isDirectRun = Boolean(process.argv[1]) && (
 
 if (isDirectRun) {
   startServer(PORT, '0.0.0.0');
-  if (music) {
-    let closingMusic = false;
-    const stopMusicServer = async () => {
-      if (closingMusic) return;
-      closingMusic = true;
-      await music.close();
-      io.close();
-    };
-    process.once('SIGINT', stopMusicServer);
-    process.once('SIGTERM', stopMusicServer);
-  }
+  let closing = false;
+  const stopServer = async () => {
+    if (closing) return;
+    closing = true;
+    try { await music?.close(); }
+    finally { io.close(); }
+  };
+  process.once('SIGINT', stopServer);
+  process.once('SIGTERM', stopServer);
 }
 
-export { app, server, io, channels, channelExtras, sweepAfk, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
+export { app, server, io, channels, channelExtras, dailyCalls, syncDailyCallTimes, sweepAfk, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };

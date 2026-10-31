@@ -1383,3 +1383,47 @@ personalização, e o ajuste final de apelido somente na voz pelo próprio perfi
   e `public/app.js` iguais aos locais. Segredos, propriedade, contas e dados preservados.
 
 A `main` ficou selecionada após a publicação. As branches de desenvolvimento foram mantidas.
+
+
+### Tempo diário por pessoa na call (30/10/2026, ainda local)
+
+Branch `melhoria/tempo-diario-na-call`, a partir da 4.2.0 publicada. Sem release/deploy e
+sem alteração de versão. O contador individual passa de duração da entrada atual para
+acumulado em voz no dia civil, com referência comum `America/Sao_Paulo` (Brasília).
+O relógio de cada canal (`callStartedAt`) continua medindo a sessão ativa daquele canal.
+
+- `daily-call-store.js`: acumula por `accessId`, com sessões vinculadas aos sockets. Soma
+  somente enquanto ao menos uma sessão daquela identidade participa de uma call. Sair,
+  trocar de canal, ser movido/removido e desconectar passam por `leaveCurrentChannel` e
+  pausam o trecho. Entrar novamente retoma o total. Dois aparelhos da mesma conta/perfil
+  contam a união dos intervalos, sem duplicar. Ausentes também é um canal de voz e conta.
+- Persistência em `TELINHA_DATA_DIR/daily-call-time.json`, com `{ day, timeZone, totals }`.
+  Os totais são milissegundos por identidade, somente do dia corrente, sem nomes ou canais.
+  Gravação por arquivo temporário/rename, `0600`, ao entrar/sair, a cada 30 segundos e ao
+  fechar o servidor/processo normalmente (inclusive servidor embutido no Electron).
+  Reiniciar recupera o último total salvo sem somar o período em que o processo ficou fora.
+  Uma interrupção forçada/SIGKILL pode perder os segundos desde o último checkpoint.
+  O arquivo participa dos backups existentes da pasta data. Sem diretório, fica em memória.
+- Ao mudar a data, descarta os acumulados anteriores. Sessões que continuam abertas
+  passam a contar desde a primeira hora válida do novo dia; nenhum tempo de ontem vaza
+  para hoje. `public/call-time.js` calcula as fronteiras pelo fuso, incluindo dias históricos
+  com horário de verão. Leituras normais usam a janela já calculada, evitando converter
+  o fuso para cada pessoa/destinatário durante grandes sequências de presença.
+- `publicUser` inclui `dailyCallTime: { day, timeZone, elapsedMs, running, serverTime,
+  dayEndsAt }` apenas enquanto aquele socket está em voz. A cada 30 segundos,
+  `daily-call-times` atualiza `{ userId, time }` somente para quem pode ver o canal,
+  inclusive respeitando canais invisíveis para o dono. Não aceita contadores do cliente.
+  A presença de cada canal é calculada uma vez por broadcast e reutilizada entre
+  destinatários autorizados; visibilidade e poderes continuam filtrados por destinatário.
+- O cliente ancora os snapshots em `performance.now()`, independente do relógio/fuso do
+  aparelho. Atualiza a cada segundo, zera localmente na virada mesmo sem outro pacote e
+  congela quando a conexão cai. Trocar de canal/recarregar recebe o acumulado do servidor.
+  Servidor antigo continua mostrando o contador da sessão anterior, como compatibilidade.
+- `daily-call-store.js` foi incluído no instalador e no empacotamento do deploy. Servidor
+  e clientes precisam de atualização para disponibilizar o contador novo aos amigos.
+
+Validação: runner (62), m1/m2/m3 + tempo diário (87), testes específicos de calendário,
+pausas, troca, aparelhos simultâneos, persistência/reinício, virada e saída do processo,
+integração de servidor com privacidade e Electron real com duas pessoas. A conferência
+visual cobre meia-noite sem novo pacote, pausa/retorno, troca, reabertura, três temas e
+390 px. Todos os dados e relógios simulados desses testes são locais e temporários.

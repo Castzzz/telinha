@@ -206,12 +206,21 @@ envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade. Tudo fica nes
 funciona com os três temas e continua após reabrir. **Restaurar personalização** remove o
 fundo e a cor próprios, preservando tema e perfil. O APK Android acompanha as melhorias.
 
+## Em preparação: tempo diário de call
+
+Na branch `melhoria/tempo-diario-na-call`, o contador de cada pessoa soma o tempo em
+qualquer canal de voz durante o dia e zera à **meia-noite de Brasília**. Sair, voltar,
+trocar de canal, reconectar ou reabrir o app preserva o acumulado; fora da call ele para.
+O total fica salvo no servidor por perfil, e dois aparelhos com o mesmo perfil contam
+uma única vez. O relógio do canal continua indicando há quanto tempo aquela call está ativa.
+Essa mudança ainda não foi publicada.
+
 ## 🎮 Como usar
 
 | Quero… | Como |
 |---|---|
 | **Entrar numa chamada** | A tela inicial mostra cartões dos canais e quem está em voz, com as fotos de perfil e o recorte escolhido (iniciais para quem não tem foto). Clique em **Entrar** no cartão ou no canal da lista. Os atalhos de texto abrem as conversas sem ligar a voz |
-| **Mostrar o jogo que estou jogando** | No app para Windows e Linux, um ícone de controle verde (🎮) aparece ao lado de quem está jogando e o nome do jogo com o tempo ativo aparece ao clicar no perfil da pessoa (**Jogando Counter-Strike 2 · há 23 min**), enquanto embaixo do nome aparece o tempo da pessoa na call. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável |
+| **Mostrar o jogo que estou jogando** | No app para Windows e Linux, um ícone de controle verde (🎮) aparece ao lado de quem está jogando e o nome do jogo com o tempo ativo aparece ao clicar no perfil da pessoa (**Jogando Counter-Strike 2 · há 23 min**), enquanto embaixo do nome aparece o total de hoje em calls. Em ⚙️ → **Atividade**, você pode desligar o compartilhamento ou cadastrar um jogo pelo nome do executável |
 | **Dar zoom numa transmissão** | Role a roda do mouse sobre o vídeo (ou faça pinça com dois dedos no celular) para dar zoom de até 500%, e arraste para mover a imagem. Clique no botão de porcentagem (`150% ✕`) para voltar ao tamanho normal |
 | **Usar o miniplayer** | Ao assistir uma tela ou câmera, acompanhe a faixa atual e use pausar/continuar e pular no palco. O título abre a fila completa |
 | **Modo Cinema** | Faixa horizontal recolhível no palco, com fotos, nomes, áudio e transmissão separados. O contador inclui pessoas; a música aparece ao lado. A fala aparece na borda do avatar. Recolhida, a faixa some após 3 segundos e reaparece com mouse, toque ou teclado. Reações funcionam também em tela cheia |
