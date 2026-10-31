@@ -336,7 +336,7 @@
           <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
           <button type="button" id="btn-stage-diagnostics" class="btn-control-icon" title="Diagnóstico das transmissões" aria-label="Diagnóstico das transmissões"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V7"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
-          <button id="btn-stage-pip" class="btn-control-icon hidden" title="Janela flutuante por cima dos outros programas (P)" aria-label="Janela flutuante">⧉</button>
+          <button id="btn-stage-pip" class="btn-control-icon hidden" title="Abrir transmissão em janela (P)" aria-label="Abrir transmissão em janela">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon hidden" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
         </div>
       </footer>
@@ -664,11 +664,18 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 4.3.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 4.3.1</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Transmissão em outra janela:</strong> no app desktop, use ⧉ ou P para abrir uma janela de verdade. Redimensione, maximize ou arraste para outro monitor enquanto continua na sala.</li>
+          <li><strong>Tela cheia na janela:</strong> use o botão, F, F11 ou duplo clique no vídeo. Esc volta ao tamanho anterior. Fechar a janela mantém a transmissão aberta na sala, com o mesmo áudio e volume.</li>
+          <li><strong>Player renovado:</strong> cabeçalho integrado ao tema e barra flutuante com ícones e fundo translúcido. Os controles somem após 3 segundos sem interação, mesmo com foco ou mouse parado nos botões; mouse e teclado trazem de volta.</li>
+        </ul>
+        <div id="whats-new-4-3-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 4.3.0</h4>
         <ul class="whats-new-list">
           <li><strong>Pessoas do servidor:</strong> botão Membros no topo abre a lateral com online/offline, busca e perfil ao clicar. Inclui quem está fora da call e não duplica quem usa dois aparelhos. No celular, abre em um painel.</li>
           <li><strong>Amigos:</strong> em Configurações → Amigos ou Você → Amigos no celular, envie pelo @usuário, aceite/recuse pedidos, cancele os enviados e remova amizades. Conta e lista acompanham você entre aparelhos.</li>
@@ -677,6 +684,7 @@
           <li><strong>Pode apagar o Geral:</strong> quem gerencia canais também pode excluí-lo. O canal não volta ao reiniciar o servidor nem por links antigos; criar outro Geral continua permitido.</li>
           <li><strong>Transmitir pelo Android:</strong> entre na call e use ⋯ → Transmitir tela com som. O Android pede autorização a cada início. O áudio dos apps permitidos precisa de Android 10+ e é separado do microfone. Também dá para parar pela notificação.</li>
         </ul>
+        </div>
         <div id="whats-new-4-2-1" class="whats-new-older hidden">
           <h4>E o que chegou na 4.2.1</h4>
         <ul class="whats-new-list">

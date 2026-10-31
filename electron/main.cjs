@@ -7,6 +7,7 @@ const { pathToFileURL } = require('url');
 const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
 const { createActivityTracker } = require('./game-activity.cjs');
+const { setupStreamWindow, updateStreamWindowTheme } = require('./stream-window.cjs');
 const gameActivity = createActivityTracker();
 let gameActivityPrefs = null;
 
@@ -772,6 +773,7 @@ function applyThemeToWindow(theme) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const colors = titleBarColors(theme);
   mainWindow.setBackgroundColor(colors.color);
+  updateStreamWindowTheme(mainWindow, colors);
   if (process.platform === 'darwin') return;
   try {
     mainWindow.setTitleBarOverlay({ ...colors, height: 52 });
@@ -807,11 +809,7 @@ async function createWindow() {
     }
   });
 
-  // Links do chat (target=_blank) abrem no navegador, nunca numa janela do app
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
-    return { action: 'deny' };
-  });
+  setupStreamWindow(mainWindow, shell, { getTitleBarColors: () => titleBarColors(loadPrefs().theme) });
 
   // Se a sala cair (servidor do amigo desligou, sem internet), volta para a tela inicial
   mainWindow.webContents.on('did-fail-load', (_e, _code, desc, url, isMainFrame) => {

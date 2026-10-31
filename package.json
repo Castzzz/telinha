@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "4.3.0",
+  "version": "4.3.1",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -20,6 +20,7 @@
     "test": "node tests/runner.js",
     "test:microphone": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-browser.cjs)'",
     "test:microphone:ui": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/microphone-controls.cjs)'",
+    "test:stream:ui": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/stream-window-browser.cjs)'",
     "test:camera": "node --test tests/camera-source.test.js",
     "test:friends": "node --test tests/accounts.test.js tests/accounts-server.test.js tests/friends.test.js",
     "test:friends:ui": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/controls-friends-browser.cjs)'",

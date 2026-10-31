@@ -1,0 +1,42 @@
+html, body { width: 100%; height: 100%; margin: 0; min-width: 0; overflow: hidden; }
+body { background: var(--bg-tertiary); }
+#player-titlebar { height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 152px 0 14px; background: var(--bg-tertiary); color: var(--text-muted); font-size: 12px; user-select: none; -webkit-app-region: drag; }
+#player-titlebar img { flex-shrink: 0; border-radius: 5px; }
+:root[data-platform="darwin"] #player-titlebar { padding-left: 80px; padding-right: 14px; }
+.player-brand { font-weight: 700; color: var(--text-normal); letter-spacing: -.2px; }
+.titlebar-divider { height: 14px; width: 1px; background: var(--border-medium); flex-shrink: 0; margin: 0 2px; }
+#window-stream-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#stream-player { position: relative; width: 100%; height: calc(100% - 44px); background: var(--bg-tertiary); color: var(--text-normal); }
+#stream-player:fullscreen { height: 100%; }
+.player-fullscreen #player-titlebar { display: none; }
+#stream-player video { display: block; width: 100%; height: 100%; object-fit: contain; }
+#player-controls { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); width: calc(100% - 40px); max-width: 720px; box-sizing: border-box; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid color-mix(in srgb, var(--text-normal) 12%, transparent); border-radius: 16px; background: color-mix(in srgb, var(--bg-floating) 90%, transparent); box-shadow: 0 8px 32px color-mix(in srgb, var(--bg-tertiary) 35%, transparent); backdrop-filter: blur(18px); transition: opacity .2s, transform .2s; }
+.player-stream-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.player-stream-icon { display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0; border-radius: 11px; color: var(--accent-brand); background: color-mix(in srgb, var(--accent-brand) 12%, transparent); }
+.player-stream-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.player-status { display: flex; gap: 5px; align-items: center; color: var(--text-muted); font-size: 9px; font-weight: 700; letter-spacing: 1.1px; }
+.live-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent-green); }
+#stream-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 1.3; }
+.player-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.player-action-divider { width: 1px; height: 22px; background: var(--border-medium); margin: 0 4px; }
+#player-controls button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--text-normal); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: background .15s, color .15s; }
+#player-controls button:hover { background: var(--bg-hover); color: var(--text-header); }
+#player-controls button:active { background: var(--bg-active); }
+#player-controls button:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 2px; }
+#player-controls #fullscreen { background: color-mix(in srgb, var(--accent-brand) 14%, transparent); color: var(--text-header); }
+#player-controls #fullscreen:hover { background: color-mix(in srgb, var(--accent-brand) 25%, transparent); }
+.fullscreen-exit, .player-fullscreen .fullscreen-enter { display: none; }
+.player-fullscreen .fullscreen-exit { display: block; }
+#stream-player.controls-idle { cursor: none; }
+#stream-player.controls-idle #player-controls { opacity: 0; pointer-events: none; transform: translate(-50%, 6px); }
+#player-error:empty { display: none; }
+#player-error { width: 100%; font-size: 12px; color: var(--text-danger); }
+@media (max-width: 540px) {
+  #player-controls { bottom: 12px; width: calc(100% - 24px); padding: 8px; gap: 8px; border-radius: 13px; }
+  #player-controls button { width: 38px; padding: 0; }
+  #player-controls button span { display: none; }
+  .player-action-divider { margin: 0 2px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #player-controls, #player-controls button { transition: none; }
+}

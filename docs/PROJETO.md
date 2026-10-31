@@ -3,6 +3,10 @@
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
+**4.3.1 em preparação (31/10/2026):** transmissão em janela normal no desktop,
+tela cheia em outro monitor, cabeçalho integrado e controles flutuantes com ocultação
+automática. APK 4.3.1/código 12 acompanha a interface; PiP móvel preservado.
+
 **[4.3.0 publicada em 31/10/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.0):**
 amigos, membros na lateral, tempo individual por canal, exclusão do Geral, barra em tela
 cheia e captura nativa Android. APK 4.3.0/código 11. Servidor atualizado e saudável.
@@ -136,6 +140,24 @@ Pontos importantes:
   PiP nativo usa `mobile-pip.js` e `MainActivity`: vídeo remoto em uma janela do sistema
   ao minimizar, sem duplicar a captura ou mudar o mixer. Detalhes em [ANDROID.md](ANDROID.md).
   Compartilhar a tela do celular exige integração MediaProjection e ainda não existe.
+
+### Transmissão em janela no desktop
+
+O botão ⧉ / atalho P usa `public/stream-window.js` para abrir o player local
+`stream-window.html` em uma janela Electron normal, com moldura, maximização e tela cheia. O cabeçalho arrastável usa `titleBarOverlay`
+com botões nativos no Windows/Linux e `hiddenInset` no macOS; as cores acompanham
+o tema da sala pelo processo principal. A barra flutuante do player usa tokens dos
+três temas, SVGs e botões compactos em larguras menores que 540 px.
+`electron/stream-window.cjs` libera somente esse endereço e nome de janela no
+`setWindowOpenHandler`; links HTTP(S) continuam no navegador. A janela compartilha o
+MediaStream já recebido, sem nova conexão WebRTC, e reproduz o vídeo sempre mutado:
+o áudio continua no mixer da sala, sem duplicar som nem ignorar volume/ensurdecer.
+Reabrir a mesma transmissão fecha a janela; escolher outra reutiliza o player. A remoção
+da transmissão, navegação ou fechamento da sala fecha o player. Fechar só o player
+não para tracks nem interrompe a call. Navegador e Android mantêm o PiP anterior.
+Os controles do player somem após 3 segundos sem interação, inclusive com foco ou
+ponteiro parado nos botões. Eventos de mouse, foco e teclado revelam a barra novamente.
+Validação com dois clientes WebRTC reais: `npm run test:stream:ui`.
 
 ## 3. Organização das pastas
 

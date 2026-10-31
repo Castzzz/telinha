@@ -1,3 +1,4 @@
+import { createStreamWindow } from './stream-window.js';
 import { profileIdentity, profileProof } from './profile-identity.js';
 /**
  * public/app.js - Telinha Client Controller
@@ -3876,8 +3877,8 @@ function toggleStageFullscreen(customTarget = null) {
   }
 }
 
-// Janela flutuante (picture-in-picture): a transmissão aberta continua visível por cima
-// do jogo ou de outro programa. No mosaico vai a que está em foco.
+// No desktop abre uma janela normal; nos outros clientes mantém o PiP nativo.
+const streamWindow = createStreamWindow();
 async function toggleStagePip() {
   if (document.pictureInPictureElement) {
     document.exitPictureInPicture().catch(() => {});
@@ -3891,6 +3892,11 @@ async function toggleStagePip() {
   const video = userId && document.getElementById(`video-el-${userId}`);
   if (!video) {
     showToast('Nenhuma transmissão pra abrir na janela flutuante.');
+    return;
+  }
+  if (window.electronAPI?.isElectron) {
+    const info = appState.activeStreams.get(userId);
+    if (!streamWindow.toggle(userId, info)) showToast('❌ Não consegui abrir a janela da transmissão.', 'error');
     return;
   }
   if (!document.pictureInPictureEnabled) {
@@ -5025,14 +5031,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.3.0';
+const WHATS_NEW_VERSION = '4.3.1';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -5625,6 +5631,7 @@ function setupTileZoomPan(tile, video, zoomResetBtn) {
 
 function registerScreenStream(userId, userName, stream, isLocal) {
   appState.activeStreams.set(userId, { stream, userName, isLocal });
+  streamWindow.update(userId, appState.activeStreams.get(userId));
 
   let tile = document.getElementById(`video-tile-${userId}`);
   if (!tile) {
@@ -5746,6 +5753,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 }
 
 function removeScreenStream(userId) {
+  streamWindow.close(userId);
   appState.activeStreams.delete(userId);
   const tile = document.getElementById(`video-tile-${userId}`);
   if (document.pictureInPictureElement && tile?.contains(document.pictureInPictureElement)) {
