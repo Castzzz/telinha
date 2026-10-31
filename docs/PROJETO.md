@@ -17,7 +17,7 @@ com o PC, busca, diagnóstico, categorias/ordenação, apelido só em voz pelo p
 download de imagens, ausentes e personalização. O APK passa a 4.2.0/código 9. Os registros
 abaixo sobre branches e testes locais descrevem as etapas anteriores à publicação.
 
-**Atualização 4.2.1 em preparação (30/10/2026):** tempo diário de call por pessoa,
+**Versão 4.2.1 publicada (30/10/2026):** tempo diário de call por pessoa,
 com pausa fora da voz, persistência e reset à meia-noite de Brasília. APK código 10.
 
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
@@ -1391,7 +1391,7 @@ A `main` ficou selecionada após a publicação. As branches de desenvolvimento 
 ### Tempo diário por pessoa na call (30/10/2026)
 
 Implementado na branch `melhoria/tempo-diario-na-call`, a partir da 4.2.0 publicada.
-Publicação autorizada pelo dono e preparada na 4.2.1. O contador individual passa de duração da entrada atual para
+Publicado na 4.2.1 com autorização do dono. O contador individual passa de duração da entrada atual para
 acumulado em voz no dia civil, com referência comum `America/Sao_Paulo` (Brasília).
 O relógio de cada canal (`callStartedAt`) continua medindo a sessão ativa daquele canal.
 
@@ -1430,3 +1430,29 @@ pausas, troca, aparelhos simultâneos, persistência/reinício, virada e saída 
 integração de servidor com privacidade e Electron real com duas pessoas. A conferência
 visual cobre meia-noite sem novo pacote, pausa/retorno, troca, reabertura, três temas e
 390 px. Todos os dados e relógios simulados desses testes são locais e temporários.
+
+### Publicação da 4.2.1 concluída (30/10/2026)
+
+Release pública [v4.2.1](https://github.com/Castzzz/telinha/releases/tag/v4.2.1), marcada como
+latest e sem pré-release. A tag aponta para `ae01ed6062d1ca70f4d0443a08f86bdcfde65d14`,
+integrado por fast-forward e enviado à `main`.
+
+- Oito arquivos publicados: Setup, Portátil, AppImage, tar.gz, blockmap do Setup,
+  `latest.yml`, `latest-linux.yml` e APK Android 4.2.1/código 10. Assinatura do APK igual
+  à 4.2.0. Tamanhos e SHA-256 de todos os arquivos no GitHub conferem com os locais;
+  manifests públicos idênticos aos locais, com tamanhos e SHA-512 validados.
+- Pacotes Windows/Linux e APK conferidos com os módulos novos e nove sons privados.
+  Tar.gz íntegro. O executável Linux empacotado entrou numa call local e exibiu o
+  acumulado diário. `public/sounds/` continua fora do Git.
+- Validação final: runner (62), suíte adicional m1/m2/m3, contador diário, permissões e
+  identidade (104), integração m4, interface Electron com duas pessoas, popup de novidades
+  e build/lint Android. Todos passaram.
+- Backups íntegros antes do deploy: `~/Teletela-backups/teletela-dados-2026-10-30_21-30-57.tar.gz`
+  e `~/Teletela-backups/teletela-dados-2026-10-30_21-33-43.tar.gz` (automático do deploy).
+- Servidor atualizado para 4.2.1, mantendo Node `v24.22.1` e Caddy `2.11.7`. Node, SFU e
+  Caddy ativos; saúde pública confirmada. Hashes remotos de `server.js`,
+  `daily-call-store.js`, `public/call-time.js` e `public/app.js` iguais aos locais.
+  Persistência real confirmada com seis perfis, tempo acumulado, dia de Brasília correto
+  e permissão `0600` em `daily-call-time.json`.
+
+A `main` ficou selecionada após a publicação. As branches de desenvolvimento foram mantidas.
