@@ -204,7 +204,7 @@ const USER_COLORS = [
 // Uma reação: um emoji só (com tom de pele, ZWJ, bandeira...), sem texto junto
 const EMOJI_RE = /^(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\p{Emoji_Component}|\u200d|\ufe0f|[\u{E0020}-\u{E007F}])+$/u;
 
-// Só o Geral é fixo; o resto a turma cria (e apaga) pelo app
+// O Geral existe na primeira abertura, mas a administração pode removê-lo.
 const DEFAULT_CHANNELS = [
   { id: 'geral', name: 'Geral', isDefault: true }
 ];
@@ -213,6 +213,7 @@ const DEFAULT_CHANNELS = [
 // Canal criado pelo "Criar Canal" é salvo e fica até alguém apagar. Canal que nasce de um
 // link antigo (?channel=x) ou de versão antiga do app é temporário: some quando esvazia.
 const channels = new Map();
+const deletedDefaultChannels = new Set();
 
 function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null, writeAccess = null, description = '' }) {
   return { id, name, isDefault, temporary, createdBy, createdAt, password, access, writeAccess, description, callStartedAt: null, users: new Map(), messages: [] };
@@ -241,8 +242,11 @@ function loadSavedChannels() {
   if (!CHANNELS_FILE) return;
   try {
     const saved = JSON.parse(fs.readFileSync(CHANNELS_FILE, 'utf8'));
+    for (const id of Array.isArray(saved.deletedDefaultChannels) ? saved.deletedDefaultChannels : []) {
+      if (DEFAULT_CHANNELS.some(channel => channel.id === id)) { deletedDefaultChannels.add(id); channels.delete(id); }
+    }
     const general = saved.defaultSettings?.geral;
-    if (general && typeof general === 'object') Object.assign(channels.get('geral'), {
+    if (channels.has('geral') && general && typeof general === 'object') Object.assign(channels.get('geral'), {
       name: safeString(general.name, 'Geral', 30), description: safeString(general.description, '', 200),
       writeAccess: storedAccess(general.writeAccess),
       password: general.password == null ? null : validChannelPasswordHash(general.password) ? general.password : { salt: '', hash: '' }
@@ -286,8 +290,9 @@ function saveChannels(strict = false) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
     const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt, access, writeAccess, description }) => ({ id, name, createdBy, createdAt, access, writeAccess, description }));
-    const { name, description, writeAccess, password } = channels.get('geral');
-    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList, defaultSettings: { geral: { name, description, writeAccess, password } } }, null, 2), { mode: 0o600 });
+    const general = channels.get('geral');
+    const defaultSettings = general?.isDefault ? { geral: { name: general.name, description: general.description, writeAccess: general.writeAccess, password: general.password } } : {};
+    fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList, defaultSettings, deletedDefaultChannels: [...deletedDefaultChannels] }, null, 2), { mode: 0o600 });
     fs.renameSync(tmp, CHANNELS_FILE);
   } catch (err) {
     console.error('⚠️ [Canais] Não deu pra salvar os canais:', err.message);
@@ -697,9 +702,9 @@ function applyServerModeration(user) {
   if (user.serverDeafened) user.isDeafened = true;
 }
 
-// Apaga: admin apaga qualquer um; quem criou apaga o seu. O Geral nunca.
+// Quem gerencia canais apaga qualquer um; quem criou apaga o seu canal público.
 function canDeleteChannel(user, channel) {
-  if (!channel || channel.isDefault) return false;
+  if (!channel) return false;
   if (!permissions.visible(user, channel)) return false;
   if (permissions.has(user, 'manageChannels')) return true;
   // O profileId dos visitantes é público; não autoriza apagar um canal privado.
@@ -744,7 +749,7 @@ function publicUser(u) {
     streamQuality: u.streamQuality,
     joinedAt: u.joinedAt,
     voiceJoinedAt: u.voiceJoinedAt || u.joinedAt,
-    dailyCallTime: u.channelId ? dailyCalls.snapshot(u.accessId) : null
+    dailyCallTime: u.channelId ? dailyCalls.snapshotChannel(u.accessId, u.channelId) : null
   };
 }
 
@@ -900,6 +905,7 @@ function getChannelUsersList(channelId) {
 }
 
 function broadcastChannels() {
+  scheduleMembers();
   // Os usuários são iguais para todos os espectadores autorizados; evita recalcular cada relógio por destinatário.
   const presence = new Map([...channels.values()].map(channel => [channel.id, [...channel.users.values()].map(publicUser)]));
   broadcastLayout();
@@ -909,6 +915,47 @@ function broadcastChannels() {
     socket.emit('channels-summary', list);
   }
 }
+
+let membersTimer, membersSignature = '', membersRevision = 0;
+function serverMembers() {
+  const online = new Map();
+  for (const client of io.sockets.sockets.values()) {
+    const user = client.data.user;
+    if (user?.profileId && !client.data.accountEnding) online.set(user.accessId, user);
+  }
+  const accountsByMember = new Map(accounts.data.accounts.map(account => [account.accessId, account]));
+  const ids = new Set([...Object.keys(permissions.data.members), ...online.keys()]);
+  const result = [];
+  for (const memberId of ids) {
+    const active = online.get(memberId), account = accountsByMember.get(memberId), saved = permissions.data.members[memberId];
+    if (!active && !account && (!saved?.name || saved.name === 'Visitante')) continue;
+    const profile = active || account?.profile || { name: saved.name, color: USER_COLORS[0] };
+    const row = { memberId, id: active?.id || `member-${memberId}`, online: Boolean(active),
+      name: profile.name, color: profile.color || USER_COLORS[0], bio: profile.bio || '',
+      avatarV: active ? active.avatar ? active.avatarV : 0 : account?.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0,
+      avatarCrop: normalizeImageCrop(profile.avatarCrop),
+      isOwner: permissions.isOwner({ accessId: memberId }),
+      roles: permissions.roles({ accessId: memberId }).map(({ id, name }) => ({ id, name })) };
+    for (const key of ['nameColor', 'nameColor2', 'frame', 'frameColor', 'displayRoleId']) row[key] = profile[key] || '';
+    result.push(row);
+  }
+  return result;
+}
+function scheduleMembers() {
+  if (membersTimer) return;
+  membersTimer = setTimeout(() => {
+    membersTimer = null;
+    const members = serverMembers(), signature = JSON.stringify(members);
+    if (signature !== membersSignature) { membersSignature = signature; membersRevision++; }
+    // Fala, mute e relógio da call não precisam reconstruir a lista de pessoas.
+    for (const client of io.sockets.sockets.values()) if (client.data.membersRevision !== membersRevision) {
+      client.data.membersRevision = membersRevision;
+      client.emit('server-members', { supported: true, members });
+    }
+  }, 30);
+  membersTimer.unref();
+}
+server.on('close', () => { clearTimeout(membersTimer); membersTimer = null; });
 
 function emitVisibleUserEvent(event, payload, subject) {
   const channel = channels.get(subject.channelId);
@@ -1032,6 +1079,24 @@ for (const [scope, storage] of [['text', textAttachments], ['chat', chatAttachme
     });
   });
 }
+
+app.get('/api/member-avatar/:memberId', (req, res) => {
+  // Fotos de contas offline também exigem uma conexão autenticada à sala.
+  if (typeof req.query.access !== 'string' || !/^[a-f0-9]{64}$/.test(req.query.access)) return res.status(404).end();
+  const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access && !client.data.accountEnding
+    && (!client.data.accountSession || accounts.resolveSessionMeta(client.handshake.auth?.accountToken)));
+  if (!viewer || !/^[a-f0-9-]{36}$/.test(req.params.memberId)) return res.status(404).end();
+  const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === req.params.memberId && !client.data.accountEnding)?.data.user;
+  let media = active?.avatar;
+  if (!active) {
+    const value = accounts.data.accounts.find(account => account.accessId === req.params.memberId)?.profile.avatar;
+    const match = typeof value === 'string' && value.match(AVATAR_RE);
+    if (match) media = { mime: match[1], data: Buffer.from(match[2], 'base64') };
+  }
+  if (!media) return res.status(404).end();
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Content-Type': media.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.send(media.data);
+});
 
 // Banner e som de entrada: mesmo esquema da foto (some quando a pessoa sai da sala)
 function serveUserMedia(field) {
@@ -1234,6 +1299,18 @@ function revokeAccountSockets({ accountId, accessId, kind, exceptSocketId }) {
   }
 }
 
+function friendOnline(accountId) {
+  return [...io.sockets.sockets.values()].some(client => client.connected && !client.data.accountEnding
+    && client.data.accountSession?.account.id === accountId && accounts.resolveSessionMeta(client.handshake.auth?.accountToken));
+}
+
+function broadcastFriends() {
+  for (const client of io.sockets.sockets.values()) {
+    const session = accounts.resolveSessionMeta(client.handshake.auth?.accountToken);
+    if (session && !client.data.accountEnding) client.emit('friends-state', { supported: true, ...accounts.friends(session.account.id, friendOnline) });
+  }
+}
+
 const accountExpiryTimer = setInterval(() => {
   for (const client of io.sockets.sockets.values()) if (client.data.accountSession && !accounts.resolveSessionMeta(client.handshake.auth?.accountToken)) endAccountSocket(client);
 }, 30000);
@@ -1331,6 +1408,7 @@ io.on('connection', (socket) => {
     applyProfile(user, { ...accountSession.profile, profileId: accountSession.profile.id });
   }
   socket.data.user = user;
+  scheduleMembers();
   socket.use((_packet, next) => {
     if ((accountSession && !accounts.resolveSessionMeta(socket.handshake.auth?.accountToken))
       || (!accountSession && accounts.accountForAccessId(user.accessId))) {
@@ -1341,7 +1419,8 @@ io.on('connection', (socket) => {
     next();
   });
   installAccountHandlers({ socket, store: accounts, user, getProfile: storedAccountProfile,
-    limit: accountLimit, onRevoke: revokeAccountSockets });
+    limit: accountLimit, onRevoke: revokeAccountSockets, onFriendsChanged: broadcastFriends, isOnline: friendOnline });
+  if (accountSession) queueMicrotask(broadcastFriends);
   setupDiceSocket(socket);
   if (accessIdentity.token) socket.emit('permission-identity', { token: accessIdentity.token });
   sendPermissions(socket);
@@ -1534,7 +1613,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
@@ -1640,9 +1719,20 @@ io.on('connection', (socket) => {
     const channel = typeof channelId === 'string' ? channels.get(channelId) : null;
     if (!channel) return cb({ success: false, error: 'Esse canal não existe mais.' });
     if (!canDeleteChannel(user, channel)) {
-      return cb({ success: false, error: channel.isDefault ? 'O Geral não pode ser apagado.' : 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
+      return cb({ success: false, error: 'Só quem gerencia canais ou quem criou o canal pode apagar.' });
     }
-    channelExtras.removeChannel('voice', channel.id);
+    // Confirma em disco antes de retirar pessoas ou anunciar a exclusão.
+    channels.delete(channel.id);
+    if (channel.isDefault) deletedDefaultChannels.add(channel.id);
+    try { saveChannels(true); }
+    catch (error) {
+      channels.set(channel.id, channel);
+      if (channel.isDefault) deletedDefaultChannels.delete(channel.id);
+      return cb({ success: false, error: error.message });
+    }
+    channels.set(channel.id, channel);
+    try { channelExtras.removeChannel('voice', channel.id); }
+    catch (error) { console.error('⚠️ [Canais] Não deu para limpar a organização do canal excluído:', error.message); }
     // Avisa antes: quem está no canal sai da call sozinho no app
     for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('channel-deleted', { channelId: channel.id, channelName: channel.name, by: user.name });
     for (const memberId of [...channel.users.keys()]) {
@@ -1651,6 +1741,7 @@ io.on('connection', (socket) => {
     }
     channels.delete(channel.id);
     saveChannels();
+    dailyCalls.removeChannel(channel.id);
     broadcastChannels();
     cb({ success: true });
   }));
@@ -1738,7 +1829,7 @@ io.on('connection', (socket) => {
 
     // Confere antes de mexer no perfil ou sair da call atual. Admin e criador também precisam.
     const destination = channels.get(cleanChannelId);
-    if (destination && !permissions.visible(user, destination)) {
+    if ((!destination && deletedDefaultChannels.has(cleanChannelId)) || (destination && !permissions.visible(user, destination))) {
       const result = { success: false, code: 'channel-unavailable', error: 'Esse canal não está disponível.' };
       if (typeof maybeCallback !== 'function') socket.emit('channel-join-error', result);
       return cb(result);
@@ -1810,7 +1901,7 @@ io.on('connection', (socket) => {
     user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
-    dailyCalls.join(user.accessId, socket.id);
+    dailyCalls.joinChannel(user.accessId, socket.id, user.channelId);
     user.watching = [];
     channel.users.set(socket.id, user);
 
@@ -1965,6 +2056,7 @@ io.on('connection', (socket) => {
         if (key !== 'id') user[key] = draft[key];
       }
       const snapshot = storedAccountProfile(user);
+      broadcastFriends();
       for (const client of io.sockets.sockets.values()) if (client.data.accountSession?.account.id === accountSession.account.id) {
         if (client !== socket) {
           applyProfile(client.data.user, { ...snapshot, profileId: snapshot.id });
@@ -2667,6 +2759,8 @@ io.on('connection', (socket) => {
 
   // Disconnect Handling
   socket.on('disconnect', () => {
+    scheduleMembers();
+    if (accountSession) queueMicrotask(broadcastFriends);
     try {
       if (user.activity) {
         user.activity = null;
@@ -2801,7 +2895,7 @@ function syncDailyCallTimes() {
   dailyCalls.checkpoint();
   for (const channel of channels.values()) {
     if (!channel.users.size) continue;
-    const times = [...channel.users.values()].map(user => ({ userId: user.id, time: dailyCalls.snapshot(user.accessId) }));
+    const times = [...channel.users.values()].map(user => ({ userId: user.id, time: dailyCalls.snapshotChannel(user.accessId, user.channelId) }));
     for (const client of io.sockets.sockets.values()) if (permissions.visible(client.data.user, channel)) client.emit('daily-call-times', times);
   }
 }

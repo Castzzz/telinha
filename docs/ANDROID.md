@@ -12,12 +12,19 @@ Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md)
 ## O que funciona
 
 - Canais de voz e texto, perfil local, chat, cargos e canais com senha ou invisíveis.
-  Conta opcional com usuário/senha e o mesmo perfil do desktop; amigos ficam para depois.
-  Acesso em **Você → Conta**. Dados de RPG e os controles do palco usam a mesma interface.
+  Conta opcional com usuário/senha e o mesmo perfil do desktop. Acesso em **Você → Conta**.
+  Amigos em **Você → Amigos** no desenvolvimento local: pedidos, aceitar/recusar, cancelar,
+  remover e presença entre aparelhos. Precisa do servidor com o suporte novo.
+  Dados de RPG e os controles do palco usam a mesma interface.
 - Microfone com o filtro e o ganho manual do desktop, mute, ensurdecer e câmera frontal/traseira.
   Com a câmera ligada, **Virar** nos controles da call ou **⋯ → Virar câmera** alterna a lente.
   O nome do botão de câmera indica **Frontal** ou **Traseira**; a troca não altera o microfone.
 - Assistir às transmissões dos computadores. Abrir uma transmissão leva à aba Sala.
+- No desenvolvimento local, botão **Membros** no topo abre pessoas online/offline do
+  servidor, com busca e perfil. Voltar fecha o painel. O APK local acompanha essa mudança.
+- Contador individual por canal no desenvolvimento local: ao ir para AFK, o acumulado
+  da outra call pausa; voltar o retoma. Zera à meia-noite de Brasília. Exige o servidor
+  atualizado; em servidor anterior continua mostrando o total único da versão publicada.
 - PiP automático: enquanto recebe vídeo de um amigo, Início/trocar de app mantém a imagem
   numa janela do Android. Voltar restaura a interface. Usa o mesmo vídeo/mixer; não muda
   mute, volume ou microfone. Precisa de suporte e autorização de PiP no sistema.
@@ -30,9 +37,12 @@ Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md)
 
 ## Limites
 
-Ainda não há captura da tela ou do som de outros aplicativos Android. Isso precisa de
-`MediaProjection`, serviço e integração de mídia próprios; `getDisplayMedia` do desktop
-não resolve essa função na WebView. Os controles indisponíveis ficam ocultos.
+O APK local inclui captura nativa da tela e do som de outros apps. Cada início pede
+consentimento pelo `MediaProjection`; não reaproveita autorização antiga. Áudio interno
+requer Android 10+ e `RECORD_AUDIO`. Android 8/9 transmite só imagem. Apps com proteção de
+conteúdo ou política que proíbe captura podem ficar sem imagem/áudio. Não há garantia de
+capturar áudio de conversas de outros apps. O próprio Teletela é excluído do áudio capturado.
+Essa mudança ainda não foi publicada; os testes em telefone físico continuam necessários.
 
 O APK abre a sala oficial. Não hospeda um servidor local, não detecta jogos de outros apps
 e não implementa os atalhos globais do PC. Também não tem atualização automática ou
@@ -46,7 +56,7 @@ Precisa de JDK 17+ e Android SDK com a plataforma 35. O Gradle Wrapper 8.9 está
 repositório, com checksum da distribuição; o Android Gradle Plugin é 8.7.3. A combinação
 é compatível com SDK 35 e dispensa trocar as ferramentas do desktop.
 
-O APK da 4.2.1 usa `versionCode 10` / `4.2.1`, com o mesmo ID e a mesma assinatura
+O APK da 4.3.0 usa `versionCode 11` / `4.3.0`, com o mesmo ID e a mesma assinatura
 do primeiro APK, permitindo instalar por cima e manter o perfil.
 
 ```bash
@@ -142,6 +152,61 @@ do PC continuou presente no mixer, com pico próximo de 0,086. Não é uma medi�
 captada em um telefone físico. É necessário conferir microfone, fone/Bluetooth, rede móvel,
 bateria e bloqueio de tela no aparelho do dono antes de distribuir como versão definitiva.
 
+
+## Captura da tela e áudio (31/10/2026, desenvolvimento local)
+
+`MainActivity` pede autorização a cada início e passa o resultado uma única vez ao
+`ScreenCaptureService`, com tipo `mediaProjection`. A notificação oferece **Parar transmissão**.
+Parar pelo app, sair da call, revogar no sistema ou destruir a atividade encerra a captura;
+o serviço da voz é independente. Cada operação usa um ID para ignorar respostas atrasadas,
+inclusive se a pessoa sair enquanto o consentimento ainda está aberto.
+
+`NativeScreenCapture` usa `io.github.webrtc-sdk:android:144.7559.15`, fixada no Gradle.
+`ScreenCapturerAndroid` fornece o vídeo; AudioRecord/AudioPlaybackCapture captura estéreo
+48 kHz de `USAGE_MEDIA/GAME/UNKNOWN`, excluindo o UID do Teletela. O ADM nativo usa
+`setAudioRecordEnabled(false)` e recebe esses blocos pelo `AudioBufferCallback`, com relógio
+de 10 ms; nunca abre um segundo microfone nem passa áudio da tela pelos filtros da voz.
+O início pede `RECORD_AUDIO` quando necessário; se negado, transmite só imagem e avisa.
+
+Uma conexão WebRTC sem STUN/TURN entrega as faixas do serviço à WebView. SDP trafega só
+pela ponte Android. `public/mobile-screen.js` recebe a MediaStream e `app.js` a envia pelo
+P2P/SFU existente, sem mudar o servidor para capturar. Não grava arquivos nem usa uma
+sequência de imagens na ponte JS. O custo extra dessa conexão local e da recodificação
+precisa ser medido em aparelhos físicos; o emulador não valida bateria/temperatura.
+
+Qualidades móveis: 720p/1080p, até 30 fps, lado maior limitado a 1280/1920 pixels e proporção
+preservada. `adaptOutputFormat` limita os quadros (o capturador ignora o argumento fps).
+Rotação redimensiona o VirtualDisplay; Android 14+ também trata redimensionamento do app
+compartilhado sem reutilizar o token para criar outra projeção.
+
+**Armadilha:** a biblioteca nativa exige `ACCESS_NETWORK_STATE`, além de `INTERNET`.
+Sem isso, o monitor de rede lança SecurityException pelo JNI e aborta o processo; build e
+lint sozinhos não detectaram a ausência. A permissão normal está declarada no manifesto.
+Use o contexto da aplicação na fábrica WebRTC: o contexto de um serviço tem seus receivers
+retirados automaticamente ao fechar. Liberar a fábrica depois tentava retirar o mesmo
+receiver outra vez e abortava o processo. A inicialização da biblioteca acontece uma única
+vez; callbacks atrasados são descartados ao encerrar e a liberação roda fora da thread da UI.
+
+```bash
+npm run build:android
+# Instalar o APK no emulador já aberto; nunca usar a sala oficial neste teste.
+adb -s emulator-5554 install -r dist/Teletela-Android-teste.apk
+npm run test:android:screen
+# Mesmo teste passando pelo SFU local (binário de npm run music:build):
+ANDROID_TEST_SFU=1 npm run test:android:screen
+```
+
+O teste gera/instala um segundo app temporário com cores e um tom de 440 Hz, aceita o
+diálogo real de consentimento e usa um cliente Electron como espectador. Ao terminar,
+remove o app auxiliar e encerra o APK/sala temporários. Precisa de SDK/build-tools 36,
+plataforma 35, JDK e emulador; aceita `ANDROID_HOME`, `JAVA_HOME`, `ANDROID_TEST_SERIAL`
+(somente serial de emulador). Não é um teste em telefone real.
+
+Validação local: pixels e áudio de 440 Hz recebidos por outro cliente em P2P e SFU,
+com Android em segundo plano e microfone mutado. Parar a tela preservou o mesmo stream
+de microfone ligado. Recusar e sair antes de aceitar a permissão não deixaram serviços
+ativos. Build/lint, regressão móvel e interface desktop/celular passaram. Nenhuma
+publicação ou alteração da sala oficial nesta retomada.
 
 ## Alternar câmera (28/10/2026)
 

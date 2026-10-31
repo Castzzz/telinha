@@ -81,6 +81,9 @@ Esse jeito não se atualiza sozinho: quando sair versão nova, baixe de novo.
 
 ## 📱 Android (versão de teste)
 
+A versão 4.3.0 inclui transmissão da tela do celular com áudio dos apps permitidos pelo
+Android, amigos, lista de membros e controles que somem em tela cheia.
+
 Baixe o [APK Android de teste](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Android-teste.apk) para Android 8 ou mais novo.
 
 Também dá para gerar o APK no PC. Ele abre a sala oficial, com canais,
@@ -89,6 +92,11 @@ chat, voz, câmera e reprodução das transmissões do PC. No celular, a navega�
 ao voltar, fica numa faixa compacta. O chat ocupa a tela inteira, e as opções de cada
 mensagem abrem pelo **⋯** ou segurando a mensagem. Em **Você**, cada configuração abre
 uma página dedicada.
+
+No Android, entre na call e toque em **Transmitir tela**, escolha a qualidade e aceite o
+diálogo do Android. O áudio interno precisa de Android 10+ e da permissão de gravação;
+alguns apps bloqueiam áudio ou imagem. O microfone é separado: mutar sua voz mantém o
+som da transmissão. Pare pelo menu de transmissão, pela notificação ou pelo sistema.
 
 No PC, com Android SDK 35 e JDK 17 ou mais novo instalados:
 
@@ -214,6 +222,13 @@ trocar de canal, reconectar ou reabrir o app preserva o acumulado; fora da call 
 O total fica salvo no servidor por perfil, e dois aparelhos com o mesmo perfil contam
 uma única vez. O relógio do canal continua indicando há quanto tempo aquela call está ativa.
 
+**Na versão 4.3.0:** o contador individual passa a ser separado
+por canal. Exemplo: 2 horas no Geral ficam pausadas enquanto você passa 20 minutos no AFK;
+ao voltar, o Geral retoma das 2 horas e o AFK fica nos 20 minutos. Também pausa ao sair ou
+fechar o app e retoma ao voltar, até zerar à meia-noite de Brasília. O servidor antigo só
+guardava um total geral: esse valor é preservado, mas não é dividido retroativamente entre
+canais. A separação começa com a atualização do servidor; o APK local acompanha o ajuste.
+
 ## 🎮 Como usar
 
 | Quero… | Como |
@@ -226,6 +241,8 @@ uma única vez. O relógio do canal continua indicando há quanto tempo aquela c
 | **Conversar enquanto assiste** | Clique num canal de texto para abrir a conversa no centro; a transmissão continua numa prévia no canto inferior direito. **Voltar à transmissão** aumenta o vídeo. O chat da call fica na lateral: arraste a borda esquerda para mudar a largura (ou use as setas com a alça em foco) |
 | **Rolar dados para RPG** | Botão **Dados** no início ou ícone de dado na call e no chat; no celular, no cabeçalho. Escolha d4 a d100 ou digite `1d15` / `2d6+3`. Clique em um dado pronto para rolar na hora e ver o resultado em destaque. O servidor compartilha um único histórico das últimas 30 rolagens, com nome, dado, resultado e horário, independente do canal |
 | **Usar o mesmo perfil em outro aparelho** | ⚙️ → **Conta** (celular: **Você → Conta**). Crie uma conta opcional com usuário e senha e guarde o código de recuperação. Entre no outro PC ou Android para recuperar perfil, cargos e acessos. A sessão fica salva por até 30 dias; sair encerra a sessão daquele aparelho |
+| **Amigos** | ⚙️ → **Amigos** ou **Você → Amigos** no celular. Envie pelo @usuário da conta nesta sala, aceite/recuse pedidos, cancele os enviados e remova amizades. A lista fica salva entre aparelhos. Online significa conectado à sala em pelo menos um aparelho; não mostra o canal em que a pessoa está |
+| **Controles em tela cheia** | A barra inferior some após 3 segundos sem interação. Mouse, toque ou teclado revelam de novo; enquanto usa os controles, ela continua visível |
 | **Bot de música na call** | Adicione músicas ou playlists de até 150 faixas na fila, reordene arrastando (`⠿`) ou usando `↑`/`↓`, use os botões rápidos de pausar/pular direto no card do bot na call e acompanhe o visualizador circular reagindo ao som |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
@@ -258,7 +275,8 @@ uma única vez. O relógio do canal continua indicando há quanto tempo aquela c
 | **Recolher os canais** | Clique em *Canais de Voz* ou *Canais de Texto*. Recolhido, fica só o canal em que você está (com as fotos lado a lado) e os canais de texto com mensagem nova |
 | **Cargo: mover pessoas de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Cargo: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até a moderação desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
-| **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou e pra admin). O Geral não apaga |
+| **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou ou gerencia canais). Quem gerencia canais também pode apagar o Geral; ele não volta ao reiniciar |
+| **Pessoas do servidor** | Botão **Membros**, no topo: lista na lateral direita, com online/offline, busca e perfil ao clicar. Inclui quem está fora da call e conta cada identidade uma vez entre aparelhos. Dá para recolher; no celular, abre em um painel. Canais privados não aparecem nessa lista |
 | **Dono e cargos** | ⚙️ → *Servidor e cargos*. O dono assume a propriedade e delega moderação e administração pelos cargos |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |

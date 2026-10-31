@@ -3,6 +3,11 @@
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
+**4.3.0 preparada para publicação autorizada em 31/10/2026:** amigos, membros na lateral,
+tempo individual por canal, exclusão do Geral, barra em tela cheia e captura nativa Android.
+APK 4.3.0/código 11. Os registros abaixo de desenvolvimento local descrevem as etapas
+anteriores; resultado da publicação será anotado ao concluir.
+
 **Pedidos e andamento:** [pendências anotadas com o dono](PENDENCIAS.md). PiP Android,
 cargos sem conta e canais invisíveis na 3.7.0. Contas/amigos e reforço de voz estão
 preservados em `teste/contas-amigos-e-canais-com-senha` (commit `08b262e`).
@@ -19,6 +24,12 @@ abaixo sobre branches e testes locais descrevem as etapas anteriores à publica�
 
 **Versão 4.2.1 publicada (30/10/2026):** tempo diário de call por pessoa,
 com pausa fora da voz, persistência e reset à meia-noite de Brasília. APK código 10.
+
+**Desenvolvimento local (31/10/2026), sem release/deploy:** amigos por conta, barra inferior
+com ocultação automática em tela cheia e captura nativa de tela/áudio no Android.
+Lista de membros do servidor na lateral, com online/offline e busca, e exclusão do Geral
+por quem gerencia canais também estão no desenvolvimento local.
+As versões dos pacotes continuam iguais até uma publicação autorizada.
 
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
@@ -559,7 +570,7 @@ trocar: apague a linha `OWNER_KEY` desse arquivo e rode o deploy. **Ela nunca va
 
 | Arquivo | O quê |
 |---|---|
-| `channels.json` | `{ channels, textChannels, defaultSettings }`: canais de voz/texto, regras de acesso/escrita e configurações do Geral (fixo e público) |
+| `channels.json` | `{ channels, textChannels, defaultSettings, deletedDefaultChannels }`: canais de voz/texto, regras de acesso/escrita, configurações do Geral inicial e registro da exclusão de canais iniciais |
 | `text/<canal>.jsonl` | histórico de cada canal de texto (veja abaixo) |
 | `text/images/` | imagens/GIFs dos canais de texto (15 MB por envio, até 25 GB no total) |
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
@@ -884,7 +895,7 @@ de ruído, e 11 inicialização (`initApp`).
 
 ### Contas, privacidade e dados (branch de testes)
 
-- A conta é opcional, local à sala, sem e-mail/telefone/amigos. Usuário único de 3–24 letras,
+- A conta é opcional, local à sala, sem e-mail/telefone. Usuário único de 3–24 letras,
   números ou `_`, sem diferença entre maiúsculas/minúsculas; senha 8–128 caracteres e apelido
   independente. Cadastro mantém `accessId` (cargos, ACL e dono) e o perfil. Se um ID público
   já estiver associado a outra conta, gera outro ID público, preservando o accessId comprovado.
@@ -920,6 +931,101 @@ de ruído, e 11 inicialização (`initApp`).
 - Novos módulos Node precisam entrar em `build.files` e no staging de `deploy/oracle/deploy.sh`.
   O APK usa todos os arquivos de `public/`; incrementar `versionCode` junto da próxima release
   e manter assinatura, ID e nome do artefato existentes.
+
+### Amigos por conta e controles em tela cheia (31/10/2026, local)
+
+`accounts.json` v2 ganha `friendships`, opcional ao ler arquivos anteriores. Cada relação
+guarda `from`, `to` e `status` (`pending`/`accepted`), sem duplicar o par. A gravação usa a
+mesma fila/rename das contas: não anuncia sucesso nem troca o estado em RAM se falhar.
+Limites: 500 relações/pedidos por conta e 25 mil na sala. Só o destinatário aceita/recusa;
+o remetente cancela e qualquer lado remove uma amizade aceita.
+
+`friend-list/request/accept/reject/cancel/remove` exigem sessão autenticada no socket,
+com limite por conta. O cliente nunca escolhe o autor. `friends-state` retorna somente
+ID de conta, usuário, apelido e presença (esta apenas para amizades aceitas); não retorna
+credenciais, dados de canal ou o perfil completo. Presença considera qualquer sessão
+válida conectada, mesmo fora de call, e atualiza ao conectar/desconectar/recuperar/sair.
+Não é uma lista global entre servidores. Clientes antigos ignoram os novos eventos;
+o painel novo informa falta de suporte ao entrar em servidor anterior.
+
+`public/friends.js` inclui a aba Amigos nas configurações e a página móvel Você.
+`public/accounts.js` restaura as preferências em memória se a gravação da sessão falhar.
+`public/stage-controls.js` esconde a barra após 3 s em tela cheia nativa ou alternativa CSS,
+mantém Tab/toque disponíveis e suspende a ocultação durante hover, arraste ou foco de teclado.
+As faixas de participantes seguem suas próprias regras.
+
+Android: `ScreenCaptureService` + `NativeScreenCapture` usam MediaProjection/WebRTC local
+para fornecer uma MediaStream à interface; o fluxo de envio P2P/SFU existente a publica.
+Detalhes, limitações de áudio e comandos de teste em [ANDROID.md](ANDROID.md).
+Validação: `npm run test:friends`, `npm run test:friends:ui`, `npm run test:android:screen`.
+O último exige emulador aberto e APK local instalado; só usa dados de uma sala temporária.
+
+### Lista de membros e exclusão do Geral (31/10/2026, local)
+
+`server-members` entrega pessoas da sala inteira, inclusive fora da voz, agrupadas por
+identidade comprovada (`accessId`), sem mesclar nomes iguais. Aparelhos da mesma conta
+contam uma vez; fica offline somente ao desconectar o último. Perfis conhecidos usam os
+registros de permissões, e contas offline mantêm os campos públicos salvos. Visitantes
+offline sem foto persistida aparecem com iniciais. A lista não contém canal, atividade,
+fala/mute/transmissão, credenciais ou permissões administrativas. Isso permite listar a
+pessoa sem revelar a call privada em que ela está.
+
+Atualizações de canais agendam a leitura; um resumo do resultado evita anunciar e
+reconstruir a lista por mudanças de fala, mute ou relógio. Conexões novas recebem o estado
+mesmo quando o resumo global não muda. `room-info.membersVersion: 1` anuncia suporte.
+`/api/member-avatar/:memberId?access=...` usa a chave efêmera de uma conexão válida e
+responde sem cache. Fotos offline vêm apenas do perfil de conta; `profileUpdatedAt` em
+`accounts.json` invalida a URL depois de editar. Nenhum arquivo novo de dados é criado.
+
+`public/server-members.js/css` acrescentam a lateral e os botões no topo desktop/celular.
+Busca e perfil funcionam offline; recolher é salvo no desktop. Em janelas estreitas o
+painel abre sobre o conteúdo, com fechamento por fora/Escape/Voltar e foco pelo teclado.
+O perfil usa o estado público da lista quando a pessoa não está numa call visível.
+
+O Geral continua sendo o canal público inicial, mas `manageChannels` permite excluí-lo.
+`channels.json.deletedDefaultChannels` registra `geral` para não recriar ao iniciar, e
+pedidos de entrada antigos deixam de criar um Geral temporário. O cliente também não
+inventa o canal ausente. Gravação é confirmada antes de expulsar os participantes; falha
+de disco preserva o canal e a call. Criar explicitamente outro canal chamado Geral continua
+permitido e ele passa a ser um canal comum. Servidor anterior ignora o registro de exclusão:
+evite downgrade sem restaurar/ajustar o backup dos canais. O app antigo pode mostrar um
+Geral fantasma, mas o servidor novo recusa entrar/recriá-lo automaticamente.
+
+Testes: `node --test tests/server-members.test.js` verifica persistência entre reinícios,
+autorização, falha de gravação, links antigos, presença, aparelhos e privacidade/fotos.
+`electron tests/server-members-browser.cjs` confere perfil, busca, recolher, chat central,
+três temas, celular e a exclusão do Geral pela interface. Também passaram a regressão
+de canais/admin e a regressão móvel. Sem release/deploy nesta retomada.
+
+### Tempo individual por canal (31/10/2026, local)
+
+Substitui no contador visível o total único de calls da 4.2.1. Cada identidade acumula
+separadamente em cada canal durante o dia de Brasília. Geral → AFK pausa um e inicia o
+outro; voltar retoma o acumulado correto. Saída, desconexão, movimento pela moderação e
+AFK automático continuam usando a mesma rotina de entrada/saída. O reset diário não muda.
+
+`DailyCallStore.joinChannel` vincula cada socket a um canal e mantém acumuladores por
+identidade/canal. Duas sessões da mesma identidade no mesmo canal contam a união dos
+períodos. Se os aparelhos estiverem em canais diferentes, cada canal conta seu período.
+`snapshotChannel` produz `{ ...snapshot, scope: 'channel', channelId }`. O `publicUser` e
+`daily-call-times` passam a usar esse snapshot apenas para canais visíveis ao destinatário;
+a lista global de membros continua sem expor tempo/canal privado. `snapshot` permanece
+como total geral separado, para compatibilidade e preservação do registro anterior.
+
+`daily-call-time.json` passa a `{ version: 2, day, timeZone, totals, channelTotals }`, com
+`channelTotals[canal][identidade]` em milissegundos. Mesmo arquivo, backup, escrita atômica
+e modo 0600; nenhum período desligado é contado. Arquivos anteriores recuperam `totals`
+e começam os acumulados por canal vazios: o registro anterior não tem informação para
+distribuir o tempo já transcorrido entre canais. Não atribuir o total antigo ao canal
+em que a pessoa entrou primeiro. Excluir um canal limpa seu acumulado; recriar o mesmo
+ID começa do zero. Migração/limpeza de identidade percorre todos os acumuladores.
+
+A interface diferencia o snapshot por canal pelo `scope` e ajusta a dica do contador.
+Contra servidor anterior, continua mostrando o total antigo com a descrição correspondente.
+É preciso atualizar servidor e app para ativar o comportamento novo. Sem release/deploy
+nesta sessão; o APK local foi reconstruído. Testes de calendário/persistência, AFK real
+do servidor, duas pessoas no Electron, troca Geral/AFK, retorno e reabertura passaram,
+incluindo os três temas e o layout de celular.
 
 ## 12. Convenções
 

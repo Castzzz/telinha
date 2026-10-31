@@ -56,6 +56,9 @@ function renderChrome(state) {
   }
   text('#mobile-flip-camera-hint', state.cameraBusy ? 'Trocando câmera…' : flipLabel);
   text('#mobile-camera-label', state.cameraBusy ? 'Aguarde…' : cameraOn ? state.cameraFacingMode === 'environment' ? 'Traseira' : 'Frontal' : 'Câmera');
+  $('#btn-mobile-screen')?.classList.toggle('hidden', !inCall || !window.TeletelaAndroid?.startScreenCapture);
+  text('#mobile-screen-label', state.myUser.isSharing ? state.localScreenStream ? 'Parar transmissão da tela' : 'Cancelar transmissão' : 'Transmitir tela com som');
+  text('#mobile-screen-hint', state.myUser.isSharing ? 'A chamada de voz continua' : 'O Android vai pedir permissão');
   // Os controles móveis acionam os originais: uma única lógica de mute e câmera.
   const actions = {
     'btn-toggle-mic': { icon: state.myUser.isMicOn ? icons.mic : icons.micOff, label: state.myUser.isMicOn ? 'Mutar microfone' : 'Ligar microfone', active: !state.myUser.isMicOn },
@@ -112,6 +115,7 @@ export function syncMobileState(state) {
 
 function back() {
   if (window.teletelaExitFullscreen?.()) return true;
+  if (hooks.closeMembers?.()) return true;
   if ($('#mobile-message-options')?.open) { $('#mobile-message-options').close(); return true; }
   const sheet = $('#mobile-call-options');
   if (sheet?.open) { sheet.close(); return true; }
@@ -153,6 +157,7 @@ export function setupMobileUI(options) {
   $('#mobile-return-call').addEventListener('click', () => { options.showRoom(); setMobileView('sala'); });
   $('#mobile-back').addEventListener('click', back);
   $('#mobile-call-more').addEventListener('click', () => $('#mobile-call-options').showModal());
+  $('#btn-mobile-screen')?.addEventListener('click', () => { $('#mobile-call-options').close(); options.toggleScreen?.(); });
   $('#mobile-close-options').addEventListener('click', () => $('#mobile-call-options').close());
   $('#mobile-call-options').addEventListener('click', event => { if (event.target === event.currentTarget) event.currentTarget.close(); });
   $('#btn-mobile-audio-output').addEventListener('click', () => { $('#mobile-call-options').close(); window.TeletelaAndroid?.chooseAudioOutput?.(); });
@@ -167,7 +172,7 @@ export function setupMobileUI(options) {
   new MutationObserver(updateTitles).observe($('.settings-nav'), { attributes: true, subtree: true, attributeFilter: ['class'] });
   new MutationObserver(() => { avatarDirty = true; renderChrome(options.getState()); }).observe($('#dock-user-avatar'), { childList: true, attributes: true, attributeFilter: ['style'] });
   setupMessageActions();
-  if (!navigator.mediaDevices?.getDisplayMedia && !window.electronAPI) {
+  if (!navigator.mediaDevices?.getDisplayMedia && !window.electronAPI && !window.TeletelaAndroid?.startScreenCapture) {
     $('#btn-share-screen')?.classList.add('mobile-unsupported');
     $('#btn-lounge-start-share')?.classList.add('mobile-unsupported');
   }

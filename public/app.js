@@ -26,11 +26,14 @@ import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.
 import { activityElapsed } from './game-activity.js';
 import { createMicrophonePipeline } from './microphone.js';
 import { CameraSource } from './camera-source.js';
+import { MobileScreenSource } from './mobile-screen.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
 import { setupDice } from './dice.js';
 import { setupStageSocial } from './stage-social.js';
+import { setupStageControls } from './stage-controls.js';
+import { setupServerMembers } from './server-members.js';
 import { applyAppearance, setupPersonalization } from './personalization.js';
 import { setupTransmissionDiagnostics } from './transmission-diagnostics.js';
 import { setupChannelOrganization } from './channel-organization.js';
@@ -43,6 +46,7 @@ let channelOrganizer = null;
 let musicUI = null;
 let diceUI = null;
 let stageSocialUI = null;
+let serverMembersUI = null;
 
 // -----------------------------------------------------------------------------
 // 1. HELPERS & UTILITIES
@@ -513,6 +517,9 @@ const accountUI = setupAccounts({
     updateUserDockProfile();
   }
 });
+
+serverMembersUI = setupServerMembers({ socket, prefs, savePrefs, serverUrl: SERVER_URL,
+  assetKey: () => appState.assetKey || '', avatar: avatarInnerHtml, applyName: applyNameStyle, openProfile: openProfileCard });
 
 const permissionUI = setupPermissions({
   socket, state: appState, showToast, escapeHtml,
@@ -1326,7 +1333,7 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
 });
 
 function canDeleteChannel(ch) {
-  if (!ch || ch.isDefault) return false;
+  if (!ch) return false;
   if (ch.isPrivate) return hasPermission(appState, 'manageChannels');
   return hasPermission(appState, 'manageChannels') || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
 }
@@ -1351,26 +1358,11 @@ function renderChannelsTree() {
   if (!treeContainer) return;
 
   // Render each channel in state
-  const defaultOrder = ['geral'];
   const channelIds = Array.from(appState.channels.keys());
 
   channelIds.sort((a,b) => {
     const first = appState.channels.get(a), second = appState.channels.get(b);
     return (first.position ?? 1e9) - (second.position ?? 1e9) || (a === 'geral' ? -1 : b === 'geral' ? 1 : a.localeCompare(b));
-  });
-
-  // Ensure default channels exist in appState if not yet received
-  defaultOrder.forEach((defId) => {
-    if (!appState.channels.has(defId)) {
-      appState.channels.set(defId, {
-        id: defId,
-        name: defId.charAt(0).toUpperCase() + defId.slice(1),
-        isDefault: true,
-        userCount: 0,
-        activeStreams: 0,
-        users: new Map()
-      });
-    }
   });
 
   // Render tree
@@ -1770,7 +1762,7 @@ window.freezeAvatar = freezeAvatar;
 
 function avatarInnerHtml(u) {
   const initials = avatarInitials(u?.name);
-  const src = avatarSrc(u?.id, u?.avatarV);
+  const src = u?.memberAvatarUrl || avatarSrc(u?.id, u?.avatarV);
   if (!src) return `<span>${initials}</span>`;
   const profile = u?.id === appState.myId ? myProfile : findUser(u?.id) || u;
   return avatarPhotoHtml(src, initials, profile?.avatarCrop);
@@ -3804,6 +3796,8 @@ function isStageFullscreen() {
   return Boolean(document.fullscreenElement || document.webkitFullscreenElement || document.body.classList.contains('stage-fullscreen'));
 }
 
+setupStageControls({ fullscreen: isStageFullscreen });
+
 function exitStageFullscreen() {
   document.body.classList.remove('stage-fullscreen');
   document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
@@ -3926,7 +3920,7 @@ function findUser(userId) {
     const u = ch.users.get(userId);
     if (u) return u;
   }
-  return null;
+  return serverMembersUI?.find(userId) || null;
 }
 
 // O relógio muda só o texto; não reconstrói fotos, canais nem conexões de mídia.
@@ -3957,7 +3951,10 @@ function renderDailyCallTimers() {
 
 function userCallTimerHtml(user) {
   const elapsed = dailyCallClocks.elapsed(user?.id);
-  if (elapsed !== null) return `<span class="user-call-timer" data-daily-call-user="${escapeHtml(user.id)}" title="Tempo em calls hoje · zera à meia-noite de Brasília">${formatCallDuration(elapsed)}</span>`;
+  if (elapsed !== null) {
+    const title = dailyCallClocks.scope(user.id) === 'channel' ? 'Tempo acumulado nesta call hoje · pausa ao sair e zera à meia-noite de Brasília' : 'Tempo em calls hoje · zera à meia-noite de Brasília';
+    return `<span class="user-call-timer" data-daily-call-user="${escapeHtml(user.id)}" title="${title}">${formatCallDuration(elapsed)}</span>`;
+  }
   const start = Number(user?.voiceJoinedAt || user?.joinedAt || Date.now());
   return `<span class="user-call-timer" data-call-timer="${start}" title="Tempo na call">${formatCallClock(start)}</span>`;
 }
@@ -5028,14 +5025,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.2.1';
+const WHATS_NEW_VERSION = '4.3.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -7095,14 +7092,14 @@ function renderQualityChoosers() {
     box.innerHTML = `
       <span class="quality-chooser-label">Qualidade da transmissão</span>
       <div class="quality-options">
-        ${Object.entries(QUALITY_LABELS)
+        ${Object.entries(QUALITY_LABELS).filter(([key]) => !window.TeletelaAndroid?.startScreenCapture || ['720p30', '1080p30'].includes(key))
           .map(
             ([key, label]) =>
               `<button type="button" class="quality-option ${key === appState.myUser.streamQuality ? 'selected' : ''}" data-quality="${key}">${label}</button>`
           )
           .join('')}
       </div>
-      <p class="quality-hint">Internet fraca ou amigos travando? Use 720p. 60 fps é melhor pra jogo; 30 fps pra filme.</p>
+      <p class="quality-hint">${window.TeletelaAndroid?.startScreenCapture ? 'O Android vai pedir permissão para compartilhar. O áudio interno precisa de Android 10+; alguns apps bloqueiam a captura. O microfone continua separado.' : 'Internet fraca ou amigos travando? Use 720p. 60 fps é melhor pra jogo; 30 fps pra filme.'}</p>
     `;
     box.querySelectorAll('[data-quality]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -7132,8 +7129,12 @@ function promptShareQuality() {
   });
 }
 
+let screenCaptureRun = 0;
+let mobileScreenSource = null;
 async function onStartScreenShare() {
-  if (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !window.electronAPI)) {
+  const nativeScreen = Boolean(window.TeletelaAndroid?.startScreenCapture);
+  const run = ++screenCaptureRun, channelId = appState.currentChannelId;
+  if (!nativeScreen && (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !window.electronAPI))) {
     showToast('❌ Captura de tela não suportada ou bloqueada pelo navegador.', 'error');
     appState.myUser.isSharing = false;
     updateShareButton();
@@ -7141,6 +7142,7 @@ async function onStartScreenShare() {
   }
 
   try {
+    if (nativeScreen && !['720p30', '1080p30'].includes(appState.myUser.streamQuality)) appState.myUser.streamQuality = '720p30';
     if (!window.electronAPI && !(await promptShareQuality())) {
       appState.myUser.isSharing = false;
       updateShareButton();
@@ -7175,6 +7177,7 @@ async function onStartScreenShare() {
     // Lida só agora: a qualidade pode ter sido trocada nos modais acima
     const presetKey = appState.myUser.streamQuality;
     const preset = QUALITY_PRESETS[presetKey] || QUALITY_PRESETS['1080p60'];
+    if (run !== screenCaptureRun || channelId !== appState.currentChannelId) return;
     console.log(`[WebRTC] Starting screen share with preset: ${presetKey}`);
 
     const isWindowsElectron = window.electronAPI?.platform === 'win32';
@@ -7192,63 +7195,77 @@ async function onStartScreenShare() {
     const wantLoopback = !processAudioTrack;
 
     let stream;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          width: { ideal: preset.width },
-          height: { ideal: preset.height },
-          frameRate: { ideal: preset.frameRate }
-        },
-        // getDisplayMedia rejeita constraints com min/exact (TypeError), só "ideal"
-        audio: wantLoopback && {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          channelCount: { ideal: 2 },
-          sampleRate: { ideal: 48000 }
-        },
-        systemAudio: 'include',
-        selfBrowserSurface: 'exclude'
-      });
-    } catch (innerErr) {
-      if (innerErr.name === 'NotAllowedError') throw innerErr;
-      console.warn('[WebRTC] getDisplayMedia with constraints failed, retrying plain:', innerErr);
-      // Tentativa simples: ainda passa pelo handler do Electron (Windows = loopback com som do PC)
+    if (nativeScreen) {
+      mobileScreenSource ||= new MobileScreenSource({ onEnded: message => {
+        onStopScreenShare();
+        if (message) showToast(message, 'error');
+      } });
+      stream = await mobileScreenSource.start(preset);
+    } else {
       try {
-        if (selectedElectronSourceId) await window.electronAPI.selectDesktopSource(selectedElectronSourceId);
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: wantLoopback });
-      } catch (plainErr) {
-        if (plainErr.name === 'NotAllowedError') throw plainErr;
-        console.warn('[WebRTC] Plain getDisplayMedia failed too:', plainErr);
+        stream = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            width: { ideal: preset.width },
+            height: { ideal: preset.height },
+            frameRate: { ideal: preset.frameRate }
+          },
+          // getDisplayMedia rejeita constraints com min/exact (TypeError), só "ideal"
+          audio: wantLoopback && {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: false,
+            channelCount: { ideal: 2 },
+            sampleRate: { ideal: 48000 }
+          },
+          systemAudio: 'include',
+          selfBrowserSurface: 'exclude'
+        });
+      } catch (innerErr) {
+        if (innerErr.name === 'NotAllowedError') throw innerErr;
+        console.warn('[WebRTC] getDisplayMedia with constraints failed, retrying plain:', innerErr);
+        // Tentativa simples: ainda passa pelo handler do Electron (Windows = loopback com som do PC)
+        try {
+          if (selectedElectronSourceId) await window.electronAPI.selectDesktopSource(selectedElectronSourceId);
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: wantLoopback });
+        } catch (plainErr) {
+          if (plainErr.name === 'NotAllowedError') throw plainErr;
+          console.warn('[WebRTC] Plain getDisplayMedia failed too:', plainErr);
+        }
+      }
+      if (!stream) {
+        if (selectedElectronSourceId) {
+          const legacyVideo = {
+            mandatory: {
+              chromeMediaSource: 'desktop',
+              chromeMediaSourceId: selectedElectronSourceId,
+              maxWidth: preset.width,
+              maxHeight: preset.height,
+              maxFrameRate: preset.frameRate
+            }
+          };
+          // Windows: o caminho antigo também pega o som do PC (loopback); se falhar, vai só a imagem
+          if (isWindowsElectron && wantLoopback) {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                audio: { mandatory: { chromeMediaSource: 'desktop' } },
+                video: legacyVideo
+              });
+            } catch (legacyErr) {
+              winAudioError = legacyErr;
+              console.warn('[WebRTC] Legacy desktop capture with audio failed:', legacyErr);
+            }
+          }
+          if (!stream) stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: legacyVideo });
+        } else {
+          stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        }
       }
     }
-    if (!stream) {
-      if (selectedElectronSourceId) {
-        const legacyVideo = {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: selectedElectronSourceId,
-            maxWidth: preset.width,
-            maxHeight: preset.height,
-            maxFrameRate: preset.frameRate
-          }
-        };
-        // Windows: o caminho antigo também pega o som do PC (loopback); se falhar, vai só a imagem
-        if (isWindowsElectron && wantLoopback) {
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              audio: { mandatory: { chromeMediaSource: 'desktop' } },
-              video: legacyVideo
-            });
-          } catch (legacyErr) {
-            winAudioError = legacyErr;
-            console.warn('[WebRTC] Legacy desktop capture with audio failed:', legacyErr);
-          }
-        }
-        if (!stream) stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: legacyVideo });
-      } else {
-        stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      }
+
+    if (run !== screenCaptureRun || channelId !== appState.currentChannelId) {
+      stream.getTracks().forEach(track => track.stop());
+      if (nativeScreen) mobileScreenSource.stop();
+      return;
     }
 
     if (processAudioTrack) stream.addTrack(processAudioTrack);
@@ -7283,7 +7300,7 @@ async function onStartScreenShare() {
     }
 
     // Linux PipeWire / PulseAudio System Audio Loopback fallback
-    if (audioChoice.mode === 'system' && stream.getAudioTracks().length === 0) {
+    if (!nativeScreen && audioChoice.mode === 'system' && stream.getAudioTracks().length === 0) {
       try {
         let sysTrack = null;
         if (appState.audioManager) {
@@ -7338,7 +7355,9 @@ async function onStartScreenShare() {
     }
     // Sem SFU, cada amigo pede o vídeo (request-stream) quando clica no "AO VIVO"
 
-    if (stream.getAudioTracks().length > 0 && audioChoice.mode === 'app') {
+    if (nativeScreen) {
+      showToast(stream.getAudioTracks().length ? 'Transmissão iniciada com o som dos apps permitidos pelo Android.' : 'Transmissão iniciada sem áudio dos apps. O áudio interno precisa de Android 10+ e permissão de gravação.', stream.getAudioTracks().length ? 'success' : 'normal');
+    } else if (stream.getAudioTracks().length > 0 && audioChoice.mode === 'app') {
       showToast(`🎬 Transmissão ao vivo iniciada com o som de ${audioChoice.name}!`, 'success');
     } else if (processAudioTrack && selectedElectronSourceId?.startsWith('window:')) {
       showToast('🎬 Transmissão ao vivo iniciada com o som só desse app!', 'success');
@@ -7351,7 +7370,10 @@ async function onStartScreenShare() {
     } else {
       showToast('⚠️ Transmissão iniciada sem som do sistema.');
     }
+    updateShareButton();
   } catch (err) {
+    if (run !== screenCaptureRun) return;
+    if (nativeScreen) mobileScreenSource?.stop();
     if (err.name !== 'NotAllowedError') {
       console.error('[WebRTC] Failed to start screen sharing:', err);
       showToast(`❌ Erro ao iniciar captura: ${err.message || err.name}`, 'error');
@@ -7497,6 +7519,7 @@ function updateShareButton() {
   // O botão grande do meio abre o mesmo menu quando já tem tela no ar
   const label = document.getElementById('lounge-share-label');
   if (label) label.textContent = live ? 'Gerenciar minhas telas' : 'Transmitir minha tela';
+  syncMobileState(appState);
 }
 
 function extraScreensState() {
@@ -7592,7 +7615,7 @@ function openShareMenu(anchor) {
     `<button type="button" class="share-menu-item${danger ? ' danger' : ''}" data-share-action="${action}">${label}</button>`;
   const rows = [];
   const total = (appState.myUser.isSharing ? 1 : 0) + appState.extraScreens.size;
-  if (total < EXTRA_SCREEN_NUMBERS.length + 1) {
+  if (!window.TeletelaAndroid?.startScreenCapture && total < EXTRA_SCREEN_NUMBERS.length + 1) {
     rows.push(item(appState.myUser.isSharing ? '➕ Transmitir outra tela' : '➕ Transmitir a tela 1 (com som)', 'add'));
   }
   if (appState.myUser.isSharing) rows.push(item(appState.extraScreens.size ? '⏹ Parar a tela 1' : '⏹ Parar a transmissão', 'stop-1', true));
@@ -7652,6 +7675,8 @@ function setupShareMenu() {
 }
 
 function onStopScreenShare() {
+  ++screenCaptureRun;
+  mobileScreenSource?.stop();
   if (!appState.myUser.isSharing && !appState.localScreenStream) return;
   console.log('[WebRTC] Stopping screen share...');
 
@@ -7844,7 +7869,12 @@ function initApp() {
     avatarInnerHtml, safeColor, frameClass, frameStyle, nameStyle, sortedUsers,
     isWatching: () => appState.activeStreams.size > 0,
     openUserPopover });
-  setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings });
+  setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings,
+    closeMembers: () => serverMembersUI?.closeOverlay(),
+    toggleScreen: () => {
+      if (appState.myUser.isSharing) onStopScreenShare();
+      else $('#btn-share-screen')?.click();
+    } });
   updateUserDockProfile();
   setupDockControls();
   setupServerHome();

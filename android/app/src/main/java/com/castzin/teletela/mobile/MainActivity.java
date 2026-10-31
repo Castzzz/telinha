@@ -18,6 +18,7 @@ import android.graphics.Color;
 import android.graphics.Rect;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -44,7 +45,9 @@ import java.util.ArrayList;
 
 public class MainActivity extends Activity {
     private static final String ORIGIN = "https://appassets.androidplatform.net";
-    private static final int MEDIA_PERMISSION = 10, NOTIFICATION_PERMISSION = 11, PICK_FILE = 12, BLUETOOTH_PERMISSION = 13;
+    private static final int MEDIA_PERMISSION = 10, NOTIFICATION_PERMISSION = 11, PICK_FILE = 12, BLUETOOTH_PERMISSION = 13, SCREEN_PERMISSION = 14, SCREEN_AUDIO_PERMISSION = 15;
+    private String screenId = "", pendingScreenId = "";
+    private int screenWidth = 1280, screenFps = 30;
     private WebView web;
     private FrameLayout root;
     private View customView;
@@ -94,6 +97,7 @@ public class MainActivity extends Activity {
         settings.setMixedContentMode(BuildConfig.DEBUG ? WebSettings.MIXED_CONTENT_ALWAYS_ALLOW : WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         web.addJavascriptInterface(new MobileBridge(), "TeletelaAndroid");
+        ScreenCaptureService.listener = (id, type, value) -> runOnUiThread(() -> { if (id.equals(screenId)) screenEvent(id, type, value); });
         WebViewAssetLoader loader = new WebViewAssetLoader.Builder()
             .addPathHandler("/", new WebViewAssetLoader.AssetsPathHandler(this)).build();
         web.setWebViewClient(new WebViewClient() {
@@ -196,9 +200,20 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(code, permissions, results);
         if (code == MEDIA_PERMISSION) finishMediaPermission();
         if (code == BLUETOOTH_PERMISSION) chooseOutput();
+        if (code == SCREEN_AUDIO_PERMISSION) beginScreenConsent();
     }
     @Override protected void onActivityResult(int code, int result, Intent data) {
         super.onActivityResult(code, result, data);
+        if (code == SCREEN_PERMISSION) {
+            String id = pendingScreenId;
+            pendingScreenId = "";
+            if (id.isEmpty() || !id.equals(screenId) || !inCall) return;
+            if (result != RESULT_OK || data == null) { screenEvent(id, "cancelled", ""); return; }
+            try {
+                startForegroundService(new Intent(this, ScreenCaptureService.class).putExtra("id", id)
+                    .putExtra("permission", data).putExtra("width", screenWidth).putExtra("fps", screenFps));
+            } catch (RuntimeException error) { screenEvent(id, "error", "Não consegui iniciar a transmissão."); }
+        }
         if (code == PICK_FILE && pendingFiles != null) {
             pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
             pendingFiles = null;
@@ -302,6 +317,8 @@ public class MainActivity extends Activity {
         if (web != null && !isInPictureInPictureMode()) setPipUi(false);
     }
     @Override protected void onDestroy() {
+        ScreenCaptureService.listener = null;
+        stopService(new Intent(this, ScreenCaptureService.class));
         unregisterReceiver(leaveReceiver);
         stopService(new Intent(this, CallService.class));
         if (pendingPermission != null) pendingPermission.deny();
@@ -311,7 +328,54 @@ public class MainActivity extends Activity {
         super.onDestroy();
     }
 
+    private void beginScreenConsent() {
+        if (screenId.isEmpty() || !inCall) return;
+        pendingScreenId = screenId;
+        try {
+            startActivityForResult(((MediaProjectionManager)getSystemService(MEDIA_PROJECTION_SERVICE)).createScreenCaptureIntent(), SCREEN_PERMISSION);
+        } catch (RuntimeException error) { pendingScreenId = ""; screenEvent(screenId, "error", "Não consegui pedir a captura da tela."); }
+    }
+
+    private void screenEvent(String id, String type, String value) {
+        if (id.isEmpty() || isDestroyed()) return;
+        if (id.equals(screenId) && ("stopped".equals(type) || "error".equals(type) || "cancelled".equals(type))) screenId = "";
+        try {
+            JSONObject event = new JSONObject().put("id", id).put("type", type).put("value", value);
+            web.evaluateJavascript("window.teletelaScreenCaptureEvent?.(" + event.toString() + ")", null);
+        } catch (org.json.JSONException ignored) { }
+    }
+
     private class MobileBridge {
+        @JavascriptInterface public void startScreenCapture(String json) {
+            runOnUiThread(() -> {
+                if (!isLocal(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) return;
+                try {
+                    JSONObject options = new JSONObject(json);
+                    String id = options.optString("id");
+                    if (!id.matches("[a-zA-Z0-9-]{8,64}")) return;
+                    if (!pendingScreenId.isEmpty() || !screenId.isEmpty()) {
+                        screenEvent(id, "error", "Espere a captura anterior terminar."); return;
+                    }
+                    screenId = id;
+                    if (!inCall) { screenEvent(id, "error", "Entre numa call antes de transmitir."); return; }
+                    screenWidth = Math.max(640, Math.min(1920, options.optInt("width", 1280)));
+                    screenFps = Math.max(10, Math.min(30, options.optInt("fps", 30)));
+                    if (Build.VERSION.SDK_INT >= 29 && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                        requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, SCREEN_AUDIO_PERMISSION);
+                    } else beginScreenConsent();
+                } catch (RuntimeException | org.json.JSONException error) { screenEvent(screenId, "error", "Não consegui pedir a captura da tela."); }
+            });
+        }
+        @JavascriptInterface public void answerScreenCapture(String id, String sdp) {
+            runOnUiThread(() -> { if (id.equals(screenId) && sdp.length() < 100000) ScreenCaptureService.answer(id, sdp); });
+        }
+        @JavascriptInterface public void stopScreenCapture(String id) {
+            runOnUiThread(() -> {
+                if (!id.equals(screenId)) return;
+                screenId = "";
+                stopService(new Intent(MainActivity.this, ScreenCaptureService.class));
+            });
+        }
         @JavascriptInterface public void setFullscreen(boolean enabled) {
             runOnUiThread(() -> {
                 if (!isLocal(Uri.parse(web.getUrl() == null ? "" : web.getUrl()))) return;
@@ -340,7 +404,12 @@ public class MainActivity extends Activity {
                 try {
                     JSONObject state = new JSONObject(json);
                     boolean active = state.optBoolean("inCall");
-                    if (!active) { inCall = false; stopService(new Intent(MainActivity.this, CallService.class)); return; }
+                    if (!active) {
+                        inCall = false;
+                        screenEvent(screenId, "stopped", "");
+                        stopService(new Intent(MainActivity.this, ScreenCaptureService.class));
+                        stopService(new Intent(MainActivity.this, CallService.class)); return;
+                    }
                     if (!inCall && Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                         requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION);
                     }

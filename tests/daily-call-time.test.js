@@ -48,3 +48,45 @@ test('o relógio da interface usa a chegada do pacote, reseta à meia-noite e co
   monotonic+=3000;assert.equal(clocks.elapsed('amigo'),2000);clocks.freeze();monotonic+=60000;assert.equal(clocks.elapsed('amigo'),2000);
   assert.equal(dailyCallElapsed({...snapshot,running:false},4000),0);assert.equal(formatCallDuration(3661000),'1:01:01');
 });
+
+test('cada call pausa separadamente e retoma seu acumulado ao voltar do AFK', () => {
+  let now=at('2026-10-30T12:00:00Z');const store=new DailyCallStore('',()=>now);
+  store.joinChannel('amigo','pc','geral');now+=2*3600000;store.leave('pc');store.joinChannel('amigo','pc','afk');
+  now+=20*60000;assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,2*3600000);assert.equal(store.snapshotChannel('amigo','geral').running,false);
+  assert.equal(store.snapshotChannel('amigo','afk').elapsedMs,20*60000);
+  store.leave('pc');store.joinChannel('amigo','pc','geral');now+=10*60000;
+  assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,130*60000);assert.equal(store.snapshotChannel('amigo','afk').elapsedMs,20*60000);
+  assert.equal(store.snapshotChannel('amigo','afk').running,false);assert.equal(store.snapshotChannel('amigo','geral').channelId,'geral');
+  assert.equal(store.snapshot('amigo').elapsedMs,150*60000,'O total antigo continua preservado separadamente.');
+});
+
+test('aparelhos na mesma call não duplicam; aparelhos em canais diferentes contam separadamente', () => {
+  let now=at('2026-10-30T12:00:00Z');const store=new DailyCallStore('',()=>now);
+  store.joinChannel('amigo','pc','geral');store.joinChannel('amigo','celular','geral');store.joinChannel('amigo','pc','geral');
+  now+=60000;store.leave('celular');store.joinChannel('amigo','celular','afk');now+=60000;
+  assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,120000);assert.equal(store.snapshotChannel('amigo','afk').elapsedMs,60000);
+  store.leave('pc');now+=60000;assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,120000);
+  assert.equal(store.snapshotChannel('amigo','afk').elapsedMs,120000);assert.equal(store.snapshot('amigo').elapsedMs,180000);
+});
+
+test('tempo por canal persiste, não conta servidor desligado e não inventa divisão do total antigo', t => {
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'teletela-tempo-canal-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+  let now=at('2026-10-30T12:00:00Z');let store=new DailyCallStore(dir,()=>now);
+  store.joinChannel('amigo','s','geral');now+=60000;store.leave('s');store.joinChannel('amigo','s','afk');now+=30000;store.checkpoint();
+  now+=3600000;store=new DailyCallStore(dir,()=>now);
+  assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,60000);assert.equal(store.snapshotChannel('amigo','afk').elapsedMs,30000);assert.equal(store.snapshotChannel('amigo','afk').running,false);
+  store.joinChannel('amigo','novo','geral');now+=10000;store.leave('novo');assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,70000);
+  const file=path.join(dir,'daily-call-time.json');const saved=JSON.parse(fs.readFileSync(file));assert.equal(saved.version,2);assert.equal(saved.channelTotals.geral.amigo,70000);
+  delete saved.channelTotals;delete saved.version;fs.writeFileSync(file,JSON.stringify(saved));store=new DailyCallStore(dir,()=>now);
+  assert.equal(store.snapshot('amigo').elapsedMs,100000);assert.equal(store.snapshotChannel('amigo','geral').elapsedMs,0);
+});
+
+test('virada, migração de identidade e exclusão de canal respeitam os acumulados separados', () => {
+  let now=at('2026-10-30T12:00:00Z');const store=new DailyCallStore('',()=>now);
+  store.joinChannel('antigo','s','geral');now+=60000;store.leave('s');store.joinChannel('antigo','s','afk');now+=30000;
+  store.merge('antigo','novo');assert.equal(store.snapshotChannel('novo','geral').elapsedMs,60000);assert.equal(store.snapshotChannel('novo','afk').elapsedMs,30000);
+  now+=10000;store.leave('s');assert.equal(store.snapshotChannel('novo','afk').elapsedMs,40000);
+  store.removeChannel('geral');store.joinChannel('novo','s','geral');now+=5000;assert.equal(store.snapshotChannel('novo','geral').elapsedMs,5000);
+  now=at('2026-10-31T03:00:04Z');assert.equal(store.snapshotChannel('novo','geral').elapsedMs,4000);assert.equal(store.snapshotChannel('novo','afk').elapsedMs,0);
+  store.merge('novo',null);now+=10000;assert.equal(store.snapshotChannel('novo','geral').elapsedMs,0);assert.equal(store.snapshotChannel('novo','geral').running,false);
+});

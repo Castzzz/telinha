@@ -1,0 +1,41 @@
+.server-members { width: 224px; flex: 0 0 224px; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg-secondary); border-left: 1px solid var(--border-subtle); }
+[data-look="novo"] .server-members { border: 0; border-radius: var(--panel-radius); box-shadow: var(--panel-shadow); }
+.server-members-header { display: flex; align-items: center; justify-content: space-between; min-height: 52px; gap: 8px; padding: 10px 12px; }
+.server-members-header > div { display: flex; align-items: center; gap: 8px; }
+.server-members-header .icon-svg { width: 18px; height: 18px; color: var(--text-muted); }
+.server-members-header h2 { margin: 0; font-size: 14px; color: var(--text-header); }
+#server-members-count { font-size: 11px; color: var(--text-muted); }
+.server-members-search { display: block; padding: 0 12px 12px; }
+.server-members-search input { box-sizing: border-box; width: 100%; min-height: 36px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--bg-tertiary); color: var(--text-normal); font: inherit; font-size: 12px; }
+.server-members-search input:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 2px; }
+.server-members-groups { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px 16px; }
+.server-members-group h3 { padding: 12px 8px 6px; margin: 0; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--text-muted); }
+.server-member { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px; border-radius: 8px; border: 0; background: transparent; color: var(--text-normal); text-align: left; cursor: pointer; }
+.server-member:hover { background: var(--bg-hover); }
+.server-member:focus-visible { outline: 2px solid var(--accent-brand); outline-offset: -2px; }
+.server-member-avatar { position: relative; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex-shrink: 0; font-size: 12px; color: var(--text-header); }
+.server-member-avatar .avatar-photo { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
+.server-member-avatar .avatar-static { display: none; }
+.server-member-presence { position: absolute; bottom: -1px; right: -1px; width: 11px; height: 11px; border: 3px solid var(--bg-secondary); border-radius: 50%; background: var(--text-muted); }
+.server-member-presence.is-online { background: var(--accent-green); }
+.server-member-info { min-width: 0; display: grid; gap: 3px; }
+.server-member-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.server-member-info small { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#server-members-status, .server-members-empty { padding: 12px; font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+.server-members-scrim { display: none; }
+#btn-server-members { display: inline-flex; align-items: center; gap: 7px; }
+#btn-server-members[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent-brand); }
+#btn-server-members .icon-svg { width: 18px; height: 18px; }
+body.stage-fullscreen .server-members, body.stage-fullscreen .server-members-scrim, body.android-pip .server-members, body.android-pip .server-members-scrim { display: none !important; }
+@media (min-width: 1280px) {
+  body.members-open .app-layout.text-full.text-with-stream #stage-section { right: calc(224px + var(--panel-gap, 12px) * 2); }
+}
+@media (max-width: 1279px) {
+  .server-members, [data-look="novo"] .server-members { position: fixed; top: 60px; right: 12px; bottom: 12px; z-index: 1301; width: min(310px, calc(100vw - 24px)); border: 1px solid var(--border-subtle); border-radius: 14px; box-shadow: var(--panel-shadow); }
+  .server-members-scrim:not(.hidden) { display: block; position: fixed; inset: 0; z-index: 1300; background: color-mix(in srgb, var(--bg-tertiary) 65%, transparent); border: 0; }
+  .server-member { min-height: 48px; }
+}
+@media (max-width: 760px), (max-width: 1100px) and (max-height: 540px) and (pointer: coarse) {
+  .server-members, [data-look="novo"] .server-members { top: calc(var(--mobile-safe-top, 0px) + 12px); bottom: calc(var(--mobile-safe-bottom, 0px) + 12px); }
+  #btn-mobile-members { flex-shrink: 0; }
+}

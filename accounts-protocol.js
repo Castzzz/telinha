@@ -62,7 +62,7 @@ export function sendAccountState(socket, store) {
 }
 
 // O servidor continua sendo o responsável pela identidade no handshake e pela revogação do SFU.
-export function installAccountHandlers({ socket, store, getProfile, user, limit = fallbackLimit, onRevoke = () => {} }) {
+export function installAccountHandlers({ socket, store, getProfile, user, limit = fallbackLimit, onRevoke = () => {}, onFriendsChanged = () => {}, isOnline = () => false }) {
   const address = accountClientAddress(socket.handshake.address, socket.handshake.headers?.['x-forwarded-for']);
   let pending = false;
   const token = () => socket.handshake.auth?.accountToken || '';
@@ -107,5 +107,28 @@ export function installAccountHandlers({ socket, store, getProfile, user, limit 
     // O cliente desconecta só depois de salvar o perfil de visitante no aparelho.
     return {};
   }));
+  let friendPending = false;
+  for (const action of ['list', 'request', 'accept', 'reject', 'cancel', 'remove']) {
+    socket.on(`friend-${action}`, async (payload, callback) => {
+      if (typeof callback !== 'function') return;
+      const current = store.resolveSessionMeta(token());
+      if (!current) return callback({ success: false, error: 'Entre numa conta para usar os amigos.' });
+      if (friendPending || limit(`friends:${current.account.id}`, 60)) return callback({ success: false, error: 'Espere alguns segundos e tente de novo.' });
+      if (!payload || typeof payload !== 'object' || Array.isArray(payload)
+        || Object.keys(payload).some(key => !['username', 'accountId'].includes(key))
+        || Object.values(payload).some(value => typeof value !== 'string' || value.length > 64)) return callback({ success: false, error: 'Pedido de amizade inválido.' });
+      friendPending = true;
+      try {
+        if (action !== 'list') {
+          await store.changeFriend(current.account.id, action, payload);
+          onFriendsChanged();
+        }
+        callback({ success: true, ...store.friends(current.account.id, isOnline) });
+      } catch (error) {
+        callback({ success: false, error: error instanceof AccountError ? error.message : 'Não deu para salvar a amizade. Tente de novo.' });
+      } finally { friendPending = false; }
+    });
+  }
   sendAccountState(socket, store);
+  socket.emit('friends-state', { supported: store.available, ...store.friends(session()?.account.id, isOnline) });
 }

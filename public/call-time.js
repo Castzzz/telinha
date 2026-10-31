@@ -48,6 +48,7 @@ export function createDailyCallClocks(now = () => performance.now()) {
       for (const user of users) this.user(user);
     },
     elapsed(id) { const clock = clocks.get(id); return clock ? dailyCallElapsed(clock.snapshot, now() - clock.receivedAt) : null; },
+    scope(id) { return clocks.get(id)?.snapshot.scope; },
     freeze() {
       const stoppedAt = now();
       for (const clock of clocks.values()) {

@@ -1,0 +1,63 @@
+const { app, BrowserWindow, ipcMain } = require('electron');
+const fs = require('node:fs'), path = require('node:path'), os = require('node:os'), assert = require('node:assert/strict');
+const { io } = require('socket.io-client');
+const { registerAppScheme, handleAppProtocol, roomUrl } = require('../electron/app-protocol.cjs');
+registerAppScheme(); app.disableHardwareAcceleration(); app.on('window-all-closed', () => {});
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teletela-membros-ui-')); app.setPath('userData', path.join(dir, 'electron'));
+process.env.TELINHA_DATA_DIR = path.join(dir, 'data'); process.env.OWNER_KEY = 'membros-ui-teste'; process.env.SFU_SECRET = ''; process.env.TELINHA_MUSIC = '0';
+const prefs = { profile: { id: 'perfil-cast-membros-ui', name: 'Cast', color: '#5865F2' }, seenWhatsNew: '99', micOn: false };
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms)); let backend, win; const clients = [];
+const js = code => win.webContents.executeJavaScript(code, true);
+const click = selector => js(`document.querySelector(${JSON.stringify(selector)}).click();void 0`);
+async function until(code) { for (let i = 0; i < 180; i++) { if (await js(code)) return; await pause(50); } throw new Error(code); }
+const timeout = setTimeout(() => { console.error('Tempo esgotado'); app.exit(1); }, 60000);
+app.whenReady().then(async () => {
+  ipcMain.handle('prefs-get', () => prefs); ipcMain.handle('prefs-set', (_event, patch) => { Object.assign(prefs, patch); return true; });
+  ipcMain.handle('get-game-activity', () => ({ activity: null })); ipcMain.handle('set-global-hotkeys', () => ({})); ipcMain.handle('autostart-get', () => ({ supported: false })); ipcMain.handle('system-idle-seconds', () => 0);
+  backend = await import('../server.js'); const server = await backend.startServer(0, '127.0.0.1'); const url = `http://127.0.0.1:${server.address().port}`;
+  async function connect(auth = {}) { const socket = io(url, { transports: ['websocket'], auth }); clients.push(socket); await new Promise(resolve => socket.once('connect', resolve)); return socket; }
+  const emit = (socket, event, payload = {}) => socket.timeout(5000).emitWithAck(event, payload);
+  const owner = await connect(); await emit(owner, 'update-profile', { profileId: 'perfil-neves-membros-ui', name: 'Neves', bio: 'Perfil de teste' }); await emit(owner, 'owner-claim', { key: 'membros-ui-teste' });
+  const text = await emit(owner, 'create-text-channel', { name: 'Conversa' }); assert(text.success);
+  const off = await connect(); await emit(off, 'update-profile', { profileId: 'perfil-nanda-membros-ui', name: 'Nanda', bio: 'Mesmo fora da call', color: '#9B84EC' });
+  const registered = await emit(off, 'account-register', { username: 'nanda_teste', password: 'senha-dos-testes' }); assert(registered.success); off.disconnect();
+  const nanda = await connect({ accountToken: registered.token }); const otherDevice = await connect({ accountToken: registered.token });
+  win = new BrowserWindow({ width: 1440, height: 900, show: false, webPreferences: { offscreen: true, backgroundThrottling: false, preload: path.join(__dirname, '../electron/preload.cjs') } });
+  handleAppProtocol(win.webContents.session); await win.loadURL(roomUrl(url)); await until('Boolean(window.appState?.myId)');
+  await js("document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
+  await until("document.querySelector('#server-members-groups').textContent.includes('Cast') && document.querySelector('#server-members-groups').textContent.includes('Neves')");
+  assert(await js("!appState.currentChannelId && !document.querySelector('#server-members').classList.contains('hidden')"));
+  const memberSelector = `.server-member[data-member-id="${registered.account.accessId}"]`;
+  await until(`document.querySelectorAll('${memberSelector}').length === 1`);
+  nanda.disconnect(); await pause(80); assert(await js(`document.querySelector('${memberSelector}').getAttribute('aria-label').includes('online')`));
+  otherDevice.disconnect(); await until(`document.querySelector('${memberSelector}').getAttribute('aria-label').includes('offline')`);
+  await click(memberSelector); await until("!document.querySelector('#modal-user-profile').classList.contains('hidden')");
+  assert.equal(await js("document.querySelector('#profile-card-name').textContent"), 'Nanda');
+  assert.equal(await js("document.querySelector('#profile-card-meta').textContent"), '');
+  await js("document.querySelector('#modal-user-profile').classList.add('hidden');void 0");
+  await js("document.querySelector('#server-members-search').value='nAnDa';document.querySelector('#server-members-search').dispatchEvent(new Event('input'));void 0");
+  assert.equal(await js("document.querySelectorAll('.server-member').length"), 1);
+  await js("document.querySelector('#server-members-search').value='';document.querySelector('#server-members-search').dispatchEvent(new Event('input'));void 0");
+  await click(`[data-text-channel-id="${text.channelId}"] .channel-row`);
+  await until('Boolean(appState.textView)');
+  assert(await js("document.querySelector('#chat-drawer').getBoundingClientRect().right <= document.querySelector('#server-members').getBoundingClientRect().left"));
+  for (const theme of ['escuro', 'preto', 'claro']) { await js(`document.documentElement.dataset.theme='${theme}';void 0`); await pause(100); fs.writeFileSync(`/tmp/teletela-membros-${theme}.png`, (await win.webContents.capturePage()).toPNG()); }
+  await click('#server-members-close'); assert.equal(prefs.membersOpen, false);
+  const loaded = new Promise(resolve => win.webContents.once('did-finish-load', resolve)); win.reload(); await loaded; await until('Boolean(window.appState?.myId)');
+  assert(await js("document.querySelector('#server-members').classList.contains('hidden')"));
+  await click('#btn-server-members'); await until("!document.querySelector('#server-members').classList.contains('hidden')");
+  const castId = await js('appState.memberId');
+  const role = await emit(owner, 'role-save', { name: 'Gerente', position: 20, permissions: ['manageChannels'] });
+  assert.equal((await emit(owner, 'member-roles', { memberId: castId, roles: [role.role.id] })).success, true);
+  await until("Boolean(document.querySelector('#channel-geral .channel-delete-btn'))");
+  await js('window.confirm=()=>true;void 0'); await click('#channel-geral .channel-delete-btn');
+  await until("!document.querySelector('#channel-geral') && !appState.channels.has('geral')");
+  win.setSize(390, 844); await pause(150); await click('#btn-mobile-members');
+  await until("document.querySelector('#server-members').getAttribute('aria-modal') === 'true'");
+  assert(await js('document.documentElement.scrollWidth <= innerWidth'));
+  fs.writeFileSync('/tmp/teletela-membros-celular.png', (await win.webContents.capturePage()).toPNG());
+  await js('window.teletelaMobileBack();void 0');
+  assert(await js("document.querySelector('#server-members').classList.contains('hidden')"));
+  console.log('Membros: presença fora da call, offline, múltiplos aparelhos, perfil, busca, recolher/persistir, chat central, três temas e celular. Exclusão do Geral pela interface passou.');
+}).then(() => finish(0)).catch(error => { console.error(error); finish(1); });
+async function finish(code) { clearTimeout(timeout); clients.forEach(socket => socket.disconnect()); win?.destroy(); if (backend) await new Promise(resolve => backend.io.close(resolve)); fs.rmSync(dir, { recursive: true, force: true }); app.exit(code); }

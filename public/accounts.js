@@ -1,5 +1,7 @@
 const ACCOUNT_ICON = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg>';
 
+import { setupFriends } from './friends.js';
+
 export function accountSession(prefs, serverUrl) {
   const session = prefs.accountSessions?.[serverUrl];
   return session && /^[a-f0-9]{64}$/.test(session.token || '') ? session : null;
@@ -118,7 +120,11 @@ export function setupAccounts({ socket, prefs, savePrefs, serverUrl, getProfile,
     feedback(); render();
   }
   const persist = async patch => {
-    if (await savePrefs(patch) === false) throw new Error('Não foi possível salvar a sessão neste aparelho. Libere espaço e tente de novo.');
+    const previous = Object.fromEntries(Object.keys(patch).map(key => [key, prefs[key]]));
+    if (await savePrefs(patch) === false) {
+      Object.assign(prefs, previous);
+      throw new Error('Não foi possível salvar a sessão neste aparelho. Libere espaço e tente de novo.');
+    }
   };
   const request = async (event, payload) => {
     let result;
@@ -235,6 +241,7 @@ export function setupAccounts({ socket, prefs, savePrefs, serverUrl, getProfile,
     .then(info => { if (!ready && info) { ready = true; supported = info.supported === true; render(); } })
     .catch(() => { if (!ready) { ready = true; supported = false; render(); } });
   setMode('login'); render();
+  setupFriends({ socket, tabs, body, getAccount: () => current, selectSettingsTab });
   return { get ready() { return ready && (!accountSession(prefs, serverUrl) || profileLoaded); }, get account() { return current; },
     open() { selectSettingsTab?.('conta'); tab.focus(); } };
 }

@@ -1,7 +1,58 @@
 # Pendências para a próxima sessão
 
+## Publicação 4.3.0 autorizada (31/10/2026)
+
+O dono pediu release e deploy das mudanças desta conversa. Preparados desktop 4.3.0 e
+Android 4.3.0/código 11, com novidades e assinatura do APK preservada. Inclui amigos,
+membros do servidor, tempo por canal, exclusão do Geral, controles em tela cheia e captura
+Android. Magic continua separado. Testes funcionais e popup conferidos; backup anterior
+íntegro em `~/Teletela-backups/teletela-dados-2026-10-31_14-23-51.tar.gz`.
+
+As menções a desenvolvimento local/sem publicação abaixo registram as etapas anteriores.
+
 Anotado em 26/10/2026, a pedido do dono, para retomar amanhã.
 Retomado com o dono; os itens concluídos ficam marcados abaixo.
+
+## Retomada de 31/10/2026: controles, contas/amigos e captura Android
+
+Pedidos acrescentados na mesma conversa, feitos localmente, sem publicação:
+
+- [x] Tempo individual acumulado por canal: pausar o Geral ao ir ao AFK, contar o AFK e
+  retomar cada acumulado ao voltar. Mesmo reset diário à meia-noite de Brasília. Contagem
+  e arquivo por identidade/canal, sem duplicar aparelhos no mesmo canal; o total antigo
+  é preservado, sem inventar em quais canais foi gasto. Testes de troca, AFK automático,
+  pausa, persistência, identidade, exclusão, virada e interface desktop/celular passaram.
+
+- [x] Lista de pessoas do servidor na lateral direita: online/offline, fotos disponíveis,
+  busca, perfil, recolher e botão no celular. Pessoas fora da call aparecem; aparelhos da
+  mesma identidade não duplicam a lista. Não revela canais privados.
+- [x] Permitir apagar o Geral com gerenciamento de canais. Exclusão persiste ao reiniciar,
+  não volta por links antigos nem pelo cliente e preserva a call se falhar a gravação.
+  Recriar Geral explicitamente funciona. Testes de servidor, interface e canais passaram.
+
+Autorizada pelo dono nesta conversa. Desenvolvimento local, sem release/deploy.
+
+- [x] Esconder a barra inferior após 3 s em tela cheia; revelar com mouse/toque/teclado
+  e preservar a interação. Conferido em vídeo único, mosaico e alternativa CSS.
+- [x] Revisar contas: cadastro, login, recuperação, logout, persistência e sincronização
+  entre aparelhos/cargos. Corrigida a restauração do estado local se salvar a sessão falhar.
+- [x] Integrar amigos nas contas atuais: pedir, aceitar/recusar, cancelar, remover e
+  presença considerando os aparelhos conectados. Listas persistentes, testes de autorização,
+  falha de gravação e interface nos três temas e celular passaram.
+- [x] Captura nativa Android: tela e áudio de outro app chegaram ao desktop por P2P e
+  SFU local, em segundo plano e com mic mutado. Parar a tela preservou o microfone ligado;
+  recusar a autorização e aceitar depois de sair não deixaram captura/serviço ativos.
+
+Validação: runner 62/62, regressões 99/99 (incluindo contas/amigos), interface de contas e
+controles, regressão móvel e build/lint Android passaram. Conferidos pixels recebidos e
+tom de 440 Hz de um segundo app. Servidor e dados de teste temporários; sala oficial intacta.
+
+APK de teste: `dist/Teletela-Android-teste.apk`. Continua com a versão de desenvolvimento
+4.2.1/código 10; aumentar apenas ao preparar uma publicação autorizada. Falta conferir o
+telefone físico, consumo de bateria e apps reais que permitem/bloqueiam captura.
+
+Os registros de versões e branches abaixo são históricos; o estado desta retomada está
+no bloco acima.
 
 ## Bot de música: bloqueio do YouTube (29/10/2026)
 
@@ -189,7 +240,7 @@ Resultado da retomada:
   minimizar, usando o mesmo áudio e respeitando mute/volume. Voltar restaura a interface;
   parar a transmissão retira o PiP sem desligar o microfone. Validado no emulador com
   transmissão real por WebRTC e testes de seleção/troca/saída na interface.
-- [ ] **Acertar contas e amigos.** Levantar os problemas percebidos e revisar cadastro,
+- [x] **Acertar contas e amigos.** Concluído na retomada de 31/10/2026 acima. Pedido original: levantar os problemas percebidos e revisar cadastro,
   login/logout, sessão após reabrir o app, perfil entre PC e celular, pedidos de amizade,
   aceitar/recusar/remover e indicação de presença. A implementação experimental está na
   branch `teste/contas-amigos-e-canais-com-senha`; precisa ser revisada junto com a
@@ -241,13 +292,18 @@ aplicar a visibilidade dos canais. O PiP pode ser trabalhado separadamente no An
 
 Estas são lembranças para avaliar com o dono, sem compromisso de fazer todas amanhã:
 
+- [x] Ocultar automaticamente a barra inferior de controles da transmissão em tela cheia
+  após alguns segundos sem interação, deixando a imagem livre. Reaparecer ao movimentar
+  o mouse; manter os controles acessíveis ao interagir com eles ou pelo teclado.
+  Pedido de 30/10/2026, com captura de referência enviada pelo dono.
 - [ ] Conferir PiP no aparelho real, inclusive fechar a janela pelo sistema, trocar de
   aplicativo, bloquear a tela e usar fone/Bluetooth. O emulador validou entrada/retorno,
   vídeo avançando, microfone aberto e encerramento da transmissão.
 - [ ] Conferir a correção do volume do microfone em aparelhos reais, incluindo Windows
   e Android, e testar fone/Bluetooth, troca de rede, tela bloqueada e bateria.
-- [ ] Transmitir a tela e o som de outros aplicativos do próprio celular. A primeira
-  versão Android já recebe as transmissões do PC; a captura do celular segue pendente.
+- [x] Transmitir a tela e o som de outros aplicativos do próprio celular. Implementado
+  e validado localmente em 31/10/2026, conforme o bloco da retomada acima. Falta conferir
+  aparelhos físicos e publicar quando o dono pedir.
 - [ ] Definir a distribuição e atualização dos APKs. Hoje a instalação/atualização é
   manual e usa uma assinatura de teste; preservar a assinatura ao atualizar o app.
 

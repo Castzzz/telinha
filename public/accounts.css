@@ -20,3 +20,10 @@
 }
 
 #account-logged p { margin-bottom: 16px; }
+.friends-list { list-style: none; padding: 0; margin: 12px 0 24px; }
+.friend-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 0; border-bottom: 1px solid var(--border-subtle); }
+.friend-row strong, .friend-row span { display: block; overflow-wrap: anywhere; }
+.friend-row span { color: var(--text-muted); font-size: 13px; margin-top: 4px; }
+.friend-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.friend-actions button { min-height: 40px; }
+[data-settings-section="amigos"] h5 { font-size: 15px; margin: 24px 0 8px; }

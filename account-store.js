@@ -46,7 +46,7 @@ export class AccountStore {
     this.busyHashes = 0;
     this.pending = 0;
     this.queue = Promise.resolve();
-    this.data = { version: 2, accounts: [], sessions: [] };
+    this.data = { version: 2, accounts: [], sessions: [], friendships: [] };
     if (!directory) return;
     this.file = path.join(directory, 'accounts.json');
     try {
@@ -63,6 +63,15 @@ export class AccountStore {
           ids.add(account.id); names.add(account.username); members.add(account.accessId); profiles.add(account.profile.id);
         }
         if (data.sessions.some(session => !ids.has(session.accountId) || !TOKEN.test(session.hash) || !Number.isFinite(session.expiresAt))) throw new Error('Sessão salva inválida.');
+        if (data.friendships === undefined) data.friendships = [];
+        const pairs = new Set();
+        if (!Array.isArray(data.friendships) || data.friendships.length > 25000) throw new Error('Lista de amigos inválida.');
+        for (const edge of data.friendships) {
+          const pair = [edge.from, edge.to].sort().join(':');
+          if (!ids.has(edge.from) || !ids.has(edge.to) || edge.from === edge.to
+            || !['pending', 'accepted'].includes(edge.status) || pairs.has(pair)) throw new Error('Amizade salva inválida.');
+          pairs.add(pair);
+        }
         this.data = data;
       }
       this.available = true;
@@ -177,11 +186,49 @@ export class AccountStore {
       if (!account) throw new AccountError('Entre na conta de novo.', 'session-expired');
       if (snapshot.id !== account.profile.id) throw new AccountError('A conta mantém a identificação original do perfil.');
       account.profile = snapshot;
+      account.profileUpdatedAt = this.now();
     });
   }
   logout(token) {
     const hash = typeof token === 'string' ? digest(token) : '';
     return this.transaction(next => { next.sessions = next.sessions.filter(item => item.hash !== hash); });
+  }
+
+  friends(accountId, online = () => false) {
+    const result = { friends: [], incoming: [], outgoing: [] };
+    for (const edge of this.data.friendships) {
+      if (edge.from !== accountId && edge.to !== accountId) continue;
+      const other = this.data.accounts.find(account => account.id === (edge.from === accountId ? edge.to : edge.from));
+      if (!other) continue;
+      const kind = edge.status === 'accepted' ? 'friends' : edge.to === accountId ? 'incoming' : 'outgoing';
+      result[kind].push({ id: other.id, username: other.username, name: other.profile.name,
+        ...(kind === 'friends' ? { online: online(other.id) } : {}) });
+    }
+    return result;
+  }
+
+  changeFriend(accountId, action, payload = {}) {
+    return this.transaction(next => {
+      if (!next.accounts.some(account => account.id === accountId)) throw new AccountError('Entre na conta de novo.');
+      const other = action === 'request'
+        ? next.accounts.find(account => account.username === usernameKey(payload.username))
+        : next.accounts.find(account => account.id === payload.accountId);
+      if (!other) throw new AccountError('Não encontrei essa conta nesta sala. Confira o @usuário.');
+      if (other.id === accountId) throw new AccountError('Você não pode adicionar a própria conta.');
+      const edge = next.friendships.find(item => (item.from === accountId && item.to === other.id) || (item.to === accountId && item.from === other.id));
+      if (action === 'request') {
+        if (edge) throw new AccountError(edge.status === 'accepted' ? 'Vocês já são amigos.' : 'Já existe um pedido entre vocês. Confira os pedidos recebidos e enviados.');
+        if (next.friendships.length >= 25000 || [accountId, other.id].some(id => next.friendships.filter(item => item.from === id || item.to === id).length >= 500)) throw new AccountError('Limite de amigos e pedidos atingido. Remova ou cancele pedidos antes.');
+        next.friendships.push({ from: accountId, to: other.id, status: 'pending' });
+      } else if (action === 'accept' || action === 'reject') {
+        if (!edge || edge.status !== 'pending' || edge.to !== accountId) throw new AccountError('Esse pedido não está mais disponível.');
+        if (action === 'accept') edge.status = 'accepted';
+        else next.friendships = next.friendships.filter(item => item !== edge);
+      } else if (action === 'cancel' || action === 'remove') {
+        if (!edge || (action === 'cancel' ? edge.status !== 'pending' || edge.from !== accountId : edge.status !== 'accepted')) throw new AccountError('Essa amizade ou pedido não está mais disponível.');
+        next.friendships = next.friendships.filter(item => item !== edge);
+      } else throw new AccountError('Ação de amizade inválida.');
+    });
   }
 }
 

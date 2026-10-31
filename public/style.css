@@ -2594,6 +2594,13 @@ body.stage-fullscreen:not(:has(:fullscreen)) #stage-controls-bar {
   width: 100%;
 }
 
+#stage-controls-bar { transition: opacity .2s ease; }
+body.stage-controls-idle #stage-controls-bar { opacity: 0; pointer-events: none; }
+body.stage-controls-idle #stage-controls-bar:has(:focus-visible) { opacity: 1; pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  #stage-controls-bar { transition: none; }
+}
+
 body.stage-fullscreen:not(:has(:fullscreen)) #videos-grid:has(.stage-fullscreen-tile) > .video-tile:not(.stage-fullscreen-tile) {
   display: none !important;
 }

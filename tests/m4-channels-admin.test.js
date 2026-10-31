@@ -99,7 +99,7 @@ async function runTests() {
     await join(bob, 'resenha', 'bob-profile-00002');
     const denied = await emit(bob, 'delete-channel', { channelId: 'resenha' });
     assert.equal(denied.success, false);
-    assert.equal((await emit(bob, 'delete-channel', { channelId: 'geral' })).success, false, 'Geral nunca é apagado');
+    assert.equal((await emit(bob, 'delete-channel', { channelId: 'geral' })).success, false, 'Quem não gerencia canais não pode apagar o Geral');
 
     const bobNotified = once(bob, 'channel-deleted');
     const deleted = await emit(alice2, 'delete-channel', { channelId: 'resenha' });
@@ -108,7 +108,7 @@ async function runTests() {
     assert.ok(!(await channelsList()).some((c) => c.id === 'resenha'));
     const savedAfter = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'channels.json'), 'utf8'));
     assert.equal(savedAfter.channels.length, 0, 'apagado sai do arquivo também');
-    console.log('  ✓ Só quem criou apaga; quem estava dentro é avisado; Geral não apaga');
+    console.log('  ✓ Só quem criou apaga; quem estava dentro é avisado; Geral exige gerenciamento de canais');
 
     // 4. Admin: senha errada não vale; certa vale e aparece pros outros
     const wrong = await emit(bob, 'admin-login', { key: 'chute' });
