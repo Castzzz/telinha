@@ -3,7 +3,7 @@
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
-**4.3.1 em preparação (31/10/2026):** transmissão em janela normal no desktop,
+**[4.3.1 publicada em 31/10/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.1):** transmissão em janela normal no desktop,
 tela cheia em outro monitor, cabeçalho integrado e controles flutuantes com ocultação
 automática. APK 4.3.1/código 12 acompanha a interface; PiP móvel preservado.
 
@@ -1607,3 +1607,26 @@ sem pré-release; tag no commit `76648db1c4e62f09ce7aed9d1a2e703ffc0abf43`.
   Nove arquivos importantes conferidos por hash entre o código local e a VM.
   Segredos, dono, três contas, um cargo e dezesseis membros preservados.
 - Magic continua separado. Registros de desenvolvimento local anteriores são históricos.
+
+
+### Publicação da 4.3.1 concluída (31/10/2026)
+
+Release solicitada pelo dono, publicada como versão mais recente e sem pré-release:
+[v4.3.1](https://github.com/Castzzz/telinha/releases/tag/v4.3.1), no commit
+`dbe34a8272a86f9269b306070948be9255401b71`, enviado à `main`.
+
+- Janela desktop normal para a transmissão, tela cheia independente, cabeçalho integrado
+  ao tema e barra flutuante. Controles somem após três segundos mesmo com foco ou mouse
+  parado nos botões; fechar o player mantém a recepção na sala e não duplica o áudio.
+- Oito arquivos publicados: Setup, Portátil, AppImage, tar.gz, blockmap, `latest.yml`,
+  `latest-linux.yml` e APK Android 4.3.1/código 12. Tamanhos e SHA-256 no GitHub iguais
+  aos locais. Manifests 4.3.1 conferidos com os tamanhos e SHA-512 dos instaladores.
+- Player e versão conferidos nos pacotes Linux/Windows; interface conferida no APK.
+  Sons privados presentes nos instaladores e fora do Git. Tar.gz íntegro. Certificado
+  SHA-256 do APK igual ao da 4.3.0, permitindo instalar por cima.
+- Validação: runner (62), m1/m2/m3 (79), dois clientes Electron com WebRTC real,
+  tela cheia, áudio sem duplicação, foco/mouse parado, fechar/reabrir/parar de assistir,
+  três temas e controles compactos. Popup novo e histórico já visto conferidos na tela;
+  build e lint Android passaram.
+- Sem deploy nesta atualização: nenhuma mudança no servidor ou no protocolo. O servidor
+  permanece na 4.3.0; o player novo é específico do app desktop.
