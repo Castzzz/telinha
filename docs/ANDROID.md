@@ -13,16 +13,16 @@ Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md)
 
 - Canais de voz e texto, perfil local, chat, cargos e canais com senha ou invisíveis.
   Conta opcional com usuário/senha e o mesmo perfil do desktop. Acesso em **Você → Conta**.
-  Amigos em **Você → Amigos** no desenvolvimento local: pedidos, aceitar/recusar, cancelar,
-  remover e presença entre aparelhos. Precisa do servidor com o suporte novo.
+  Amigos em **Você → Amigos** desde a 4.3.0: pedidos, aceitar/recusar, cancelar,
+  remover e presença entre aparelhos. O servidor oficial já tem o suporte novo.
   Dados de RPG e os controles do palco usam a mesma interface.
 - Microfone com o filtro e o ganho manual do desktop, mute, ensurdecer e câmera frontal/traseira.
   Com a câmera ligada, **Virar** nos controles da call ou **⋯ → Virar câmera** alterna a lente.
   O nome do botão de câmera indica **Frontal** ou **Traseira**; a troca não altera o microfone.
 - Assistir às transmissões dos computadores. Abrir uma transmissão leva à aba Sala.
-- No desenvolvimento local, botão **Membros** no topo abre pessoas online/offline do
-  servidor, com busca e perfil. Voltar fecha o painel. O APK local acompanha essa mudança.
-- Contador individual por canal no desenvolvimento local: ao ir para AFK, o acumulado
+- Desde a 4.3.0, botão **Membros** no topo abre pessoas online/offline do
+  servidor, com busca e perfil. Voltar fecha o painel.
+- Contador individual por canal desde a 4.3.0: ao ir para AFK, o acumulado
   da outra call pausa; voltar o retoma. Zera à meia-noite de Brasília. Exige o servidor
   atualizado; em servidor anterior continua mostrando o total único da versão publicada.
 - PiP automático: enquanto recebe vídeo de um amigo, Início/trocar de app mantém a imagem
@@ -37,12 +37,12 @@ Registro dos pedidos e do que já foi concluído: [PENDENCIAS.md](PENDENCIAS.md)
 
 ## Limites
 
-O APK local inclui captura nativa da tela e do som de outros apps. Cada início pede
+O APK 4.3.0 inclui captura nativa da tela e do som de outros apps. Cada início pede
 consentimento pelo `MediaProjection`; não reaproveita autorização antiga. Áudio interno
 requer Android 10+ e `RECORD_AUDIO`. Android 8/9 transmite só imagem. Apps com proteção de
 conteúdo ou política que proíbe captura podem ficar sem imagem/áudio. Não há garantia de
 capturar áudio de conversas de outros apps. O próprio Teletela é excluído do áudio capturado.
-Essa mudança ainda não foi publicada; os testes em telefone físico continuam necessários.
+Publicada na 4.3.0; os testes em telefone físico continuam necessários.
 
 O APK abre a sala oficial. Não hospeda um servidor local, não detecta jogos de outros apps
 e não implementa os atalhos globais do PC. Também não tem atualização automática ou

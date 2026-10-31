@@ -3,10 +3,10 @@
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
-**4.3.0 preparada para publicação autorizada em 31/10/2026:** amigos, membros na lateral,
-tempo individual por canal, exclusão do Geral, barra em tela cheia e captura nativa Android.
-APK 4.3.0/código 11. Os registros abaixo de desenvolvimento local descrevem as etapas
-anteriores; resultado da publicação será anotado ao concluir.
+**[4.3.0 publicada em 31/10/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.0):**
+amigos, membros na lateral, tempo individual por canal, exclusão do Geral, barra em tela
+cheia e captura nativa Android. APK 4.3.0/código 11. Servidor atualizado e saudável.
+Os registros abaixo de desenvolvimento local descrevem as etapas anteriores à publicação.
 
 **Pedidos e andamento:** [pendências anotadas com o dono](PENDENCIAS.md). PiP Android,
 cargos sem conta e canais invisíveis na 3.7.0. Contas/amigos e reforço de voz estão
@@ -25,11 +25,9 @@ abaixo sobre branches e testes locais descrevem as etapas anteriores à publica�
 **Versão 4.2.1 publicada (30/10/2026):** tempo diário de call por pessoa,
 com pausa fora da voz, persistência e reset à meia-noite de Brasília. APK código 10.
 
-**Desenvolvimento local (31/10/2026), sem release/deploy:** amigos por conta, barra inferior
-com ocultação automática em tela cheia e captura nativa de tela/áudio no Android.
-Lista de membros do servidor na lateral, com online/offline e busca, e exclusão do Geral
-por quem gerencia canais também estão no desenvolvimento local.
-As versões dos pacotes continuam iguais até uma publicação autorizada.
+**Incluído na 4.3.0 (31/10/2026):** amigos por conta, barra inferior com ocultação automática
+em tela cheia e captura nativa de tela/áudio no Android. Lista de membros do servidor na
+lateral, com online/offline e busca, e exclusão do Geral por quem gerencia canais.
 
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
@@ -1562,3 +1560,28 @@ integrado por fast-forward e enviado à `main`.
   e permissão `0600` em `daily-call-time.json`.
 
 A `main` ficou selecionada após a publicação. As branches de desenvolvimento foram mantidas.
+
+
+### Publicação da 4.3.0 concluída (31/10/2026)
+
+Release e deploy solicitados explicitamente pelo dono.
+[4.3.0 pública e marcada como mais recente](https://github.com/Castzzz/telinha/releases/tag/v4.3.0),
+sem pré-release; tag no commit `76648db1c4e62f09ce7aed9d1a2e703ffc0abf43`.
+
+- Oito arquivos publicados: Setup, Portátil, AppImage, tar.gz, blockmap do Setup,
+  `latest.yml`, `latest-linux.yml` e APK Android 4.3.0/código 11. Tamanhos e SHA-256
+  conferidos com os locais; manifests públicos idênticos, com SHA-512 e tamanhos validados.
+  Assinatura do APK preservada em relação à 4.2.1; permite instalar por cima.
+- Pacotes Windows/Linux conferidos com os módulos novos e os sons privados.
+  `public/sounds/` continua somente no disco e nos instaladores, fora do Git.
+- Testes funcionais, integrações de contas/amigos, membros, canais e contador por canal,
+  interfaces desktop/celular, popup de novidades e build/lint Android passaram. Captura
+  Android validada em emulador, via P2P e SFU; validação em aparelhos físicos continua pendente.
+- Backup íntegro anterior ao deploy:
+  `~/Teletela-backups/teletela-dados-2026-10-31_14-25-47.tar.gz`.
+  Backup íntegro posterior: `~/Teletela-backups/teletela-dados-2026-10-31_14-28-52.tar.gz`.
+- Deploy concluído mantendo Node `v24.22.1` e Caddy `2.11.7`. Serviços Node, SFU, WARP
+  e Caddy ativos; saúde pública confirmou quatro canais e três usuários reconectados.
+  Nove arquivos importantes conferidos por hash entre o código local e a VM.
+  Segredos, dono, três contas, um cargo e dezesseis membros preservados.
+- Magic continua separado. Registros de desenvolvimento local anteriores são históricos.

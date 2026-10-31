@@ -1,12 +1,16 @@
 # Pendências para a próxima sessão
 
-## Publicação 4.3.0 autorizada (31/10/2026)
+## Publicação 4.3.0 concluída (31/10/2026)
 
-O dono pediu release e deploy das mudanças desta conversa. Preparados desktop 4.3.0 e
-Android 4.3.0/código 11, com novidades e assinatura do APK preservada. Inclui amigos,
+[Desktop e Android 4.3.0 publicados](https://github.com/Castzzz/telinha/releases/tag/v4.3.0),
+com APK código 11 e assinatura preservada. Servidor atualizado e saudável. Inclui amigos,
 membros do servidor, tempo por canal, exclusão do Geral, controles em tela cheia e captura
-Android. Magic continua separado. Testes funcionais e popup conferidos; backup anterior
-íntegro em `~/Teletela-backups/teletela-dados-2026-10-31_14-23-51.tar.gz`.
+Android. Magic continua separado. Oito arquivos e manifests públicos conferidos.
+
+Backups íntegros antes e depois do deploy:
+`~/Teletela-backups/teletela-dados-2026-10-31_14-25-47.tar.gz` e
+`~/Teletela-backups/teletela-dados-2026-10-31_14-28-52.tar.gz`. Contas, cargos, dono e
+segredos preservados. Testes em aparelhos Android físicos continuam pendentes.
 
 As menções a desenvolvimento local/sem publicação abaixo registram as etapas anteriores.
 
