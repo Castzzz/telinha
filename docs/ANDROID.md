@@ -46,7 +46,7 @@ Precisa de JDK 17+ e Android SDK com a plataforma 35. O Gradle Wrapper 8.9 está
 repositório, com checksum da distribuição; o Android Gradle Plugin é 8.7.3. A combinação
 é compatível com SDK 35 e dispensa trocar as ferramentas do desktop.
 
-O APK da 4.2.0 usa `versionCode 9` / `4.2.0`, com o mesmo ID e a mesma assinatura
+O APK da 4.2.1 usa `versionCode 10` / `4.2.1`, com o mesmo ID e a mesma assinatura
 do primeiro APK, permitindo instalar por cima e manter o perfil.
 
 ```bash

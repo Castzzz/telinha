@@ -206,14 +206,13 @@ envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade. Tudo fica nes
 funciona com os três temas e continua após reabrir. **Restaurar personalização** remove o
 fundo e a cor próprios, preservando tema e perfil. O APK Android acompanha as melhorias.
 
-## Em preparação: tempo diário de call
+## Novidade da versão 4.2.1: tempo diário de call
 
-Na branch `melhoria/tempo-diario-na-call`, o contador de cada pessoa soma o tempo em
+O contador de cada pessoa soma o tempo em
 qualquer canal de voz durante o dia e zera à **meia-noite de Brasília**. Sair, voltar,
 trocar de canal, reconectar ou reabrir o app preserva o acumulado; fora da call ele para.
 O total fica salvo no servidor por perfil, e dois aparelhos com o mesmo perfil contam
 uma única vez. O relógio do canal continua indicando há quanto tempo aquela call está ativa.
-Essa mudança ainda não foi publicada.
 
 ## 🎮 Como usar
 

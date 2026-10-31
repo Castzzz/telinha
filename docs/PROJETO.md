@@ -17,6 +17,9 @@ com o PC, busca, diagnóstico, categorias/ordenação, apelido só em voz pelo p
 download de imagens, ausentes e personalização. O APK passa a 4.2.0/código 9. Os registros
 abaixo sobre branches e testes locais descrevem as etapas anteriores à publicação.
 
+**Atualização 4.2.1 em preparação (30/10/2026):** tempo diário de call por pessoa,
+com pausa fora da voz, persistência e reset à meia-noite de Brasília. APK código 10.
+
 > O nome antigo era **Telinha**. O app virou **Teletela** na 2.0, mas muita coisa por dentro
 > continua com o nome antigo de propósito (pasta do repositório, `appId`, serviços da VM,
 > chaves de preferências). Veja [Nomes que não podem mudar](#nomes-que-não-podem-mudar).
@@ -1385,10 +1388,10 @@ personalização, e o ajuste final de apelido somente na voz pelo próprio perfi
 A `main` ficou selecionada após a publicação. As branches de desenvolvimento foram mantidas.
 
 
-### Tempo diário por pessoa na call (30/10/2026, ainda local)
+### Tempo diário por pessoa na call (30/10/2026)
 
-Branch `melhoria/tempo-diario-na-call`, a partir da 4.2.0 publicada. Sem release/deploy e
-sem alteração de versão. O contador individual passa de duração da entrada atual para
+Implementado na branch `melhoria/tempo-diario-na-call`, a partir da 4.2.0 publicada.
+Publicação autorizada pelo dono e preparada na 4.2.1. O contador individual passa de duração da entrada atual para
 acumulado em voz no dia civil, com referência comum `America/Sao_Paulo` (Brasília).
 O relógio de cada canal (`callStartedAt`) continua medindo a sessão ativa daquele canal.
 
