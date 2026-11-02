@@ -10,6 +10,8 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
+**4.3.2:** conexão alternativa segura quando a rede bloqueia WebSocket, evitando que a sala fique sem conectar.
+
 ---
 
 ## ⬇️ Downloads
@@ -292,6 +294,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |
 | **Parou de ouvir alguém** | Clique na pessoa → *🔄 Reconectar a voz* (a conexão também se refaz sozinha se cair) |
+| **Rede bloqueia a conexão em tempo real** | O app tenta uma conexão HTTP alternativa se o WebSocket falhar. Na sala oficial, as duas opções usam HTTPS. Essa alternativa conecta a sala e o chat; voz e tela continuam dependendo de WebRTC |
 | **Voltar pra tela inicial** | `Ctrl+Shift+H` |
 
 ### 🔊 O som da transmissão

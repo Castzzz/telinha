@@ -1,5 +1,9 @@
 # Teletela: documentação do projeto
 
+**Versão 4.3.2 (02/11/2026):** correção da conexão alternativa HTTP quando WebSocket falha.
+Validação na interface instalada: conexão normal, bloqueio de WebSocket, entrada no canal e
+retomada após queda. Release desktop e atualização do servidor para navegador.
+
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
 
@@ -94,6 +98,13 @@ Repositório público: https://github.com/Castzzz/telinha
 
 Pontos importantes:
 
+- **Conexão em redes com bloqueio de WebSocket (4.3.2):**
+  `public/app.js` usa `transports: ['websocket', 'polling']` com `tryAllTransports: true`.
+  Só listar os dois transportes não ativa a alternativa quando o primeiro falha: sem
+  essa opção o app repetia WebSocket e nunca tentava HTTP, mesmo com HTTPS acessível.
+  A alternativa usa o mesmo domínio/certificado e mantém autenticação; não substitui
+  WebRTC para voz/tela. Teste na interface instalada com bloqueio real de requisições
+  WebSocket e reconexão: `electron tests/connection-fallback-browser.cjs`.
 - **A interface vem instalada no app.** O Electron serve a pasta `public/` empacotada pelo
   protocolo `telinha://app` (`electron/app-protocol.cjs`) e passa o endereço da sala em
   `?server=https://...`. Do servidor só vem a conexão Socket.IO e os arquivos de mídia
