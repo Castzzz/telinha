@@ -1,8 +1,9 @@
 # Teletela: documentação do projeto
 
-**Versão 4.3.2 (02/11/2026):** correção da conexão alternativa HTTP quando WebSocket falha.
+**[Versão 4.3.2 publicada em 02/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.2):** correção da conexão alternativa HTTP quando WebSocket falha.
 Validação na interface instalada: conexão normal, bloqueio de WebSocket, entrada no canal e
-retomada após queda. Release desktop e atualização do servidor para navegador.
+retomada após queda. Release desktop e servidor atualizado para navegador, com backup prévio
+e saúde pública conferida. Android permanece na 4.3.1/código 12.
 
 Tudo o que precisa pra entender, rodar, mudar, publicar e manter o Teletela. Escrito pra quem
 for mexer no código, inclusive agentes de IA (Claude Code, Antigravity, etc.) em outra conversa.
