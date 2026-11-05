@@ -1,9 +1,9 @@
 # Teletela: documentação do projeto
 
-**4.3.3 em preparação (05/11/2026):** canal de Ausentes bloqueia o microfone de todos,
+**[4.3.3 publicada em 05/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.3):** canal de Ausentes bloqueia o microfone de todos,
 inclusive administradores, e restaura o estado anterior ao sair. Novo bundle Flatpak
 experimental nos downloads do GitHub, com atualização manual. APK 4.3.3/código 13.
-Release e deploy solicitados pelo dono; conferir o registro da publicação ao final.
+Release e servidor atualizados a pedido do dono, com backup prévio e saúde pública conferida.
 
 **[Versão 4.3.2 publicada em 02/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.2):** correção da conexão alternativa HTTP quando WebSocket falha.
 Validação na interface instalada: conexão normal, bloqueio de WebSocket, entrada no canal e
@@ -479,7 +479,8 @@ O destino continua `com.castzin.telinha` e gera `dist/Teletela.flatpak`, separad
 alvos padrão AppImage/tar.gz e do comando de release. Para publicar, gere também esse
 bundle na versão nova e anexe `Teletela.flatpak` à release do GitHub. As permissões incluem rede,
 PulseAudio, Wayland/X11, GPU, notificações e Downloads, sem acesso geral ao diretório pessoal.
-O primeiro bundle foi gerado após instalar `flatpak-builder`. Conferir especialmente portais de captura, `pactl`, jogos,
+Geração, instalação por bundle, abertura no Wayland, conexão e entrada mutada no canal
+foram validadas na 4.3.3. Conferir especialmente portais de captura, `pactl`, jogos,
 atalhos e autostart antes de distribuir. O updater atual só atende AppImage/Setup;
 um bundle local precisa ser reinstalado para atualizar, até haver repositório próprio.
 
@@ -1669,3 +1670,30 @@ Release solicitada pelo dono, publicada como versão mais recente e sem pré-rel
   build e lint Android passaram.
 - Sem deploy nesta atualização: nenhuma mudança no servidor ou no protocolo. O servidor
   permanece na 4.3.0; o player novo é específico do app desktop.
+
+### Publicação da 4.3.3 concluída (05/11/2026)
+
+Release solicitada pelo dono e publicada como mais recente, sem pré-release:
+[v4.3.3](https://github.com/Castzzz/telinha/releases/tag/v4.3.3), no commit
+`a0e66a0edc7ea0267aaba6afd168e0ccf6a5861d`, enviado à `main`.
+
+- Ausentes mantém todos mutados, inclusive o dono e administradores. Entrada manual e
+  automática bloqueiam a captura; sair restaura o estado anterior do microfone. Bloqueios
+  da moderação são preservados. O servidor também nega tentativas de desmutar e tokens
+  SFU de publicação de voz no canal de Ausentes.
+- Nove arquivos publicados: Setup, Portátil, AppImage, tar.gz, Flatpak, blockmap,
+  `latest.yml`, `latest-linux.yml` e APK Android 4.3.3/código 13. Tamanhos e SHA-256
+  conferidos com os arquivos locais; os manifests de atualização têm versão 4.3.3 e
+  SHA-512/tamanhos corretos. Sons continuam nos pacotes e fora do Git.
+- Flatpak experimental instalado e aberto no Wayland: interface 4.3.3, conexão ao
+  servidor local, entrada mutada no Geral e popup de novidades conferidos. Captura de
+  tela, áudio por aplicativo, jogos e atalhos no sandbox ainda exigem validação própria.
+  Atualização manual por bundle; nenhum pacote foi publicado no Flathub.
+- Validação: runner (62), integração de extras/cargos (16), interface de organização e
+  Ausentes com movimentação automática e restauração de faixa de áudio, três temas e
+  celular. Popup e código dos pacotes Linux/Windows conferidos; APK com build/lint,
+  versão e interface verificados. Certificado Android de desenvolvimento preservado.
+- Deploy com backup prévio em `~/Teletela-backups`, preservando Node v24.22.1 e Caddy
+  2.11.7. Node/SFU/Caddy ativos; saúde pública saudável e interface 4.3.3 acessível.
+  SHA-256 de `server.js`, `package.json`, `public/app.js` e `public/index.html`
+  conferidos entre o código local e a VM. Segredos não foram exibidos nem versionados.
