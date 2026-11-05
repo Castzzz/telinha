@@ -695,10 +695,11 @@ const serverMutedProfiles = new Set();
 const serverDeafenedProfiles = new Set();
 
 function applyServerModeration(user) {
-  user.serverMuted = Boolean(user.profileId && serverMutedProfiles.has(user.profileId));
+  user.afkMuted = Boolean(user.channelId && user.channelId === channelExtras.data.afk.channelId);
+  user.serverMuted = user.afkMuted || Boolean(user.profileId && serverMutedProfiles.has(user.profileId));
   user.serverDeafened = Boolean(user.profileId && serverDeafenedProfiles.has(user.profileId));
   // Mutado pelo admin não abre o microfone; ensurdecido também não ouve nem fala
-  if (user.serverMuted || user.serverDeafened) user.isMicOn = false;
+  if (user.serverMuted || user.serverDeafened) { user.isMicOn = false; user.isSpeaking = false; }
   if (user.serverDeafened) user.isDeafened = true;
 }
 
@@ -734,6 +735,7 @@ function publicUser(u) {
     isOwner: permissions.isOwner(u),
     displayRoleId: u.displayRoleId || '',
     roles: permissions.roles(u).map(({ id, name }) => ({ id, name })),
+    afkMuted: Boolean(u.afkMuted),
     serverMuted: Boolean(u.serverMuted),
     serverDeafened: Boolean(u.serverDeafened),
     avatarV: u.avatar ? u.avatarV : 0,
@@ -1596,7 +1598,14 @@ io.on('connection', (socket) => {
     if (payload.channelId && (!destination || destination.isDefault || destination.password || destination.access?.private || !permissions.visible(user,destination))) throw new Error('Escolha um canal de voz público, sem senha, diferente do Geral.');
     if (![5,10,15,30,60].includes(payload.minutes)) throw new Error('Escolha um tempo de ausência válido.');
     channelExtras.change(() => { channelExtras.data.afk = { channelId: destination?.id || '', minutes: payload.minutes }; });
-    for (const client of io.sockets.sockets.values()) client.data.user.lastActiveAt = Date.now();
+    for (const client of io.sockets.sockets.values()) {
+      const member = client.data.user, wasAfkMuted = Boolean(member.afkMuted);
+      member.lastActiveAt = Date.now();
+      applyServerModeration(member);
+      if (wasAfkMuted !== member.afkMuted) client.emit('server-moderation', {
+        serverMuted: member.serverMuted, serverDeafened: member.serverDeafened, afkMuted: member.afkMuted
+      });
+    }
   }));
   socket.on('idle-activity', safeHandler(raw => {
     const payload = safeObject(raw);
@@ -1681,6 +1690,7 @@ io.on('connection', (socket) => {
     if (!permissions.canModerate(user, targetUser, kind === 'mute' ? 'muteMembers' : 'deafenMembers') || !permissions.visible(user, channels.get(targetUser.channelId))) return cb({ success: false, error: 'Seu cargo não permite moderar essa pessoa.' });
     if (!targetUser.profileId) return cb({ success: false, error: 'Essa pessoa está com uma versão antiga do app.' });
     const on = payload.on === true;
+    if (!on && kind === 'mute' && targetUser.channelId === channelExtras.data.afk.channelId) return cb({ success: false, error: 'No canal de ausentes, todos ficam mutados, inclusive administradores.' });
     const set = kind === 'mute' ? serverMutedProfiles : serverDeafenedProfiles;
     if (on) set.add(targetUser.profileId);
     else set.delete(targetUser.profileId);
@@ -1688,7 +1698,7 @@ io.on('connection', (socket) => {
     applyServerModeration(targetUser);
     // Tirou o ensurdecer do admin: volta a ouvir (o mic continua como a pessoa deixar)
     if (kind === 'deafen' && !on && wasDeafened) targetUser.isDeafened = false;
-    target.emit('server-moderation', { serverMuted: targetUser.serverMuted, serverDeafened: targetUser.serverDeafened, by: user.name });
+    target.emit('server-moderation', { serverMuted: targetUser.serverMuted, serverDeafened: targetUser.serverDeafened, afkMuted: targetUser.afkMuted, by: user.name });
     if (targetUser.channelId) {
       const statePayload = {
         userId: target.id,
@@ -1901,6 +1911,7 @@ io.on('connection', (socket) => {
     user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
+    applyServerModeration(user);
     dailyCalls.joinChannel(user.accessId, socket.id, user.channelId);
     user.watching = [];
     channel.users.set(socket.id, user);
@@ -1965,6 +1976,7 @@ io.on('connection', (socket) => {
       }
     }
     // Mutado/ensurdecido pelo admin não consegue se desmutar
+    applyServerModeration(user);
     const micLocked = user.serverMuted || user.serverDeafened;
     if (typeof rawPayload.isMicOn === 'boolean' && user.isMicOn !== rawPayload.isMicOn && !(micLocked && rawPayload.isMicOn)) {
       user.isMicOn = rawPayload.isMicOn;
@@ -1975,7 +1987,7 @@ io.on('connection', (socket) => {
       presenceChanged = true;
     }
     if (typeof rawPayload.isSpeaking === 'boolean' && user.isSpeaking !== rawPayload.isSpeaking) {
-      user.isSpeaking = rawPayload.isSpeaking;
+      user.isSpeaking = !micLocked && rawPayload.isSpeaking;
     }
     // Quem está assistindo o quê (as fotinhas do lado do nome de quem transmite)
     if (Array.isArray(rawPayload.watching)) {
@@ -2031,6 +2043,7 @@ io.on('connection', (socket) => {
     const owner = io.sockets.sockets.get(ownerId)?.data?.user;
     if (!owner || owner.channelId !== user.channelId) return callback({ ok: false });
     if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
+    if (role === 'host' && payload.kind === 'voice' && user.channelId === channelExtras.data.afk.channelId) return callback({ ok: false });
     // Voz também passa pelo SFU: cada um que fala tem a sua sala de voz no canal
     // Voz e câmera também passam pelo SFU, cada uma na sua sala (separada da tela)
     // Telas a mais: "screen2" → "__s2"

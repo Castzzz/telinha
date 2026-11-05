@@ -9,7 +9,7 @@ const wait = ms => new Promise(resolve=>setTimeout(resolve,ms));
 
 test('categorias, ordem, apelidos, imagens privadas e ausência usam servidor real e dados persistentes', { timeout: 15000 }, async t => {
   const data=fs.mkdtempSync(path.join(os.tmpdir(),'teletela-extras-'));
-  process.env.TELINHA_DATA_DIR=data;process.env.OWNER_KEY='propriedade-extras-teste';process.env.SFU_SECRET='';process.env.TELINHA_MUSIC='0';
+  process.env.TELINHA_DATA_DIR=data;process.env.OWNER_KEY='propriedade-extras-teste';process.env.SFU_SECRET='segredo-sfu-extras-teste';process.env.TELINHA_MUSIC='0';
   const backend=await import('../server.js'),server=await backend.startServer(0,'127.0.0.1'),clients=[];
   t.after(async()=>{for(const socket of clients)socket.disconnect();await new Promise(resolve=>backend.io.close(resolve));fs.rmSync(data,{recursive:true,force:true});});
   async function connect(){const socket=client('http://127.0.0.1:'+server.address().port,{transports:['websocket'],reconnection:false});clients.push(socket);await new Promise(resolve=>socket.once('connect',resolve));return socket;}
@@ -65,6 +65,31 @@ test('categorias, ordem, apelidos, imagens privadas e ausência usam servidor re
   user.watching=[];user.afkEnabled=false;backend.sweepAfk();assert.equal(user.channelId,'geral');
   user.afkEnabled=true;user.lastActiveAt=Date.now()-6*60000;const moved=new Promise(resolve=>guest.once('afk-move',resolve));backend.sweepAfk();assert.equal((await moved).channelId,afk);assert.equal(user.channelId,null);
   assert.equal(backend.io.sockets.sockets.get(outsider.id).data.user.channelId,'geral','cliente antigo não é movido');
+  // A regra vale na entrada automática, manual e para o próprio dono.
+  const joinWithMic = (socket, channelId) => emit(socket,'join-channel',{channelId,isMicOn:true});
+  const member = socket => backend.io.sockets.sockets.get(socket.id).data.user;
+  await joinWithMic(guest,afk);
+  assert.equal(user.isMicOn,false);assert.equal(user.afkMuted,true);
+  const changed = new Promise(resolve=>guest.once('user-state-changed',resolve));
+  guest.emit('user-state-changed',{isMicOn:true,isSpeaking:true});await changed;
+  assert.equal(user.isMicOn,false);assert.equal(user.isSpeaking,false);
+  await joinWithMic(guest,afk);assert.equal(user.isMicOn,false,'reentrada não libera');
+  assert.equal((await emit(owner,'admin-mute-user',{userId:guest.id,on:false})).success,false);
+  await joinWithMic(owner,afk);assert.equal(member(owner).isMicOn,false,'dono também fica mutado');
+  assert.equal((await emit(owner,'sfu-token',{kind:'voice',role:'host',ownerId:owner.id})).ok,false);
+  await joinWithMic(owner,'geral');assert.equal(member(owner).isMicOn,true,'sair libera o microfone');
+  assert.equal((await emit(owner,'sfu-token',{kind:'voice',role:'host',ownerId:owner.id})).ok,true);
+  assert((await emit(owner,'afk-settings',{channelId:second,minutes:5})).success);
+  assert.equal(user.serverMuted,false,'trocar o destino libera o canal antigo');
+  await joinWithMic(owner,second);assert.equal(member(owner).isMicOn,false);
+  assert((await emit(owner,'afk-settings',{channelId:'',minutes:5})).success);
+  assert.equal(member(owner).serverMuted,false,'desligar ausentes remove o bloqueio');
+  await joinWithMic(owner,'geral');
+  assert((await emit(owner,'admin-mute-user',{userId:guest.id,on:true})).success);
+  assert((await emit(owner,'afk-settings',{channelId:afk,minutes:5})).success);
+  await joinWithMic(guest,'geral');assert.equal(user.serverMuted,true,'punição sobrevive à saída');
+  assert((await emit(owner,'admin-mute-user',{userId:guest.id,on:false})).success);
+  await joinWithMic(guest,'geral');assert.equal(user.isMicOn,true);
   const reloaded=new ChannelExtras(data);assert.equal(reloaded.categories('voice').find(c=>c.id==='voice').name,'Bate-papo');assert.equal(reloaded.placement('voice',second).position,0);assert.equal(reloaded.data.afk.channelId,afk);
   assert.equal(reloaded.nickname(user.accessId,'call','geral'),'Guerreiro');
   assert((await emit(owner,'delete-channel',{channelId:afk})).success);assert.equal(backend.channelExtras.data.afk.channelId,'');

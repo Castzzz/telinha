@@ -1,5 +1,10 @@
 # Teletela: documentação do projeto
 
+**4.3.3 em preparação (05/11/2026):** canal de Ausentes bloqueia o microfone de todos,
+inclusive administradores, e restaura o estado anterior ao sair. Novo bundle Flatpak
+experimental nos downloads do GitHub, com atualização manual. APK 4.3.3/código 13.
+Release e deploy solicitados pelo dono; conferir o registro da publicação ao final.
+
 **[Versão 4.3.2 publicada em 02/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.2):** correção da conexão alternativa HTTP quando WebSocket falha.
 Validação na interface instalada: conexão normal, bloqueio de WebSocket, entrada no canal e
 retomada após queda. Release desktop e servidor atualizado para navegador, com backup prévio
@@ -466,6 +471,18 @@ go test -race ./sfu                       # SFU: erro de espectador não interro
   `capturePage()`. Esses scripts não ficam no repositório.
 
 ## 6. Publicar uma versão (release)
+
+**Flatpak experimental:** `npm run dist:flatpak` usa `scripts/build-flatpak.sh`
+e `build.flatpak` no `package.json`, sem publicar. Exige `flatpak`, `flatpak-builder`
+e o remoto Flathub do usuário; o empacotador instala runtime/SDK/BaseApp 25.08.
+O destino continua `com.castzin.telinha` e gera `dist/Teletela.flatpak`, separado dos
+alvos padrão AppImage/tar.gz e do comando de release. Para publicar, gere também esse
+bundle na versão nova e anexe `Teletela.flatpak` à release do GitHub. As permissões incluem rede,
+PulseAudio, Wayland/X11, GPU, notificações e Downloads, sem acesso geral ao diretório pessoal.
+O primeiro bundle foi gerado após instalar `flatpak-builder`. Conferir especialmente portais de captura, `pactl`, jogos,
+atalhos e autostart antes de distribuir. O updater atual só atende AppImage/Setup;
+um bundle local precisa ser reinstalado para atualizar, até haver repositório próprio.
+
 
 Uma versão nova é o que faz os apps da galera atualizarem sozinhos.
 
@@ -1455,7 +1472,17 @@ válidos: os canais começam nos grupos padrão até alguém organizar.
   Desktop Windows/X11 consulta `powerMonitor.getSystemIdleTime()` por IPC da interface local;
   Wayland e navegador usam interações dentro do Teletela. A tela explica essa diferença e
   permite desativar em Som (`afkEnabled`), útil ao jogar em silêncio fora da janela.
-  Não altera a preferência de mute. Não retorna automaticamente ao canal anterior.
+  Não altera a preferência salva de mute. Não retorna automaticamente ao canal anterior.
+  O destino mantém todos mutados, inclusive dono e cargos administrativos, na entrada
+  manual ou automática. `applyServerModeration` deriva `afkMuted` do canal atual e o inclui
+  em `serverMuted`, sem gravar uma punição no perfil. Entrada, reentrada e atualizações
+  bloqueiam microfone/fala; desmutar pela moderação e obter token SFU de voz como host
+  nesse canal são negados. Mudar/desligar o destino reaplica o bloqueio aos presentes e
+  envia `server-moderation`. A interface silencia o microfone ao entrar e explica o bloqueio;
+  sair restaura o estado anterior do microfone, mantendo eventuais punições de moderação.
+  `channel-state` e `server-moderation` compartilham `micOnBeforeAdminLock` para preservar
+  a escolha durante bloqueios sobrepostos. A restauração reativa a faixa de áudio e
+  comunica `isMicOn` ao servidor, sem alterar `prefs.micOn`.
 - Ao vencer o tempo, o servidor encerra a participação anterior e emite `afk-move`; o
   cliente entra no destino pelo fluxo normal, que reconfere acesso/senha. Clientes antigos
   que não anunciam suporte via `idle-activity` não são movidos. Se o destino ganhar senha,

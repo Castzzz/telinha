@@ -58,6 +58,25 @@ app.whenReady().then(async()=>{
  const afk=backend.channelExtras.data.afk.channelId;
  for(const win of [owner,guest]){await js(win,"document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#channel-geral .channel-row').click();void 0");await until(win,"appState.currentChannelId==='geral'");}
  const id=await js(guest,'appState.myId'),user=backend.io.sockets.sockets.get(id).data.user;user.lastActiveAt=Date.now()-16*60000;user.afkSupported=true;backend.sweepAfk();await until(guest,`appState.currentChannelId==='${afk}'`);assert.equal(user.channelId,afk);
+ await until(guest,'appState.myUser.afkMuted && !appState.myUser.isMicOn');
+ await click(guest,'#btn-toggle-mic');assert.equal(await js(guest,'appState.myUser.isMicOn'),false);
+ // Dono entra falando: áudio do microfone desliga e o botão não libera.
+ await click(owner,'#btn-toggle-mic');await until(owner,'appState.myUser.isMicOn && Boolean(appState.localMicStream)');
+ await click(owner,`#channel-${afk} .channel-row`);await until(owner,`appState.currentChannelId==='${afk}' && appState.myUser.afkMuted && !appState.myUser.isMicOn && (!appState.localMicStream || appState.localMicStream.getAudioTracks().every(track=>!track.enabled))`);
+ await click(owner,'#btn-toggle-mic');assert.equal(await js(owner,'appState.myUser.isMicOn'),false);
+ await fs.promises.writeFile('/tmp/teletela-ausentes-mutado.png',(await owner.webContents.capturePage()).toPNG());
+ await click(owner,'#channel-geral .channel-row');await until(owner,"appState.currentChannelId==='geral' && !appState.myUser.serverMuted");
+ await until(owner,'appState.myUser.isMicOn && appState.localMicStream.getAudioTracks().every(track=>track.enabled)');
+ await until(owner,`appState.channels.get('geral').users.get(appState.myId)?.isMicOn === true`);
+ await click(owner,'#btn-toggle-mic');
+ await click(owner,`#channel-${afk} .channel-row`);await until(owner,'appState.myUser.afkMuted');
+ await click(owner,'#channel-geral .channel-row');await until(owner,"appState.currentChannelId==='geral' && !appState.myUser.serverMuted");
+ assert.equal(await js(owner,'appState.myUser.isMicOn'),false,'Quem entrou mutado continua mutado ao sair');
+ // A movimentação automática também restaura o microfone ao voltar.
+ await click(guest,'#channel-geral .channel-row');await until(guest,"appState.currentChannelId==='geral'");
+ await click(guest,'#btn-toggle-mic');await until(guest,'appState.myUser.isMicOn');
+ user.lastActiveAt=Date.now()-16*60000;user.isSpeaking=false;backend.sweepAfk();await until(guest,'appState.myUser.afkMuted && !appState.myUser.isMicOn');
+ await click(guest,'#channel-geral .channel-row');await until(guest,"appState.currentChannelId==='geral' && appState.myUser.isMicOn && appState.localMicStream.getAudioTracks().every(track=>track.enabled)");
  await click(owner,'#btn-organize-channels');
  for(const theme of ['escuro','preto','claro']){await js(owner,`document.documentElement.dataset.theme='${theme}';void 0`);await pause(120);await fs.promises.writeFile('/tmp/teletela-organizacao-'+theme+'.png',(await owner.webContents.capturePage()).toPNG());}
  owner.setSize(390,844);await pause(200);assert(await js(owner,'document.querySelector("#modal-channel-organization .modal-card").getBoundingClientRect().width<=innerWidth'));

@@ -1,6 +1,6 @@
 {
   "name": "telinha",
-  "version": "4.3.2",
+  "version": "4.3.3",
   "description": "Transmissão de tela P2P (WebRTC) e voz estilo Discord/TeamSpeak com áudio de sistema independente",
   "type": "module",
   "private": true,
@@ -30,6 +30,7 @@
     "test:permissions": "sh -c '($(command -v electron || ls /usr/lib/electron*/electron | head -n1) tests/permissions-browser.cjs)'",
     "sfu": "go run ./sfu",
     "dist:linux": "electron-builder --linux",
+    "dist:flatpak": "bash scripts/build-flatpak.sh",
     "dist:win": "npm run build:win-audio && electron-builder --win nsis portable",
     "dist": "npm run build:win-audio && electron-builder --linux --win",
     "build:win-audio": "sh native/win-audio/build.sh",
@@ -83,6 +84,22 @@
       ],
       "category": "AudioVideo",
       "artifactName": "Teletela.${ext}"
+    },
+    "flatpak": {
+      "runtimeVersion": "25.08",
+      "baseVersion": "25.08",
+      "artifactName": "Teletela.${ext}",
+      "useWaylandFlags": true,
+      "finishArgs": [
+        "--socket=wayland",
+        "--socket=x11",
+        "--share=ipc",
+        "--device=dri",
+        "--socket=pulseaudio",
+        "--share=network",
+        "--filesystem=xdg-download",
+        "--talk-name=org.freedesktop.Notifications"
+      ]
     },
     "win": {
       "target": [

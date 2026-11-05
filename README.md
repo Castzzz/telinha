@@ -10,7 +10,7 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**4.3.2:** conexão alternativa segura quando a rede bloqueia WebSocket, evitando que a sala fique sem conectar.
+**4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
 
 ---
 
@@ -28,11 +28,35 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 |---|---|---|
 | Windows | [Teletela-Portatil.exe](https://github.com/Castzzz/telinha/releases/latest/download/Teletela-Portatil.exe) | Se não puder instalar nada no PC |
 | Linux | [Teletela.tar.gz](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.tar.gz) | Se o AppImage não abrir de jeito nenhum |
+| Linux | [Teletela.flatpak](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.flatpak) | Instalação pelo Flatpak (experimental) |
 
 Todas as versões e o que mudou em cada uma: [Releases](https://github.com/Castzzz/telinha/releases).
 </details>
 
 ---
+
+### Instalar pelo Flatpak (experimental)
+
+Baixe o [Teletela.flatpak](https://github.com/Castzzz/telinha/releases/latest/download/Teletela.flatpak)
+no GitHub. Ainda não há pacote publicado no Flathub. Com Flatpak instalado, abra o terminal
+na pasta onde baixou o arquivo:
+
+```bash
+flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak install --user ./Teletela.flatpak
+flatpak run com.castzin.telinha
+```
+
+Para compilar o pacote no Linux, instale também `flatpak-builder`, rode `npm ci` e depois:
+
+```bash
+npm run dist:flatpak
+```
+
+A configuração usa o runtime/BaseApp 25.08 e permite rede, microfone, som, vídeo e Downloads.
+A captura de tela depende do portal do desktop; áudio por aplicativo, atalhos globais, detecção de jogos
+e início com o PC podem precisar de adaptações. A atualização automática do AppImage não
+se aplica: até existir um repositório Flatpak, instale o novo arquivo a cada versão.
 
 ## 🪟 Instalar no Windows
 
@@ -210,6 +234,9 @@ troca de câmera frontal/traseira no Android. O APK acompanha essa atualização
   Em **Configurações → Som**, você pode desligar o movimento automático só para você.
   No Wayland/navegador, a atividade conta dentro do Teletela; no Windows/X11, também fora
   da janela. É preciso escolher um canal manualmente para voltar de Ausentes.
+  Dentro de Ausentes, todos ficam mutados, inclusive administradores. Ninguém pode liberar
+  o microfone nesse canal; ao sair, ele volta ao estado anterior: quem estava desmutado
+  volta desmutado, e quem estava mutado continua mutado. Bloqueios da moderação continuam valendo.
 
 Em **Configurações → Aparência → Personalização**, escolha uma cor pronta ou própria,
 envie um fundo PNG/JPG/WebP de até 2 MB e ajuste sua intensidade. Tudo fica neste aparelho,

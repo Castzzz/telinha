@@ -715,17 +715,30 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
     pendingChannelJoin = null;
     closeChannelPasswordModal();
   }
-  if (channelId !== appState.currentChannelId) activateVoiceChannel(channelId);
   // Eu entrei: ouço o mesmo áudio que tocou pra quem já estava no canal
   playCallSound(soundSeed, joinSoundUrl(myProfile));
+  const wasMicLocked = isMicLockedByAdmin();
   if (me) {
     if (me.id) appState.myId = me.id;
     if (me.name) appState.myUser.name = me.name;
     if (me.color) appState.myUser.color = me.color;
+    appState.myUser.afkMuted = Boolean(me.afkMuted);
     appState.myUser.serverMuted = Boolean(me.serverMuted);
     appState.myUser.serverDeafened = Boolean(me.serverDeafened);
+    if (!wasMicLocked && isMicLockedByAdmin()) appState.micOnBeforeAdminLock = appState.myUser.isMicOn;
+    if (isMicLockedByAdmin()) {
+      appState.myUser.isMicOn = false;
+      onMicrophoneToggle(false);
+      updateMicButton();
+    } else if (wasMicLocked) {
+      appState.myUser.isMicOn = Boolean(appState.micOnBeforeAdminLock) && !appState.myUser.isDeafened;
+      appState.micOnBeforeAdminLock = false;
+      updateMicButton();
+    }
     updateUserDockProfile();
   }
+
+  if (channelId !== appState.currentChannelId) activateVoiceChannel(channelId);
 
   let ch = appState.channels.get(channelId);
   if (!ch) {
@@ -757,7 +770,7 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
   // conexão da segunda e um não ouvia o outro até reiniciar o app.
   // Transmissão: só quando a pessoa clica no "AO VIVO".
   // Eu entrei com o mic ligado: quem está mutado não vai me oferecer nada, então eu ofereço
-  if (Array.isArray(users) && appState.myUser.isMicOn && appState.localMicStream && !appState.sfuEnabled) {
+  if (Array.isArray(users) && appState.myUser.isMicOn && appState.localMicStream && !appState.sfuEnabled && !wasMicLocked) {
     users.forEach((u) => {
       if (u.id !== appState.myId && !u.isMicOn) createVoiceOfferForUser(u.id);
     });
@@ -770,7 +783,11 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
   updateVoiceLounge();
   if (attempt) setMobileView('sala');
   // A escolha salva restaura o botão; a captura só é aberta quando a call começa.
-  if (appState.myUser.isMicOn && !appState.localMicStream) onMicrophoneToggle(true);
+  // Ao sair de Ausentes, a captura existe, mas a faixa ainda está desativada.
+  if (appState.myUser.isMicOn && (!appState.localMicStream || wasMicLocked)) onMicrophoneToggle(true);
+  if (wasMicLocked && !isMicLockedByAdmin()) {
+    socket.emit('user-state-changed', { isMicOn: appState.myUser.isMicOn });
+  }
   if (attempt?.streamKey) openStream(attempt.streamKey);
 });
 
@@ -1269,7 +1286,7 @@ function muteIndicatorsHtml(u) {
   let html = '';
   if (!u.isMicOn) {
     html += u.serverMuted || u.serverDeafened
-      ? `<span class="indicator-icon mic-muted" title="Mutado pela moderação">${MIC_OFF_SVG}${byAdmin}</span>`
+      ? `<span class="indicator-icon mic-muted" title="${u.afkMuted ? 'Mutado no canal de ausentes' : 'Mutado pela moderação'}">${MIC_OFF_SVG}${byAdmin}</span>`
       : `<span class="indicator-icon mic-muted" title="Microfone Mutado">${MIC_OFF_SVG}</span>`;
   }
   if (u.isDeafened) {
@@ -1303,10 +1320,11 @@ socket.on('moved-by-admin', ({ channelId, channelName, by } = {}) => {
 });
 
 // Admin me mutou / ensurdeceu (ou desfez)
-socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
+socket.on('server-moderation', ({ serverMuted, serverDeafened, afkMuted, by } = {}) => {
   const me = appState.myUser;
   const wasDeafenedByAdmin = me.serverDeafened;
   const wasLocked = isMicLockedByAdmin();
+  me.afkMuted = Boolean(afkMuted);
   me.serverMuted = Boolean(serverMuted);
   me.serverDeafened = Boolean(serverDeafened);
   // Lembra se o mic estava aberto, pra abrir de novo quando o admin liberar
@@ -1331,6 +1349,7 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, by } = {}) => {
   renderChannelsTree();
   updateVoiceLounge();
   if (me.serverDeafened) showToast(`🎧 ${by || 'A moderação'} te ensurdeceu.`, 'error');
+  else if (me.afkMuted) showToast('No canal de ausentes, todos ficam mutados, inclusive administradores.', 'error');
   else if (me.serverMuted) showToast(`🔇 ${by || 'A moderação'} te mutou pra todos.`, 'error');
   else showToast(`🎙️ ${by || 'A moderação'} liberou seu microfone.`, 'success');
 });
@@ -3235,7 +3254,7 @@ function setupDockControls() {
   // Mic Mute Toggle
   micBtn?.addEventListener('click', async () => {
     if (!appState.myUser.isMicOn && isMicLockedByAdmin()) {
-      showToast(appState.myUser.serverDeafened ? '🎧 A moderação te ensurdeceu.' : '🔇 A moderação te mutou pra todos.', 'error');
+      showToast(appState.myUser.afkMuted ? 'No canal de ausentes, todos ficam mutados, inclusive administradores.' : appState.myUser.serverDeafened ? '🎧 A moderação te ensurdeceu.' : '🔇 A moderação te mutou pra todos.', 'error');
       return;
     }
     const nextMicOn = !appState.myUser.isMicOn;
@@ -5033,14 +5052,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.3.2';
+const WHATS_NEW_VERSION = '4.3.3';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -6701,6 +6720,12 @@ async function restartMicrophone(deviceId) {
 
 async function onMicrophoneToggle(isMicOn) {
   console.log(`[WebRTC] Microphone toggled: ${isMicOn ? 'ON' : 'OFF'}`);
+
+  if (isMicOn && isMicLockedByAdmin()) {
+    appState.myUser.isMicOn = false;
+    updateMicButton();
+    return;
+  }
 
   // O botão pode escolher o estado antes de entrar, sem abrir o microfone no Android.
   if (isMicOn && window.TeletelaAndroid && !appState.currentChannelId) return;
