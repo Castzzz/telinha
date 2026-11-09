@@ -28,13 +28,13 @@ test('prévia do início limita fotos, reaproveita consultas e trata servidor an
   assert.equal(calls[0].options.headers.Authorization, `Bearer ${token}`);
   assert.equal(calls[0].options.redirect, 'error');
   assert.equal(calls.some(call => call.url.includes(token)), false);
-  assert.deepEqual(await preview(), result); assert.equal(calls.length, 2);
-  time += 11000; await preview(); assert.equal(calls.length, 3, 'Foto da mesma versão não é baixada novamente.');
+  assert.deepEqual(await preview(), result); assert.equal(calls.filter(call => call.url.endsWith('/api/launcher/friends')).length, 1);
+  time += 11000; await preview(); assert.equal(calls.filter(call => call.url.includes('friend-avatar')).length, 1, 'Foto da mesma versão não é baixada novamente.');
   time += 11000; status = 401; assert.equal((await preview()).status, 'expired');
   time += 11000; status = 404; assert.equal((await preview()).status, 'unsupported');
   time += 11000; status = 500; assert.equal((await preview()).status, 'offline');
   prefs = {}; status = 200;
-  assert.equal((await preview()).status, 'guest'); assert.equal(calls.at(-1).url, `${serverUrl}/api/health`);
+  assert.equal((await preview()).status, 'guest'); assert.ok(calls.some(call => call.url === `${serverUrl}/api/health`));
   const offline = createLauncherPreview({ serverUrl, getPrefs: () => prefs, fetch: async () => { throw new Error('rede'); } });
   assert.equal((await offline()).status, 'offline');
 });
@@ -43,7 +43,7 @@ test('prévia compartilha consultas concorrentes e mostra no máximo oito miniat
   let release, calls = 0;
   const serverUrl = 'https://sala.test';
   const preview = createLauncherPreview({ serverUrl, getPrefs: () => ({ accountSessions: { [serverUrl]: { token: 'b'.repeat(64) } } }),
-    fetch: async () => { calls++; await new Promise(resolve => { release = resolve; }); return Response.json({ supported: true, friends: Array.from({ length: 12 }, (_, i) => ({ id: randomUUID(), name: `Amigo ${i}`, online: true })) }); }
+    fetch: async url => { if (url.endsWith('/api/server-info')) return new Response('', { status: 404 }); calls++; await new Promise(resolve => { release = resolve; }); return Response.json({ supported: true, friends: Array.from({ length: 12 }, (_, i) => ({ id: randomUUID(), name: `Amigo ${i}`, online: true })) }); }
   });
   const first = preview(), second = preview();
   assert.equal(calls, 1); release();

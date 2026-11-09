@@ -1,8 +1,9 @@
+import { validServerIcon } from './public/server-branding.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 
-const defaults = () => ({ categories: [{ id: 'voice', type: 'voice', name: 'Canais de Voz' }, { id: 'text', type: 'text', name: 'Canais de Texto' }], placements: {}, nicknames: {}, afk: { channelId: '', minutes: 15 } });
+const defaults = () => ({ categories: [{ id: 'voice', type: 'voice', name: 'Canais de Voz' }, { id: 'text', type: 'text', name: 'Canais de Texto' }], placements: {}, nicknames: {}, afk: { channelId: '', minutes: 15 }, server: { icon: '', iconVersion: 0 } });
 const plain = value => value && typeof value === 'object' && !Array.isArray(value);
 const validName = value => typeof value === 'string' && value.trim().length > 0 && value.trim().length <= 30 && !/[\x00-\x1f\x7f]/.test(value);
 export class ChannelExtras {
@@ -11,6 +12,7 @@ export class ChannelExtras {
     this.data = defaults();
     try {
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      if (validServerIcon(saved.server?.icon)) this.data.server = { icon: saved.server.icon, iconVersion: Number.isSafeInteger(saved.server.iconVersion) && saved.server.iconVersion > 0 ? saved.server.iconVersion : 1 };
       if (Array.isArray(saved.categories)) {
         const seen = new Set(['voice', 'text']);
         for (const item of this.data.categories) { const stored = saved.categories.find(c => c.id === item.id); if (validName(stored?.name)) item.name = stored.name.trim(); }
@@ -34,6 +36,10 @@ export class ChannelExtras {
       if (this.file) { fs.mkdirSync(path.dirname(this.file), { recursive: true }); fs.writeFileSync(this.file + '.tmp', JSON.stringify(this.data), { mode: 0o600 }); fs.renameSync(this.file + '.tmp', this.file); }
       return result;
     } catch (error) { this.data = previous; throw error; }
+  }
+  setServerIcon(icon) {
+    if (icon !== '' && !validServerIcon(icon)) throw new Error('Escolha uma imagem PNG, JPG ou WebP.');
+    this.change(() => { this.data.server = { icon, iconVersion: icon ? Math.max(Date.now(), this.data.server.iconVersion + 1) : 0 }; });
   }
   categories(type) { return this.data.categories.filter(c => !type || c.type === type); }
   placement(type, id) {

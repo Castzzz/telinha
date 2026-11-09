@@ -104,7 +104,7 @@
         aria-label="Largura da barra de canais" tabindex="0"
         title="Arraste pra mudar a largura (duplo clique volta ao normal)"></div>
       <div class="sidebar-header">
-        <h2 class="sidebar-title">Canais</h2>
+        <span class="sidebar-server-icon" data-server-icon aria-hidden="true"></span><h2 class="sidebar-title">Canais</h2>
         <button type="button" id="btn-organize-channels" class="btn-icon-add hidden" title="Organizar categorias e ausentes" aria-label="Organizar categorias e ausentes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
         <button id="btn-header-add-channel" class="btn-icon-add" title="Criar novo canal de voz">+</button>
       </div>
@@ -1121,9 +1121,9 @@
           </section>
           <section class="settings-section hidden" data-settings-section="atividade">
             <h4 class="settings-section-title">Presença e atividade</h4>
-            <div class="settings-presence-row"><div><strong>Ficar invisível</strong><small>Offline na lista. Visível na call.</small></div><label class="settings-switch"><input type="checkbox" id="check-invisible"><span aria-hidden="true"></span><span class="sr-only">Ficar invisível neste aparelho</span></label></div>
+            <div class="settings-presence-row"><div><strong>Sua presença</strong><small>Automática quando Online. Manual nas outras opções.</small></div><label class="sr-only" for="select-presence">Sua presença neste aparelho</label><select id="select-presence" class="form-select" disabled><option value="online">Online</option><option value="away">Ausente</option><option value="dnd">Não perturbe</option><option value="offline">Offline</option></select></div>
             <p id="presence-status" class="form-help" role="status"></p>
-            <p class="form-help">Você aparece offline em Membros e Amigos e sua atividade fica oculta. Na call, nas mensagens e nas transmissões você continua visível. Outros aparelhos conectados podem manter você online.</p>
+            <p class="form-help">Online muda para Ausente após cinco minutos sem atividade ou no canal de Ausentes, e volta ao retomar a atividade ou sair desse canal. Ausente e Não perturbe escolhidos manualmente ficam até você trocar. Não perturbe silencia avisos e menções. Offline esconde sua presença e atividade; na call e nas mensagens você continua visível. A escolha vale neste aparelho; outros aparelhos podem manter sua conta online.</p>
             <form id="form-manual-activity" class="manual-activity-form" data-activity-form>
               <div class="form-group"><label for="select-activity-type">O que está fazendo?</label><select id="select-activity-type" class="form-select" data-activity-type><option value="">Automática (jogo detectado)</option><option value="studying">Estudando</option><option value="working">Trabalhando</option><option value="watching">Assistindo</option><option value="listening">Ouvindo</option><option value="playing">Jogando</option><option value="custom">Outra atividade…</option></select></div>
               <div class="activity-custom-field hidden" data-activity-custom>
@@ -1345,6 +1345,14 @@
             </div>
 
             <div id="owner-transfer" class="form-group hidden"><label for="owner-transfer-member">Transferir propriedade</label><select id="owner-transfer-member" class="form-input"></select><button type="button" id="btn-owner-transfer" class="btn-secondary">Transferir para este perfil</button></div>
+            <div id="server-identity-settings" class="form-group hidden">
+              <h4>Imagem do servidor</h4>
+              <div class="server-identity-preview"><span data-server-icon aria-hidden="true"></span><strong>Colheita Fartus</strong></div>
+              <div class="personal-actions"><button type="button" id="btn-server-icon-choose" class="btn-secondary">Trocar imagem</button><button type="button" id="btn-server-icon-reset" class="btn-secondary">Usar ícone padrão</button></div>
+              <input id="input-server-icon" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+              <small>PNG, JPG ou WebP até 2 MB. Aparece também na abertura do app.</small>
+              <p id="server-icon-status" class="form-help" role="status"></p>
+            </div>
             <div id="permission-management" class="hidden">
               <p class="form-help">Cargos e acesso funcionam com ou sem conta. Cada perfil guarda uma identidade privada que permanece nas atualizações. Exporte seu perfil para levar os cargos a outro aparelho ou recuperá-los se apagar os dados. Guarde o backup só com você.</p>
               <div id="permission-role-management" class="hidden">
@@ -1550,7 +1558,7 @@
             </form>
 
     <p id="quick-activity-status" class="form-help sr-only" role="status"></p>
-    <label class="profile-quick-invisible"><input type="checkbox" id="quick-check-invisible" disabled> Ficar invisível neste aparelho</label>
+    <div class="profile-quick-presence"><label for="quick-select-presence">Sua presença</label><select id="quick-select-presence" class="form-select" disabled><option value="online">Online</option><option value="away">Ausente</option><option value="dnd">Não perturbe</option><option value="offline">Offline</option></select></div>
     <p id="quick-presence-status" class="form-help" role="status"></p>
     <p class="form-help">Você continua visível na call.</p>
     <button type="button" id="btn-quick-edit-profile" class="btn-secondary">Editar perfil</button>

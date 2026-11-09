@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const themes = ['escuro', 'preto', 'claro'];
 const labels = { escuro: 'Escuro', preto: 'Preto', claro: 'Claro' };
 let serverRoomUrl, timer, previewRun = 0;
+const defaultRoomIcon = $('server-room-icon').innerHTML;
 
 function applyTheme(theme) {
   const next = themes.includes(theme) ? theme : 'escuro';
@@ -38,6 +39,13 @@ $('form-other-room').addEventListener('submit', event => {
 });
 
 function renderPreview(state = {}) {
+  $('server-room-name').textContent = state.server?.name || 'Colheita Fartus';
+  const icon = $('server-room-icon'); icon.innerHTML = defaultRoomIcon;
+  if (/^data:image\/png;base64,/.test(state.server?.icon || '')) {
+    const image = document.createElement('img'); image.src = state.server.icon; image.alt = '';
+    image.addEventListener('error', () => { icon.innerHTML = defaultRoomIcon; }, { once: true });
+    icon.replaceChildren(image);
+  }
   const available = ['ready', 'guest', 'expired', 'unsupported'].includes(state.status);
   $('server-status').dataset.available = String(available);
   $('server-status-text').textContent = available ? 'Pronta pra entrar' : 'Não consegui consultar a sala';
@@ -50,7 +58,7 @@ function renderPreview(state = {}) {
     const row = document.createElement('li');
     const button = document.createElement('button'); button.type = 'button'; button.className = 'friend-button';
     button.setAttribute('aria-label', `Abrir a sala com ${friend.name}`);
-    const avatar = document.createElement('span'); avatar.className = 'friend-avatar'; avatar.setAttribute('aria-hidden', 'true');
+    const avatar = document.createElement('span'); avatar.className = 'friend-avatar'; avatar.dataset.presence = friend.presence || 'online'; avatar.setAttribute('aria-hidden', 'true');
     avatar.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(friend.color) ? friend.color : '#5865f2';
     avatar.textContent = friend.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
     if (/^data:image\/png;base64,/.test(friend.avatar || '')) {

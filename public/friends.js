@@ -1,3 +1,4 @@
+import { PRESENCE_LABELS, normalizePresence } from './presence.js';
 export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab }) {
   const tab = document.createElement('button');
   tab.type = 'button'; tab.className = 'settings-tab'; tab.dataset.settingsTab = 'amigos';
@@ -39,8 +40,10 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
       const row = document.createElement('li'); row.className = 'friend-row';
       const info = document.createElement('div'), name = document.createElement('strong'), detail = document.createElement('span');
       name.textContent = person.name || person.username;
-      detail.textContent = `@${person.username}${kind === 'friends' ? ` · ${!socket.connected ? 'Sem conexão' : person.online ? 'Online' : 'Offline'}` : ''}`;
-      info.append(name, detail); row.append(info);
+      detail.textContent = `@${person.username}${kind === 'friends' ? ` · ${!socket.connected ? 'Sem conexão' : person.online ? PRESENCE_LABELS[normalizePresence(person.presence || 'online')] : 'Offline'}` : ''}`;
+      const avatar = document.createElement('span'); avatar.className = 'friend-initials'; avatar.textContent = (person.name || person.username).slice(0, 2).toUpperCase();
+      if (kind === 'friends') { const dot = document.createElement('span'); dot.className = 'user-presence-dot'; dot.dataset.presence = socket.connected && person.online ? normalizePresence(person.presence || 'online') : 'offline'; avatar.append(dot); }
+      info.append(name, detail); row.append(avatar, info);
       const actions = document.createElement('div'); actions.className = 'friend-actions';
       for (const action of kind === 'incoming' ? ['accept', 'reject'] : kind === 'outgoing' ? ['cancel'] : ['remove']) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary';

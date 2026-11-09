@@ -9,8 +9,12 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 
 - [x] Microfone mono com RNNoise, corrigindo o canal vazio e a perda de volume.
 - [x] Sons de entrada/saída audíveis ao ensurdecer, respeitando preferências e volume geral.
-- [x] Protótipo de modo invisível por aparelho: offline em Membros e Amigos, atividade oculta;
-  participantes da call, mensagens e transmissões continuam visíveis.
+- [x] Presença por aparelho: Online, Ausente, Não perturbe e Offline, com cores próprias.
+- [x] Ausente automático após cinco minutos ou no canal de Ausentes; seleção manual preservada.
+- [x] Não perturbe silencia avisos e menções; Offline oculta presença/atividade e preserva call.
+- [x] Abertura com nome Colheita Fartus e imagem do servidor personalizável por quem gerencia.
+- [x] Remover as faixas/bordas cinzas das configurações.
+- [x] Anotar para depois os dois servidores extras, ID/senha e capacidade de até oito pessoas.
 - [x] Atividades prontas sem descrição: estudar, trabalhar, assistir, ouvir e jogar;
   texto livre somente em “Outra atividade…”.
 - [x] Troca rápida pelo próprio perfil no rodapé; no celular, pela página Você.
@@ -30,9 +34,11 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
   pode facilitar manutenção, mas fica fora deste protótipo para reduzir regressões.
 - Não foi identificada evidência para remover módulos de áudio, contas ou transmissão nesta
   revisão. Os documentos duplicavam principalmente estados históricos já concluídos.
-- Verificações locais: runner 62/62, regressões m1–m3 79/79, presença/membros/amigos/jogos
-  11/11, integração m4, Web Audio/Opus e interface Electron nos três temas e celular passaram.
+- Verificações locais: runner 62/62 e 93 regressões de servidor/mídia/contas/presença,
+  incluindo imagem do servidor. Interface nos três temas/celular, upload e restauração da
+  imagem, menções silenciosas em Não perturbe e retorno da notificação em Online passaram.
   Os testes simulados de áudio não substituem a escuta em aparelhos físicos.
+
 
 ## Android e distribuição
 

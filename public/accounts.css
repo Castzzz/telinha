@@ -27,3 +27,6 @@
 .friend-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .friend-actions button { min-height: 40px; }
 [data-settings-section="amigos"] h5 { font-size: 15px; margin: 24px 0 8px; }
+
+.friend-row .friend-initials { display: grid; margin: 0; color: var(--text-normal); }
+.friend-row .user-presence-dot { margin: 0; }

@@ -5,8 +5,12 @@ Trabalho em andamento fica em [PENDENCIAS.md](PENDENCIAS.md).
 
 - **Personalização mais ampla:** avaliar temas e plano de fundo do app/perfil além das
   opções atuais. Parte da personalização já saiu na 4.2.0; falta definir o que ainda faz falta.
-- **Vários servidores:** adiado para bem depois. Ainda depende de decidir se o app deve
-  atender outros grupos ou continuar só com a turma atual.
+- **Vários servidores (anotado em 09/11/2026, para depois):** no máximo mais dois servidores,
+  para outros grupos de amigos, com até oito pessoas cada e limite configurável para menos.
+  A pessoa começaria sem nenhum servidor adicionado. A entrada teria **Criar servidor**
+  (somente para quem puder) e **Adicionar servidor**, informando ID e senha. Não implementar
+  nesta etapa; depois definir isolamento de dados/cargos, permissão de criação, limite de
+  membros/conexões e capacidade de voz/transmissão na VM.
 - **Detalhes dos jogos:** mapa, placar e fila exigem integrações específicas. A detecção
   atual foi confirmada pelo dono em 08/11/2026 para quase todos os jogos do grupo no Windows/Linux.
 - **Mudança maior no Android:** avaliar apenas quando houver necessidade; o APK atual

@@ -4251,7 +4251,6 @@ select option, select optgroup { color: var(--text-normal); background-color: va
 .profile-quick-heading strong { display: block; color: var(--text-header); overflow-wrap: anywhere; }
 .profile-quick-heading small { display: block; color: var(--text-muted); margin-top: 3px; }
 .profile-quick-heading .user-avatar { width: 40px; height: 40px; flex-shrink: 0; overflow: hidden; border-radius: 50%; }
-.profile-quick-invisible { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); font-size: 13px; }
 .profile-quick-menu > .btn-secondary { width: 100%; margin-top: 16px; }
 .profile-quick-menu .activity-custom-field { flex-direction: column; align-items: stretch; }
 .profile-quick-menu .form-group label { text-transform: none; letter-spacing: normal; }
@@ -4259,3 +4258,15 @@ select option, select optgroup { color: var(--text-normal); background-color: va
   .activity-custom-field { flex-direction: column; align-items: stretch; }
   .profile-quick-menu select option { min-height: 44px; }
 }
+
+[data-presence="online"] { --presence-color: var(--accent-green); }
+[data-presence="away"] { --presence-color: var(--accent-yellow); }
+[data-presence="dnd"] { --presence-color: var(--accent-red); }
+[data-presence="offline"] { --presence-color: var(--text-muted); }
+.status-indicator[data-presence], .server-member-presence[data-presence], .user-presence-dot[data-presence] { background: var(--presence-color); }
+.user-presence-dot { position: absolute; right: -2px; bottom: -2px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--bg-secondary); }
+#quick-profile-status::before { content: ''; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--presence-color, var(--accent-green)); margin-right: 6px; }
+.friend-initials { position: relative; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 12px; background: var(--accent-soft); color: var(--text-normal); flex-shrink: 0; }
+.friend-row > div:not(.friend-actions) { flex: 1; min-width: 0; }
+
+.user-info .user-status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

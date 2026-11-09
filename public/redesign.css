@@ -558,14 +558,6 @@
 .settings-presence-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; border: 1px solid var(--border-medium); border-radius: 12px; padding: 18px; background: var(--bg-secondary); margin-bottom: 10px; }
 .settings-presence-row strong { font-size: 14px; font-weight: 600; }
 .settings-presence-row small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
-.settings-switch { position: relative; flex: 0 0 38px; display: block; width: 38px; height: 22px; cursor: pointer; }
-.settings-switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
-.settings-switch > span[aria-hidden] { display: block; height: 22px; border: 1px solid var(--border-medium); border-radius: 20px; background: var(--bg-tertiary); pointer-events: none; }
-.settings-switch > span[aria-hidden]::after { content: ''; position: absolute; width: 14px; height: 14px; left: 4px; top: 4px; border-radius: 50%; background: var(--text-muted); transition: transform var(--transition-fast); }
-.settings-switch input:checked + span { background: var(--accent-brand); border-color: var(--accent-brand); }
-.settings-switch input:checked + span::after { transform: translateX(16px); background: #fff; }
-.settings-switch input:focus-visible + span { outline: 2px solid var(--accent-brand); outline-offset: 3px; }
-.settings-switch input:disabled + span { opacity: .45; }
 .settings-block-title { color: var(--text-header); font-size: 15px; margin: 26px 0 12px; }
 .settings-section .game-activity-status { margin: 10px 0 20px; padding: 0; border: 0; background: none; color: var(--text-muted); font-size: 12px; }
 .settings-help, .settings-game-details { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border-subtle); }
@@ -598,5 +590,20 @@
 [data-look="novo"] .channel-row:is(:hover, :focus-within):has(.channel-chat-btn):has(.channel-settings-btn, .channel-delete-btn, .channel-order-handle) .channel-name { padding-right: 88px; }
 [data-look="novo"] .channel-row:is(:hover, :focus-within):has(.channel-settings-btn, .channel-delete-btn, .channel-order-handle) :is(.channel-call-timer, .channel-count) { display: none; }
 
-.settings-section label:not(.settings-switch):has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 10px; line-height: 1.45; }
+.settings-section label:has(> input[type="checkbox"]) { display: flex; align-items: center; gap: 10px; line-height: 1.45; }
 .settings-section label > input[type="checkbox"] { flex-shrink: 0; accent-color: var(--accent-brand); }
+
+/* O cabeçalho e o rodapé acompanham o fundo da navegação, sem faixas cinzas. */
+[data-look="novo"] .modal-settings-card { gap: 0; background: var(--bg-secondary); border-color: var(--border-subtle); }
+[data-look="novo"] .modal-settings-card > .modal-header,
+[data-look="novo"] .modal-settings-card > .settings-actions { background: var(--bg-secondary); border-color: var(--border-subtle); }
+[data-look="novo"] .modal-settings-card .settings-panels { background: var(--bg-primary); }
+.settings-presence-row .form-select { flex: 0 0 160px; }
+.profile-quick-presence { display: grid; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.profile-quick-presence label { color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.sidebar-server-icon { width: 28px; height: 28px; display: grid; place-items: center; flex-shrink: 0; color: var(--accent-brand); background: var(--accent-soft); border-radius: 8px; overflow: hidden; }
+.sidebar-server-icon .icon-svg { width: 18px; height: 18px; }
+[data-server-icon] img { width: 100%; height: 100%; object-fit: cover; }
+.server-identity-preview { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.server-identity-preview [data-server-icon] { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px; overflow: hidden; background: var(--accent-soft); color: var(--accent-brand); }
+@media (max-width: 600px) { .settings-presence-row { align-items: stretch; flex-direction: column; } .settings-presence-row .form-select { flex-basis: auto; width: 100%; } }

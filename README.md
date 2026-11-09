@@ -15,10 +15,21 @@ canais renovada e configurações com menos texto. Clique no seu perfil no rodap
 atividade e presença rapidamente (no celular: Você → Trocar atividade e presença).
 Escolha “Estudando”, “Trabalhando” e outras atividades prontas; só “Outra atividade…” pede
 um texto. As opções também ficam em Configurações → Atividade. Todos os seletores da sala,
-incluindo as listas abertas, acompanham o tema no app desktop. Invisível aparece
-offline em Membros/Amigos e oculta a atividade; call, mensagens e transmissões continuam visíveis.
-Outros aparelhos podem manter a conta online. A atividade manual tem prioridade sobre o jogo
-detectado e termina ao fechar/recarregar a janela. [Pendências atuais](docs/PENDENCIAS.md).
+incluindo as listas abertas, acompanham o tema no app desktop.
+
+A presença tem **Online** (verde), **Ausente** (amarelo), **Não perturbe** (vermelho) e
+**Offline** (cinza). Online passa para Ausente após cinco minutos sem atividade ou no canal
+de Ausentes e volta ao retomar a atividade ou sair do canal. Escolher Ausente ou Não perturbe
+manualmente mantém o estado até você trocar. Não perturbe silencia avisos de entrada/saída
+e menções, preservando voz, música e sons dos seus botões. Offline oculta a presença em
+Membros/Amigos e a atividade; você continua visível na call, mensagens e transmissões.
+A escolha é por aparelho; outro aparelho pode manter sua conta online.
+
+A sala da abertura se chama **Colheita Fartus**. Em **Servidor e cargos → Imagem do servidor**,
+quem pode gerenciar o servidor troca a imagem ou restaura o ícone padrão. A imagem aparece
+na abertura e na lateral da sala. Atividade manual tem prioridade sobre o jogo detectado
+e termina ao fechar/recarregar a janela. [Pendências atuais](docs/PENDENCIAS.md).
+
 
 **4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
 

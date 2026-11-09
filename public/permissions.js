@@ -1,7 +1,7 @@
 export const permissionLabels = {
   kickMembers: 'Tirar pessoas da call', moveMembers: 'Mover pessoas entre calls',
   muteMembers: 'Mutar pessoas', deafenMembers: 'Ensurdecer pessoas', manageChannels: 'Gerenciar canais e visibilidade',
-  manageRoles: 'Gerenciar cargos abaixo do seu', manageServer: 'Gerenciar senha e entrada do servidor', manageMessages: 'Moderar mensagens e soundboard'
+  manageRoles: 'Gerenciar cargos abaixo do seu', manageServer: 'Gerenciar imagem, senha e entrada do servidor', manageMessages: 'Moderar mensagens e soundboard'
 };
 
 export function hasPermission(state, permission) {

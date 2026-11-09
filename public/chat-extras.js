@@ -28,13 +28,13 @@ export function setupChatExtras({ socket, state, prefs, savePrefs, showToast, mo
   modal.addEventListener('keydown',event=>{if(event.key==='Escape')close();});
   const recheck=()=>{if(target&&!allowed(target))close();};
   socket.on('text-channels',recheck);socket.on('channel-state',recheck);socket.on('disconnect',close);window.addEventListener('teletela-call-left',recheck);
-  for(const event of ['pointerdown','pointermove','keydown','touchstart'])document.addEventListener(event,()=>{lastInput=Date.now();},{passive:true});
+  for(const event of ['pointerdown','pointermove','keydown','touchstart'])document.addEventListener(event,()=>{const returning=Date.now()-lastInput>=15000;lastInput=Date.now();if(returning)activity();},{passive:true});
   const enabled=$('check-afk-enabled');enabled.checked=prefs.afkEnabled!==false;
   enabled.addEventListener('change',()=>{savePrefs({afkEnabled:enabled.checked});lastInput=Date.now();activity();});
   async function activity(){
     if(!socket.connected)return;
     let active=Date.now()-lastInput<15000;
-    if(state.currentChannelId&&window.electronAPI?.getIdleSeconds){try{const idle=await window.electronAPI.getIdleSeconds();if(Number.isFinite(idle))active=active||idle<15;}catch{}}
+    if(window.electronAPI?.getIdleSeconds){try{const idle=await window.electronAPI.getIdleSeconds();if(Number.isFinite(idle))active=active||idle<15;}catch{}}
     socket.emit('idle-activity',{enabled:prefs.afkEnabled!==false,active});
   }
   setInterval(activity,10000);socket.on('connect',activity);activity();

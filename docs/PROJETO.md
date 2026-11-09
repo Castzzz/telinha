@@ -1793,3 +1793,55 @@ celular. Uma execução paralela do teste antigo de desconexão rápida falhou n
 convergência; o mesmo teste passou isolado e na execução sequencial, sem mudança no protocolo.
 Capturas de teste em `/tmp/teletela-inicio-*.png`, `/tmp/teletela-canais-redesign.png` e
 `/tmp/teletela-config-*-redesign.png` usam dados locais de exemplo.
+
+
+### Presença completa e imagem do servidor (09/11/2026, protótipo)
+
+- `public/presence.js` compartilha estados/rótulos com servidor e interface. `prefs.presence`
+  guarda `online`, `away`, `dnd` ou `offline` por aparelho; `prefs.invisible` antigo migra para
+  Offline e continua atualizado para compatibilidade. O handshake aceita `presence`; clientes
+  antigos ainda podem enviar `invisible`. `room-info.presenceVersion` passa a **2**.
+- `update-presence: { status }` valida a escolha e tem limite de alterações. `presence-state`
+  devolve `{ presence, selected, automatic }`; `user-presence-updated` atualiza os indicadores
+  dos participantes autorizados sem reconstruir a mídia. Metadados de membros/amigos e a
+  prévia HTTP incluem `presence`, preservando o booleano `online` dos clientes antigos.
+- Online é o modo automático. Cinco minutos sem atividade marcam Ausente, mesmo fora da
+  call. Fala, transmissão ou assistir mantêm a presença ativa; o canal de Ausentes também
+  marca ausência. Atividade ou saída desse canal restaura Online. Ausente, DND e Offline
+  manuais têm prioridade e não são trocados pela automação.
+- O sinal `idle-activity` usa a interação no app e, no desktop compatível, o tempo de
+  inatividade do PC via [powerMonitor](https://www.electronjs.org/docs/latest/api/power-monitor).
+  O guard existente retorna `null` no Wayland; nesse caso, navegador e Android, a referência
+  é a interação no Teletela. A varredura reaproveita o timer de 10 s do AFK. `sweepPresence`
+  permite verificar os tempos nos testes sem esperar cinco minutos reais.
+- A escolha segue por aparelho. Na presença pública da mesma identidade, Não perturbe
+  tem prioridade, depois Online, Ausente e Offline. Um aparelho Offline não oculta outro
+  conectado. Nenhum status concede permissões ou esconde participantes da call.
+- DND bloqueia avisos de entrada/saída e notificações/toasts de menções. Mensagens,
+  indicadores de não lidas e áudio de voz/música continuam; sons de botões e prévias manuais
+  continuam disponíveis. O teste de interface confirma mensagem recebida sem notificação
+  e notificação voltando após escolher Online.
+- `Colheita Fartus` substitui Sala da turma. `channel-extras.json` ganha `server.icon`
+  (PNG/JPG/WebP em data URI) e `server.iconVersion`. A gravação usa a mesma transação atômica
+  das categorias e restaura o estado anterior se falhar. Backups já incluem esse arquivo;
+  senha, identidade e segredos do servidor não mudam.
+- `server-icon-set: { icon }` exige `manageServer` e valida assinatura/tamanho (até 512 KB
+  após conversão). A interface aceita arquivos até 2 MB, recorta no centro e converte para
+  PNG 256×256 antes de enviar. `brandingVersion: 1` anuncia suporte no `room-info`;
+  `server-info` anuncia a nova versão após salvar.
+- `/api/server-info` e `/api/server-icon` expõem apenas o nome/imagem públicos, inclusive
+  para a abertura sem conta; não incluem membros, canais ou dados de autenticação.
+  `launcher-preview.cjs` consulta a marca em paralelo aos amigos, gera miniatura e reutiliza
+  o cache. A prévia dos amigos também mostra os indicadores amarelo/vermelho.
+- Interface: seletores no perfil rápido e configurações, cores em membros/amigos/call,
+  nome completo no tooltip do dock, navegação das configurações sem faixas cinzas.
+- Testes novos: `tests/presence-status.test.js` e `tests/server-branding.test.js`; regressões
+  de membros/amigos/início e teste de imagem por upload na interface. Sem release/deploy.
+  A criação/adição dos futuros servidores permanece somente em [Ideias futuras](IDEIAS-FUTURAS.md).
+
+
+Validação da presença/imagem: runner 62/62, regressões 93/93, integração m4 de canais/chat,
+interface de permissões e regressão móvel. A interface confirma cores compartilhadas entre
+membros e dock, menção recebida silenciosamente em DND, aviso restaurado em Online,
+upload de PNG pelo seletor de arquivo e restauração do ícone. As capturas de `/tmp` usam
+perfis/arquivos de teste; os dados da sala oficial não foram alterados.

@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { PermissionStore, PERMISSIONS } from './permission-store.js';
 import { DiceStore, installDice } from './dice-store.js';
+import { normalizePresence, effectivePresence, presencePriority, PRESENCE_IDLE_MS } from './public/presence.js';
+import { SERVER_NAME, MAX_SERVER_ICON_BYTES, SERVER_ICON_RE, validServerIcon } from './public/server-branding.js';
 import { AccountStore, createAccountLimiter, accountClientAddress } from './account-store.js';
 import { installAccountHandlers, installAccountHttp, sendAccountState } from './accounts-protocol.js';
 
@@ -730,6 +732,7 @@ function publicUser(u) {
     joinSoundV: u.joinSound ? u.joinSoundV : 0,
     bio: u.bio,
     activity: u.invisible ? null : u.activity || null,
+    presence: effectivePresence(u),
     profileId: u.profileId,
     isAdmin: permissions.isOwner(u),
     isOwner: permissions.isOwner(u),
@@ -923,7 +926,8 @@ function serverMembers() {
   const online = new Map();
   for (const client of io.sockets.sockets.values()) {
     const user = client.data.user;
-    if (user?.profileId && !user.invisible && !client.data.accountEnding) online.set(user.accessId, user);
+    if (user?.profileId && !user.invisible && !client.data.accountEnding
+      && (!online.has(user.accessId) || presencePriority(effectivePresence(user)) > presencePriority(effectivePresence(online.get(user.accessId))))) online.set(user.accessId, user);
   }
   const accountsByMember = new Map(accounts.data.accounts.map(account => [account.accessId, account]));
   const ids = new Set([...Object.keys(permissions.data.members), ...online.keys()]);
@@ -932,7 +936,7 @@ function serverMembers() {
     const active = online.get(memberId), account = accountsByMember.get(memberId), saved = permissions.data.members[memberId];
     if (!active && !account && (!saved?.name || saved.name === 'Visitante')) continue;
     const profile = active || account?.profile || { name: saved.name, color: USER_COLORS[0] };
-    const row = { memberId, id: active?.id || `member-${memberId}`, online: Boolean(active),
+    const row = { memberId, id: active?.id || `member-${memberId}`, online: Boolean(active), presence: active ? effectivePresence(active) : 'offline',
       name: profile.name, color: profile.color || USER_COLORS[0], bio: profile.bio || '',
       avatarV: active ? active.avatar ? active.avatarV : 0 : account?.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0,
       avatarCrop: normalizeImageCrop(profile.avatarCrop),
@@ -1039,6 +1043,15 @@ function isSameChannel(socket, targetId) {
 // REST API & Health Endpoints
 // ----------------------------------------------------
 
+function publicServerInfo() { return { name: SERVER_NAME, iconVersion: channelExtras.data.server.iconVersion }; }
+app.get('/api/server-info', (_req, res) => res.set('Cache-Control', 'no-store').json(publicServerInfo()));
+app.get('/api/server-icon', (_req, res) => {
+  const match = channelExtras.data.server.icon.match(SERVER_ICON_RE);
+  if (!match) return res.status(404).end();
+  res.set({ 'Content-Type': match[1], 'Cache-Control': 'public, max-age=3600', 'X-Content-Type-Options': 'nosniff' });
+  res.send(Buffer.from(match[2], 'base64'));
+});
+
 app.get('/api/channels', (req, res) => {
   // Sala com senha: a lista de quem está online não fica aberta pra qualquer um
   if (roomPassword) return res.status(401).json({ error: 'Sala com senha' });
@@ -1058,7 +1071,7 @@ function launcherSession(req, res, next) {
 }
 app.get('/api/launcher/friends', launcherSession, (req, res) => {
   const account = accounts.data.accounts.find(item => item.id === req.launcherAccount.id);
-  const friends = accounts.friends(account.id, friendOnline).friends.filter(friend => friend.online).map(friend => {
+  const friends = friendState(account.id).friends.filter(friend => friend.online).map(friend => {
     const profile = accounts.data.accounts.find(item => item.id === friend.id);
     return { ...friend, color: profile.profile.color, avatarCrop: normalizeImageCrop(profile.profile.avatarCrop), avatarV: profile.profile.avatar ? profile.profileUpdatedAt || profile.createdAt : 0 };
   });
@@ -1329,16 +1342,45 @@ function revokeAccountSockets({ accountId, accessId, kind, exceptSocketId }) {
   }
 }
 
-function friendOnline(accountId) {
-  return [...io.sockets.sockets.values()].some(client => client.connected && !client.data.accountEnding && !client.data.user?.invisible
-    && client.data.accountSession?.account.id === accountId && accounts.resolveSessionMeta(client.handshake.auth?.accountToken));
+function friendPresence(accountId) {
+  let selected = 'offline';
+  for (const client of io.sockets.sockets.values()) {
+    if (!client.connected || client.data.accountEnding || client.data.accountSession?.account.id !== accountId || !accounts.resolveSessionMeta(client.handshake.auth?.accountToken)) continue;
+    const presence = effectivePresence(client.data.user);
+    if (presencePriority(presence) > presencePriority(selected)) selected = presence;
+  }
+  return selected;
 }
-
+function friendOnline(accountId) { return friendPresence(accountId) !== 'offline'; }
+function friendState(accountId) {
+  const state = accounts.friends(accountId, friendOnline);
+  for (const friend of state.friends) friend.presence = friendPresence(friend.id);
+  return state;
+}
 function broadcastFriends() {
   for (const client of io.sockets.sockets.values()) {
     const session = accounts.resolveSessionMeta(client.handshake.auth?.accountToken);
-    if (session && !client.data.accountEnding) client.emit('friends-state', { supported: true, ...accounts.friends(session.account.id, friendOnline) });
+    if (session && !client.data.accountEnding) client.emit('friends-state', { supported: true, ...friendState(session.account.id) });
   }
+}
+
+function refreshPresence(user, force = false, now = Date.now()) {
+  const channelAway = Boolean(user.channelId && user.channelId === channelExtras.data.afk.channelId);
+  const busy = user.isSpeaking || user.isSharing || user.isCameraOn || user.watching?.length;
+  if (busy) user.lastPresenceActiveAt = now;
+  user.automaticAway = channelAway || Boolean(user.afkSupported && !busy && now - user.lastPresenceActiveAt >= PRESENCE_IDLE_MS);
+  const presence = effectivePresence(user);
+  if (!force && presence === user.publicPresence) return;
+  user.publicPresence = presence;
+  const client = io.sockets.sockets.get(user.id);
+  client?.emit('presence-state', { presence, selected: user.presence, automatic: user.presence === 'online' && user.automaticAway });
+  emitVisibleUserEvent('user-presence-updated', { userId: user.id, presence }, user);
+  scheduleMembers();
+  broadcastFriends();
+}
+function touchPresence(user) { user.lastPresenceActiveAt = Date.now(); refreshPresence(user); }
+function sweepPresence(now = Date.now()) {
+  for (const client of io.sockets.sockets.values()) if (client.data.user && !client.data.accountEnding) refreshPresence(client.data.user, false, now);
 }
 
 const accountExpiryTimer = setInterval(() => {
@@ -1403,7 +1445,9 @@ io.on('connection', (socket) => {
     color: USER_COLORS[colorIndex],
     bio: '',
     activity: null,
-    invisible: socket.handshake.auth?.invisible === true,
+    presence: normalizePresence(socket.handshake.auth?.presence ?? (socket.handshake.auth?.invisible ? 'offline' : 'online')),
+    invisible: normalizePresence(socket.handshake.auth?.presence ?? (socket.handshake.auth?.invisible ? 'offline' : 'online')) === 'offline',
+    automaticAway: false, lastPresenceActiveAt: Date.now(), publicPresence: null,
     nameColor: '',
     nameColor2: '', // com as duas cores o nome vira gradiente
     frame: '', // moldura da foto (FRAME_PRESETS)
@@ -1450,7 +1494,7 @@ io.on('connection', (socket) => {
     next();
   });
   installAccountHandlers({ socket, store: accounts, user, getProfile: storedAccountProfile,
-    limit: accountLimit, onRevoke: revokeAccountSockets, onFriendsChanged: broadcastFriends, isOnline: friendOnline });
+    limit: accountLimit, onRevoke: revokeAccountSockets, onFriendsChanged: broadcastFriends, isOnline: friendOnline, getFriendState: friendState });
   if (accountSession) queueMicrotask(broadcastFriends);
   setupDiceSocket(socket);
   if (accessIdentity.token) socket.emit('permission-identity', { token: accessIdentity.token });
@@ -1640,7 +1684,10 @@ io.on('connection', (socket) => {
     const payload = safeObject(raw);
     if (typeof payload.enabled !== 'boolean') return;
     user.afkSupported = true; user.afkEnabled = payload.enabled;
-    if (payload.active === true && Date.now() - user.lastActiveAt > 4000) user.lastActiveAt = Date.now();
+    if (payload.active === true) {
+      if (Date.now() - user.lastActiveAt > 4000) user.lastActiveAt = Date.now();
+      touchPresence(user);
+    }
   }));
 
   // Entrou (com senha, chave de membro ou sala aberta): ganha a chave pra próxima vez
@@ -1651,7 +1698,8 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, presenceVersion: 1, assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, presenceVersion: 2, brandingVersion: 1, server: publicServerInfo(), assetKey: user.assetKey });
+  refreshPresence(user, true);
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
@@ -1940,6 +1988,7 @@ io.on('connection', (socket) => {
     user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
+    touchPresence(user);
     applyServerModeration(user);
     dailyCalls.joinChannel(user.accessId, socket.id, user.channelId);
     user.watching = [];
@@ -1983,7 +2032,7 @@ io.on('connection', (socket) => {
   const handleStateUpdate = safeHandler((rawPayload) => {
     if (!user.channelId || !isPlainObject(rawPayload)) return;
     const channelId = user.channelId;
-    if (rawPayload.isSpeaking === true) user.lastActiveAt = Date.now();
+    if (rawPayload.isSpeaking === true) { user.lastActiveAt = Date.now(); touchPresence(user); }
 
     let presenceChanged = false;
 
@@ -2114,16 +2163,47 @@ io.on('connection', (socket) => {
     cb({ success: true });
   }));
 
+  socket.on('server-icon-set', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite personalizar o servidor.' });
+    if (!isPlainObject(raw) || typeof raw.icon !== 'string') return cb({ success: false, error: 'Imagem inválida.' });
+    if (raw.icon !== '') {
+      if (!validServerIcon(raw.icon)) return cb({ success: false, error: 'Use PNG, JPG ou WebP de até 512 KB.' });
+      const match = raw.icon.match(SERVER_ICON_RE), bytes = Buffer.from(match[2], 'base64');
+      const mime = match[1].toLowerCase();
+      const signature = mime === 'image/png' ? bytes.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]))
+        : mime === 'image/jpeg' ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
+        : bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+      if (!signature || bytes.length > MAX_SERVER_ICON_BYTES) return cb({ success: false, error: 'Imagem inválida ou grande demais.' });
+    }
+    if (accountLimit(`server-icon:${user.accessId}`, 12)) return cb({ success: false, error: 'Espere um pouco antes de trocar novamente.' });
+    try {
+      channelExtras.setServerIcon(raw.icon);
+      const info = publicServerInfo(); io.emit('server-info', info);
+      cb({ success: true, server: info });
+    } catch { cb({ success: false, error: 'Não consegui salvar a imagem. A anterior foi mantida.' }); }
+  }));
+
+  let presenceChanges = [];
   socket.on('update-presence', safeHandler((raw, callback) => {
     const cb = safeCallback(callback);
-    if (!isPlainObject(raw) || typeof raw.invisible !== 'boolean') return cb({ success: false });
-    if (user.invisible === raw.invisible) return cb({ success: true });
-    user.invisible = raw.invisible;
-    emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity: user.invisible ? null : user.activity }, user);
-    scheduleMembers();
-    broadcastFriends();
-    if (user.channelId) broadcastChannels();
-    cb({ success: true });
+    if (!isPlainObject(raw)) return cb({ success: false });
+    const status = raw.status ?? (typeof raw.invisible === 'boolean' ? raw.invisible ? 'offline' : 'online' : null);
+    if (!['online', 'away', 'dnd', 'offline'].includes(status)) return cb({ success: false });
+    if (user.presence === status) return cb({ success: true, presence: effectivePresence(user) });
+    presenceChanges = presenceChanges.filter(time => Date.now() - time < 10000);
+    if (presenceChanges.length >= 12) return cb({ success: false });
+    presenceChanges.push(Date.now());
+    user.lastPresenceActiveAt = Date.now();
+    const wasInvisible = user.invisible;
+    user.presence = status;
+    user.invisible = status === 'offline';
+    refreshPresence(user, true);
+    if (wasInvisible !== user.invisible) {
+      emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity: user.invisible ? null : user.activity }, user);
+      if (user.channelId) broadcastChannels();
+    }
+    cb({ success: true, presence: effectivePresence(user) });
   }));
 
   let activityChanges = [];
@@ -2252,7 +2332,7 @@ io.on('connection', (socket) => {
       timestamp: Date.now()
     };
 
-    user.lastActiveAt = Date.now();
+    user.lastActiveAt = Date.now(); touchPresence(user);
     indexAssets(channel, [chatMsg], 'voice');
     channel.messages.push(chatMsg);
     if (channel.messages.length > 50) {
@@ -2645,7 +2725,7 @@ io.on('connection', (socket) => {
   });
 
   const publishTextMessage = (ch, msg, cb) => {
-    user.lastActiveAt = Date.now();
+    user.lastActiveAt = Date.now(); touchPresence(user);
     try {
       appendTextMessage(ch, msg);
     } catch (err) {
@@ -2810,6 +2890,7 @@ io.on('connection', (socket) => {
   // Responde com o som sorteado, pra quem saiu ouvir o mesmo áudio que ficou pros outros
   socket.on('leave-channel', safeHandler((_rawPayload, maybeCallback) => {
     const soundSeed = leaveCurrentChannel(socket);
+    touchPresence(user);
     safeCallback(maybeCallback)({ soundSeed });
   }));
 
@@ -2932,6 +3013,7 @@ function getLocalIPs() {
 }
 
 function sweepAfk(now = Date.now()) {
+  sweepPresence(now);
   const setting = channelExtras.data.afk, destination = channels.get(setting.channelId);
   if (!destination || destination.password || destination.access?.private || destination.isDefault) return;
   for (const client of io.sockets.sockets.values()) {
@@ -2998,4 +3080,4 @@ if (isDirectRun) {
   process.once('SIGTERM', stopServer);
 }
 
-export { app, server, io, channels, channelExtras, dailyCalls, syncDailyCallTimes, sweepAfk, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };
+export { app, server, io, channels, channelExtras, dailyCalls, syncDailyCallTimes, sweepAfk, sweepPresence, music, getChannelsSummary, startServer, safeHandler, isPlainObject, safeObject };

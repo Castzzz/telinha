@@ -430,8 +430,8 @@ async function runConnectHtmlTests() {
     const calls = { joined: [], previews: 0 };
     let preview = { status: 'ready', name: 'Cast', onlineCount: 3, friends: [
       { id: '1', name: 'Nanda', color: '#7c3aed' },
-      { id: '2', name: 'Neves', color: '#047857' },
-      { id: '3', name: 'Rafa', color: '#b45309' }
+      { id: '2', name: 'Neves', color: '#047857', presence: 'away' },
+      { id: '3', name: 'Rafa', color: '#b45309', presence: 'dnd' }
     ] };
     contextBridge.exposeInMainWorld('__testCalls', { get: () => calls, setPreview: value => { preview = value; } });
     contextBridge.exposeInMainWorld('electronAPI', { getPrefs: async () => ({ theme: 'preto' }), setPrefs: async () => true });
@@ -452,6 +452,8 @@ async function runConnectHtmlTests() {
   assert.equal(await js("document.querySelector('#server-url').value"), 'https://outra-sala.test');
   assert.equal(await js("document.documentElement.dataset.theme"), 'preto');
   assert.equal(await js("document.querySelector('#online-count').textContent"), '3');
+  assert.equal(await js("document.querySelector('#server-room-name').textContent"), 'Colheita Fartus');
+  assert(await js("Boolean(document.querySelector('.friend-avatar[data-presence=away]') && document.querySelector('.friend-avatar[data-presence=dnd]'))"));
   for (const theme of ['escuro', 'preto', 'claro']) {
     await js(`while(document.documentElement.dataset.theme !== '${theme}') document.querySelector('#btn-theme').click();void 0`);
     await new Promise(resolve => setTimeout(resolve, 60));

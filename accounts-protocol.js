@@ -62,7 +62,7 @@ export function sendAccountState(socket, store) {
 }
 
 // O servidor continua sendo o responsável pela identidade no handshake e pela revogação do SFU.
-export function installAccountHandlers({ socket, store, getProfile, user, limit = fallbackLimit, onRevoke = () => {}, onFriendsChanged = () => {}, isOnline = () => false }) {
+export function installAccountHandlers({ socket, store, getProfile, user, limit = fallbackLimit, onRevoke = () => {}, onFriendsChanged = () => {}, isOnline = () => false, getFriendState = id => store.friends(id, isOnline) }) {
   const address = accountClientAddress(socket.handshake.address, socket.handshake.headers?.['x-forwarded-for']);
   let pending = false;
   const token = () => socket.handshake.auth?.accountToken || '';
@@ -123,12 +123,12 @@ export function installAccountHandlers({ socket, store, getProfile, user, limit 
           await store.changeFriend(current.account.id, action, payload);
           onFriendsChanged();
         }
-        callback({ success: true, ...store.friends(current.account.id, isOnline) });
+        callback({ success: true, ...getFriendState(current.account.id) });
       } catch (error) {
         callback({ success: false, error: error instanceof AccountError ? error.message : 'Não deu para salvar a amizade. Tente de novo.' });
       } finally { friendPending = false; }
     });
   }
   sendAccountState(socket, store);
-  socket.emit('friends-state', { supported: store.available, ...store.friends(session()?.account.id, isOnline) });
+  socket.emit('friends-state', { supported: store.available, ...getFriendState(session()?.account.id) });
 }

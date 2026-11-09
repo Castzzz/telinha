@@ -1,3 +1,5 @@
+import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js';
+import { setupServerBranding } from './server-branding.js';
 import { setupSettingsLayout } from './settings-layout.js';
 import { createStreamWindow } from './stream-window.js';
 import { profileIdentity, profileProof } from './profile-identity.js';
@@ -381,7 +383,8 @@ const socket = io(SERVER_URL, {
       if (response.ok && profileCredential) proof = await profileProof(profileCredential, SERVER_URL, (await response.json()).challenge);
     } catch (_) { /* Servidores antigos continuam usando a credencial por sala. */ }
     cb({
-    invisible: prefs.invisible === true,
+    presence: savedPresence(prefs),
+    invisible: savedPresence(prefs) === 'offline',
     accountToken: accountSession(prefs, SERVER_URL)?.token || '',
     profileId: myProfile.id,
     memberKey: roomAccess().memberKey || '',
@@ -906,7 +909,7 @@ async function loadSoundBuffer(ctx, url) {
 }
 
 async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 'join' } = {}) {
-  if (!force && prefs.callSounds === false) return;
+  if (!force && (prefs.callSounds === false || savedPresence(prefs) === 'dnd')) return;
   const callVolPct = typeof prefs.callSoundsVolume === 'number' ? prefs.callSoundsVolume : 100;
   if (!force && callVolPct <= 0) return;
   const callVolGain = Math.max(0, callVolPct / 100);
@@ -1493,7 +1496,7 @@ function renderChannelsTree() {
           <div class="user-avatar${frameClass(u)}" style="background-color: ${safeColor(u.color)};${frameStyle(u)}">
             ${avatarInnerHtml(u)}
           </div>
-          <span class="speaking-halo"></span>
+          <span class="speaking-halo"></span>${userPresenceHtml(u)}
         </div>
         <span class="channel-user-info"><span class="channel-user-name">
           <span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>
@@ -1689,7 +1692,7 @@ function updateVoiceLounge() {
           <div class="user-avatar${frameClass(u)}" style="background-color: ${safeColor(u.color)};${frameStyle(u)}">
             ${avatarInnerHtml(u)}
           </div>
-          <span class="speaking-halo"></span>
+          <span class="speaking-halo"></span>${userPresenceHtml(u)}
         </div>
         <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${ownershipBadge(u)}${isMe ? ' (Você)' : ''}</span>
         ${userCallTimerHtml(u)}
@@ -2192,6 +2195,7 @@ function mentionify(escaped) {
 
 // Marcaram você: som, aviso e notificação do sistema se o Teletela não estiver na frente
 function notifyMention(msg, where, open) {
+  if (savedPresence(prefs) === 'dnd') return;
   playMentionPing();
   const who = msg.userName || msg.senderName || 'Alguém';
   const body = (msg.text || '').slice(0, 140);
@@ -2201,6 +2205,7 @@ function notifyMention(msg, where, open) {
   }
   try {
     const show = () => {
+      if (savedPresence(prefs) === 'dnd') return;
       const n = new Notification(`${who} te marcou em ${where}`, { body, icon: 'icon.png', silent: true });
       n.onclick = () => {
         window.focus();
@@ -3955,9 +3960,11 @@ const GAME_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="
 let localGameActivity = null;
 let manualActivity = null;
 let presenceSupported = false;
+let ownPresence = savedPresence(prefs);
+let automaticPresence = false;
 let quickProfileTrigger = null;
 function currentActivity() {
-  return prefs.invisible === true ? null : manualActivity || (prefs.shareGameActivity === false ? null : localGameActivity);
+  return savedPresence(prefs) === 'offline' ? null : manualActivity || (prefs.shareGameActivity === false ? null : localGameActivity);
 }
 let publishedGameActivity;
 let gamePollTimer;
@@ -3990,6 +3997,11 @@ function userCallTimerHtml(user) {
   }
   const start = Number(user?.voiceJoinedAt || user?.joinedAt || Date.now());
   return `<span class="user-call-timer" data-call-timer="${start}" title="Tempo na call">${formatCallClock(start)}</span>`;
+}
+
+function userPresenceHtml(user) {
+  const presence = normalizePresence(user.presence || 'online');
+  return `<span class="user-presence-dot" data-presence-user="${escapeHtml(user.id)}" data-presence="${presence}" title="${PRESENCE_LABELS[presence]}" aria-label="${PRESENCE_LABELS[presence]}"></span>`;
 }
 
 function userGameBadgeHtml(user) {
@@ -4064,12 +4076,18 @@ function refreshOwnActivity() {
   const activity = currentActivity();
   appState.myUser.activity = activity;
   renderUserActivity(appState.myId, activity);
-  const status = manualActivity ? `${activityLabel(manualActivity)}${prefs.invisible ? ' · oculta enquanto invisível' : ''}` : 'Atividade automática: mostra o jogo detectado, se houver.';
+  const status = manualActivity ? `${activityLabel(manualActivity)}${savedPresence(prefs) === 'offline' ? ' · oculta enquanto offline' : ''}` : 'Atividade automática: mostra o jogo detectado, se houver.';
   $('#manual-activity-status').textContent = status;
   $('#quick-activity-status').textContent = status;
-  $('#dock-user-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : activity ? activityLabel(activity) : '#Conectado';
-  $('#quick-profile-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : 'Online';
-  document.querySelector('#user-profile .status-indicator')?.classList.toggle('online', !(prefs.invisible && presenceSupported));
+  const presence = presenceSupported ? ownPresence : 'online';
+  const label = PRESENCE_LABELS[presence];
+  $('#dock-user-status').textContent = presence === 'online' && activity ? activityLabel(activity) : label;
+  $('#dock-user-status').title = `${label}${automaticPresence ? ' · automático' : ''}`;
+  $('#quick-profile-status').textContent = `${label}${automaticPresence ? ' · automático' : ''}`;
+  $('#quick-profile-status').dataset.presence = presence;
+  const dot = document.querySelector('#user-profile .status-indicator');
+  dot.dataset.presence = presence;
+  dot.classList.toggle('online', presence !== 'offline');
   publishGameActivity();
 }
 
@@ -4109,11 +4127,11 @@ function openQuickProfile(trigger = $('#user-profile')) {
 }
 
 function setupGameActivity() {
-  const invisibleInputs = [$('#check-invisible'), $('#quick-check-invisible')];
+  const presenceInputs = [$('#select-presence'), $('#quick-select-presence')];
   let presencePending = false;
   const syncPresence = (message = '') => {
-    for (const input of invisibleInputs) {
-      input.checked = prefs.invisible === true;
+    for (const input of presenceInputs) {
+      input.value = savedPresence(prefs);
       input.disabled = presencePending || !presenceSupported || !socket.connected;
     }
     $('#presence-status').textContent = message;
@@ -4122,20 +4140,37 @@ function setupGameActivity() {
   syncPresence();
   socket.on('room-info', info => {
     if (!info.assetKey && !Object.hasOwn(info, 'presenceVersion')) return;
-    presenceSupported = info.presenceVersion === 1;
-    syncPresence(presenceSupported ? '' : 'Modo invisível precisa do servidor atualizado.');
+    presenceSupported = info.presenceVersion >= 2;
+    syncPresence(presenceSupported ? '' : 'Atualize o servidor para trocar a presença.');
     refreshOwnActivity();
   });
+  socket.on('presence-state', state => {
+    ownPresence = normalizePresence(state.presence);
+    appState.myUser.presence = ownPresence;
+    automaticPresence = state.automatic === true;
+    refreshOwnActivity();
+  });
+  socket.on('user-presence-updated', ({ userId, presence }) => {
+    for (const channel of appState.channels.values()) {
+      const user = channel.users.get(userId);
+      if (user) user.presence = presence;
+    }
+    for (const dot of $$('[data-presence-user]')) if (dot.dataset.presenceUser === userId) {
+      dot.dataset.presence = normalizePresence(presence);
+      dot.title = PRESENCE_LABELS[normalizePresence(presence)];
+    }
+  });
   socket.on('disconnect', () => { syncPresence('Sem conexão com a sala.'); });
-  for (const input of invisibleInputs) input.addEventListener('change', async () => {
-    const invisible = input.checked;
+  for (const input of presenceInputs) input.addEventListener('change', async () => {
+    const status = input.value;
     presencePending = true;
-    invisibleInputs.forEach(control => { control.disabled = true; });
+    presenceInputs.forEach(control => { control.disabled = true; });
     let message = '';
     try {
-      const result = await socket.timeout(5000).emitWithAck('update-presence', { invisible });
+      const result = await socket.timeout(5000).emitWithAck('update-presence', { status });
       if (!result?.success) throw new Error();
-      const saved = await savePrefs({ invisible });
+      const saved = await savePrefs({ presence: status, invisible: status === 'offline' });
+      ownPresence = normalizePresence(result.presence);
       if (saved === false) message = 'Presença alterada, mas não foi possível salvar neste aparelho.';
       refreshOwnActivity();
     } catch { message = 'Não consegui alterar a presença. Tente novamente.'; }
@@ -8123,6 +8158,7 @@ function initApp() {
   updateTopBar();
   renderChannelChat(appState.currentChannelId);
   updateVoiceLounge();
+  setupServerBranding({ socket, state: appState, serverUrl: SERVER_URL, canManage: () => hasPermission(appState, 'manageServer'), showToast });
   setupSettingsLayout();
   if (isFirstRun) openProfileSettings();
   showWhatsNewOnce();

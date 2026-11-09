@@ -1,3 +1,4 @@
+import { PRESENCE_LABELS, normalizePresence } from './presence.js';
 const PEOPLE = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-2a8 8 0 0 1 16 0v2M17 4a4 4 0 0 1 0 8M23 21v-2a7 7 0 0 0-4-6"/></svg>';
 const narrow = window.matchMedia('(max-width: 1279px)');
 
@@ -55,10 +56,10 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
       const title = document.createElement('h3'); title.textContent = `${label} — ${query ? group.length : count}`; section.append(title);
       for (const member of group) {
         const row = document.createElement('button'); row.type = 'button'; row.className = 'server-member'; row.dataset.memberId = member.memberId;
-        row.setAttribute('aria-label', `${member.name}, ${active ? 'online' : 'offline'}. Abrir perfil`);
+        row.setAttribute('aria-label', `${member.name}, ${active ? PRESENCE_LABELS[normalizePresence(member.presence || 'online')].toLocaleLowerCase('pt-BR') : 'offline'}. Abrir perfil`);
         const photo = document.createElement('span'); photo.className = 'server-member-avatar'; photo.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(member.color) ? member.color : 'var(--accent-brand)';
         photo.innerHTML = avatar(shown(member));
-        const dot = document.createElement('span'); dot.className = `server-member-presence ${active ? 'is-online' : ''}`; photo.append(dot);
+        const dot = document.createElement('span'); dot.className = `server-member-presence ${active ? 'is-online' : ''}`; dot.dataset.presence = active ? normalizePresence(member.presence || 'online') : 'offline'; photo.append(dot);
         const info = document.createElement('span'); info.className = 'server-member-info';
         const name = document.createElement('strong'); name.textContent = member.name; applyName(name, member); info.append(name);
         const role = member.roles.find(role => role.id === member.displayRoleId);

@@ -17,7 +17,7 @@
 .server-member-avatar .avatar-photo { position: absolute; inset: 0; border-radius: 50%; overflow: hidden; }
 .server-member-avatar .avatar-static { display: none; }
 .server-member-presence { position: absolute; bottom: -1px; right: -1px; width: 11px; height: 11px; border: 3px solid var(--bg-secondary); border-radius: 50%; background: var(--text-muted); }
-.server-member-presence.is-online { background: var(--accent-green); }
+.server-member-presence.is-online { background: var(--presence-color, var(--accent-green)); }
 .server-member-info { min-width: 0; display: grid; gap: 3px; }
 .server-member-info strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .server-member-info small { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
