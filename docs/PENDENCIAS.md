@@ -1,9 +1,9 @@
 # Pendências atuais
 
-Atualizado em 09/11/2026. Última versão publicada registrada: **4.3.3**.
+Atualizado em 09/11/2026. Versão **4.4.0** em publicação autorizada pelo dono.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
-## Em teste local, sem publicação
+## Incluído na 4.4.0
 
 Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações locais anteriores preservadas:
 
@@ -27,7 +27,7 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 - [x] Retirar a hospedagem no PC e o código de túnel do desktop.
 - [x] Evitar reconstruir a atividade quando a detecção retorna o mesmo jogo.
 - [x] Separar pendências atuais dos registros históricos e corrigir ideias já publicadas.
-- [ ] Validar o protótipo com o dono e a amiga antes de decidir uma publicação.
+- [x] Publicação autorizada pelo dono após a revisão do protótipo.
 - [ ] Ouvir a correção de volume/RNNoise nos microfones reais do grupo, Windows e Android.
 
 ## Revisão de código desta retomada
@@ -51,11 +51,11 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 - [ ] Validar troca de rede, áudio em segundo plano, CPU e consumo de bateria em aparelho físico.
 - [ ] Definir distribuição/atualização dos APKs; hoje é manual. Preservar a assinatura existente.
 
-## Para publicar, quando o dono pedir
+## Publicação autorizada
 
 O protótipo muda cliente e servidor: precisa de release e deploy em conjunto para funcionar
-nos apps instalados. Atualizar versão e novidades somente ao preparar a publicação autorizada.
-Não há release ou deploy autorizado nesta retomada.
+nos apps instalados. Versão e novidades preparadas para a 4.4.0.
+Release e deploy autorizados em 09/11/2026, sem repetir os testes já concluídos.
 
 O filtro experimental GTCRN foi revertido; o pendente de escuta atual é RNNoise/volume mono.
 Ideias sem implementação ficam em [IDEIAS-FUTURAS.md](IDEIAS-FUTURAS.md).

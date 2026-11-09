@@ -1,5 +1,7 @@
 # Teletela: documentação do projeto
 
+**4.4.0 em publicação autorizada (09/11/2026):** presença, atividades, redesign, avatares do histórico, teste de microfone e Membros redimensionável. Testes anteriores aproveitados a pedido do dono.
+
 **[4.3.3 publicada em 05/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.3):** canal de Ausentes bloqueia o microfone de todos,
 inclusive administradores, e restaura o estado anterior ao sair. Novo bundle Flatpak
 experimental nos downloads do GitHub, com atualização manual. APK 4.3.3/código 13.

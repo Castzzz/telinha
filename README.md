@@ -39,6 +39,8 @@ pelas setas do teclado ou restaurada com duplo clique; a largura fica salva nest
 [Pendências atuais](docs/PENDENCIAS.md).
 
 
+**4.4.0:** presença e atividades, início/canais/configurações renovados, avatares no histórico, teste de microfone e Membros redimensionável.
+
 **4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
 
 ---
