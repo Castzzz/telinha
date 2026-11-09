@@ -33,11 +33,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }
 });
 
-// Tela inicial (hospedar / entrar na sala de um amigo)
+// Início e entrada na sala.
 contextBridge.exposeInMainWorld('telinhaLauncher', {
   getState: () => ipcRenderer.invoke('launcher-state'),
-  host: () => ipcRenderer.invoke('launcher-host'),
-  join: (url) => ipcRenderer.invoke('launcher-join', url),
-  open: (url) => ipcRenderer.invoke('launcher-open', url),
-  copy: (text) => ipcRenderer.invoke('launcher-copy', text)
+  getPreview: () => ipcRenderer.invoke('launcher-preview'),
+  join: (url) => ipcRenderer.invoke('launcher-join', url)
 });

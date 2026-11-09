@@ -1,3 +1,4 @@
+import { setupSettingsLayout } from './settings-layout.js';
 import { createStreamWindow } from './stream-window.js';
 import { profileIdentity, profileProof } from './profile-identity.js';
 /**
@@ -1412,22 +1413,20 @@ function renderChannelsTree() {
     row.className = 'channel-row';
     row.setAttribute('role', 'button');
     row.setAttribute('tabindex', '0');
+    row.title = ch.name;
 
-    let icon = '🔊';
-    if (chId === 'cinema') icon = '🎬';
-    else if (chId === 'futebol') icon = '⚽';
-    else if (chId === 'gameplay') icon = '🎮';
+    const icon = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 14v-3a8 8 0 0 1 16 0v3M4 12H2v8h5v-8H4zm16 0h2v8h-5v-8h3z"/></svg>';
 
     const userCount = ch.users.size;
 
     row.innerHTML = `
       <span class="channel-speaker-icon"${ch.hasPassword ? ' title="Canal com senha" aria-label="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : icon}</span>
-      <span class="channel-name">${escapeHtml(ch.name)}${ch.isAfk ? ' <span class="badge-role">Ausentes</span>' : ''}${ch.isPrivate ? ' <span class="badge-role">Restrito</span>' : ''}</span>
+      <span class="channel-name"><span class="channel-label">${escapeHtml(ch.name)}</span>${ch.isAfk || ch.isPrivate ? `<span class="channel-kind">${ch.isAfk ? 'Ausentes' : ''}${ch.isAfk && ch.isPrivate ? ' · ' : ''}${ch.isPrivate ? 'Restrito' : ''}</span>` : ''}</span>
       ${userCount > 0 && ch.callStartedAt ? `<span class="channel-call-timer" data-call-timer="${Number(ch.callStartedAt)}" title="Tempo ativo da call">${formatCallClock(ch.callStartedAt)}</span>` : ''}
       ${isActive
         ? `<button type="button" class="channel-chat-btn${hasUnread ? ' has-unread' : ''}" title="Abrir o chat da call" aria-label="Abrir o chat da call">${CHAT_BUBBLE_SVG}</button>`
         : userCount > 0 ? `<span class="channel-count" id="count-${chId}">${userCount}</span>` : ''}
-      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>` : ''}
       ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
     `;
 
@@ -2991,11 +2990,11 @@ function renderTextChannels() {
     li.className = `channel-item ${active ? 'channel-active' : ''} ${unread ? 'channel-unread' : ''}`;
     li.dataset.textChannelId = ch.id;
     li.innerHTML = `
-      <div class="channel-row" role="button" tabindex="0">
-        <span class="channel-speaker-icon channel-hash">#</span>
-        <span class="channel-name">${escapeHtml(ch.name)}</span>
+      <div class="channel-row" role="button" tabindex="0" title="${escapeHtml(ch.name)}">
+        <span class="channel-speaker-icon channel-hash" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M5 9h15M4 15h15M11 3 7 21M17 3l-4 18"/></svg></span>
+        <span class="channel-name"><span class="channel-label">${escapeHtml(ch.name)}</span></span>
         ${appState.textMentions.has(ch.id) && !active ? '<span class="channel-mention-badge" title="Te marcaram aqui">@</span>' : ''}
-      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}">🗑️</button>` : ''}
+      ${canDeleteChannel(ch) ? `<button type="button" class="channel-delete-btn" title="Apagar canal" aria-label="Apagar canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>` : ''}
         ${ch.canManageAccess ? `<button type="button" class="channel-settings-btn" title="Configurações do canal" aria-label="Configurações do canal ${escapeHtml(ch.name)}"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>` : ''}
       </div>
     `;
@@ -4124,7 +4123,7 @@ function setupGameActivity() {
   socket.on('room-info', info => {
     if (!info.assetKey && !Object.hasOwn(info, 'presenceVersion')) return;
     presenceSupported = info.presenceVersion === 1;
-    syncPresence(presenceSupported ? '' : 'Esta sala precisa ser atualizada para usar o modo invisível.');
+    syncPresence(presenceSupported ? '' : 'Modo invisível precisa do servidor atualizado.');
     refreshOwnActivity();
   });
   socket.on('disconnect', () => { syncPresence('Sem conexão com a sala.'); });
@@ -4188,7 +4187,7 @@ function setupGameActivity() {
   check.checked = prefs.shareGameActivity !== false;
   check.disabled = !supported;
   form.querySelectorAll('input, button').forEach((el) => { el.disabled = !supported; });
-  if (!supported) $('#game-activity-status').textContent = 'A detecção de jogos está disponível no app para Windows e Linux. Pelo navegador você pode ver a atividade dos amigos.';
+  if (!supported) $('#game-activity-status').textContent = 'Detecção automática disponível no app para Windows e Linux.';
   check.addEventListener('change', async () => {
     // Esconde imediatamente, mesmo se uma detecção anterior ainda estiver terminando.
     ++gamePollRun;
@@ -8124,6 +8123,7 @@ function initApp() {
   updateTopBar();
   renderChannelChat(appState.currentChannelId);
   updateVoiceLounge();
+  setupSettingsLayout();
   if (isFirstRun) openProfileSettings();
   showWhatsNewOnce();
 }

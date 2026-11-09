@@ -19,6 +19,10 @@ app.whenReady().then(async () => {
   const emit = (socket, event, payload = {}) => socket.timeout(5000).emitWithAck(event, payload);
   const owner = await connect(); await emit(owner, 'update-profile', { profileId: 'perfil-neves-membros-ui', name: 'Neves', bio: 'Perfil de teste' }); await emit(owner, 'owner-claim', { key: 'membros-ui-teste' });
   const text = await emit(owner, 'create-text-channel', { name: 'Conversa' }); assert(text.success);
+  await emit(owner, 'category-save', { id: 'voice', type: 'voice', name: 'Colheita Fartus' });
+  for (const name of ['Colheita', 'Maldição do Colecionador', 'Pilha de Corpos', 'testes']) await emit(owner, 'create-channel', { name });
+  await emit(owner, 'afk-settings', { channelId: 'pilha-de-corpos', minutes: 15 });
+  await emit(owner, 'create-text-channel', { name: 'Colheitas Gerais' });
   const off = await connect(); await emit(off, 'update-profile', { profileId: 'perfil-nanda-membros-ui', name: 'Nanda', bio: 'Mesmo fora da call', color: '#9B84EC' });
   const registered = await emit(off, 'account-register', { username: 'nanda_teste', password: 'senha-dos-testes' }); assert(registered.success); off.disconnect();
   const nanda = await connect({ accountToken: registered.token }); const otherDevice = await connect({ accountToken: registered.token });
@@ -28,6 +32,11 @@ app.whenReady().then(async () => {
   await until("document.querySelector('#server-members-groups').textContent.includes('Cast') && document.querySelector('#server-members-groups').textContent.includes('Neves')");
   assert(await js("!appState.currentChannelId && !document.querySelector('#server-members').classList.contains('hidden')"));
   await until("!document.querySelector('#check-invisible').disabled && appState.myUser.activity?.id === 'cs2'");
+  await until("document.querySelector('#channel-maldicao-do-colecionador .channel-label')");
+  await js("document.querySelector('#select-theme').value='preto';document.querySelector('#select-theme').dispatchEvent(new Event('change'));void 0");
+  assert(await js("Boolean(document.querySelector('#channel-colheita .channel-speaker-icon svg'))"));
+  await pause(180);
+  fs.writeFileSync('/tmp/teletela-canais-redesign.png', (await win.webContents.capturePage({ x: 8, y: 52, width: 250, height: 650 })).toPNG());
   await click('#user-profile'); await until("document.querySelector('#profile-quick-menu').matches(':popover-open')");
   assert.equal(await js("document.querySelector('#quick-profile-name').textContent"), 'Cast');
   await js("document.querySelector('#quick-activity-type').showPicker();void 0");
@@ -55,6 +64,7 @@ app.whenReady().then(async () => {
   await until("appState.myUser.activity?.type === 'studying'");
   assert.equal(await js("document.querySelector('#manual-activity-status').textContent"), 'Estudando');
   assert(await js("document.querySelector('#input-activity-name').disabled && document.querySelector('#input-activity-name').closest('[data-activity-custom]').classList.contains('hidden')"));
+  assert(await js("document.querySelector('[data-settings-section=atividade] > .settings-help') && !document.querySelector('[data-settings-section=atividade] > .settings-help').open && document.querySelector('#form-custom-game').closest('details')"));
   assert(await js("CSS.supports('appearance', 'base-select') && getComputedStyle(document.querySelector('#select-activity-type')).appearance === 'base-select'"));
   for (const theme of ['escuro', 'preto', 'claro']) {
     await js(`document.querySelector('#select-theme').value='${theme}';document.querySelector('#select-theme').dispatchEvent(new Event('change'));void 0`);
@@ -65,11 +75,19 @@ app.whenReady().then(async () => {
     fs.writeFileSync(`/tmp/teletela-seletor-${theme}.png`, (await win.webContents.capturePage()).toPNG());
     win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
     await until("!document.querySelector('#select-activity-type').matches(':open')");
+    await pause(80);
     fs.writeFileSync(`/tmp/teletela-atividade-${theme}.png`, (await win.webContents.capturePage()).toPNG());
   }
   assert.deepEqual(await js("Array.from(document.querySelectorAll('select')).filter(el => getComputedStyle(el).appearance !== 'base-select').map(el => el.id)"), []);
+  await js("document.querySelector('#select-theme').value='preto';document.querySelector('#select-theme').dispatchEvent(new Event('change'));void 0");
+  for (const topic of ['aparencia', 'microfone', 'som']) {
+    await click(`[data-settings-tab="${topic}"]`); await pause(100);
+    fs.writeFileSync(`/tmp/teletela-config-${topic}-redesign.png`, (await win.webContents.capturePage()).toPNG());
+  }
+  await click('[data-settings-tab="atividade"]');
   win.setSize(390, 844); await pause(150);
   assert(await js('document.documentElement.scrollWidth <= innerWidth'));
+  assert(await js("document.querySelector('.settings-panels').scrollWidth <= document.querySelector('.settings-panels').clientWidth"));
   fs.writeFileSync('/tmp/teletela-atividade-celular.png', (await win.webContents.capturePage()).toPNG());
   await js("document.querySelector('#modal-settings').classList.add('hidden');document.querySelector('[data-mobile-view=voce]').click();void 0");
   await click('#btn-mobile-quick-profile'); await until("document.querySelector('#profile-quick-menu').matches(':popover-open')");
@@ -118,6 +136,9 @@ app.whenReady().then(async () => {
   const role = await emit(owner, 'role-save', { name: 'Gerente', position: 20, permissions: ['manageChannels'] });
   assert.equal((await emit(owner, 'member-roles', { memberId: castId, roles: [role.role.id] })).success, true);
   await until("Boolean(document.querySelector('#channel-geral .channel-delete-btn'))");
+  await click('#channel-geral .channel-row'); await until("appState.currentChannelId === 'geral'");
+  await js("document.querySelector('#channel-geral .channel-row').focus();void 0");
+  assert(await js("(() => { const chat=document.querySelector('#channel-geral .channel-chat-btn').getBoundingClientRect(); const settings=document.querySelector('#channel-geral .channel-settings-btn').getBoundingClientRect(); return chat.right <= settings.left; })()"), 'Ações não cobrem o chat da call.');
   await js('window.confirm=()=>true;void 0'); await click('#channel-geral .channel-delete-btn');
   await until("!document.querySelector('#channel-geral') && !appState.channels.has('geral')");
   win.setSize(390, 844); await pause(150); await click('#btn-mobile-members');

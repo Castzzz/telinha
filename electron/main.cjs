@@ -1,8 +1,7 @@
-const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, powerMonitor, session, shell } = require('electron');
+const { app, BrowserWindow, Menu, clipboard, desktopCapturer, dialog, globalShortcut, ipcMain, net, nativeImage, powerMonitor, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
-const os = require('os');
 const { pathToFileURL } = require('url');
 const { execSync, execFileSync, spawn } = require('child_process');
 const { registerAppScheme, handleAppProtocol, roomUrl, serverFromUrl } = require('./app-protocol.cjs');
@@ -26,10 +25,7 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 let mainWindow = null;
 let selectedDesktopSourceId = null;
-let tunnelProcess = null;
-let publicUrl = null;
 let launcherError = null;
-const PORT = Number(process.env.PORT) || 8080;
 const CONNECT_PAGE = path.join(__dirname, 'connect.html');
 // Sala fixa na VM da Oracle (sempre ligada, transmissão pelo repassador)
 const SERVER_ROOM_URL = 'https://colheitafartus.duckdns.org';
@@ -426,112 +422,6 @@ function setupAutoUpdater() {
   setInterval(check, 4 * 60 * 60 * 1000);
 }
 
-function checkServerRunning(port) {
-  return new Promise((resolve) => {
-    // Confere o cliente do socket.io: um servidor antigo/alheio na porta não serve
-    const req = http.get(`http://127.0.0.1:${port}/socket.io/socket.io.js`, (res) => {
-      res.resume();
-      resolve(res.statusCode === 200);
-    });
-    req.on('error', () => resolve(false));
-    req.setTimeout(800, () => {
-      req.destroy();
-      resolve(false);
-    });
-  });
-}
-
-async function ensureLocalServer() {
-  const isRunning = await checkServerRunning(PORT);
-  if (isRunning) return `http://localhost:${PORT}`;
-
-  try {
-    // Sala hospedada no PC: os canais criados ficam salvos na pasta do app
-    process.env.TELINHA_DATA_DIR ||= path.join(app.getPath('userData'), 'sala');
-    const serverModule = await import(pathToFileURL(path.join(__dirname, '..', 'server.js')).href);
-    if (serverModule && typeof serverModule.startServer === 'function') {
-      await serverModule.startServer(PORT);
-    } else if (serverModule && serverModule.server && !serverModule.server.listening) {
-      await new Promise((resolve) => serverModule.server.listen(PORT, '0.0.0.0', resolve));
-    }
-  } catch (err) {
-    console.warn('[Electron] Aviso ao iniciar servidor embutido:', err.message);
-  }
-  if (!(await checkServerRunning(PORT))) {
-    throw new Error(
-      `A porta ${PORT} está ocupada por outro programa (ou um servidor antigo do Teletela). Feche-o e tente de novo.`
-    );
-  }
-  return `http://localhost:${PORT}`;
-}
-
-function getLanUrls() {
-  const urls = [];
-  for (const ifaces of Object.values(os.networkInterfaces())) {
-    for (const iface of ifaces || []) {
-      if (iface.family === 'IPv4' && !iface.internal) urls.push(`http://${iface.address}:${PORT}`);
-    }
-  }
-  return urls;
-}
-
-// Cria um link público HTTPS temporário via cloudflared (quick tunnel)
-function startTunnel() {
-  if (publicUrl && tunnelProcess) return Promise.resolve(publicUrl);
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const finish = (err, url) => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      if (err) reject(err);
-      else resolve(url);
-    };
-    let proc;
-    try {
-      proc = spawn('cloudflared', ['tunnel', '--no-autoupdate', '--url', `http://localhost:${PORT}`], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      });
-    } catch (err) {
-      return finish(err);
-    }
-    tunnelProcess = proc;
-    // O link aparece antes do túnel ficar pronto; só libera após registrar a conexão
-    let foundUrl = null;
-    let registered = false;
-    const onData = (chunk) => {
-      const text = chunk.toString();
-      const match = text.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-      if (match) foundUrl = match[0];
-      if (/Registered tunnel connection/i.test(text)) registered = true;
-      if (foundUrl && registered) {
-        publicUrl = foundUrl;
-        finish(null, publicUrl);
-      }
-    };
-    proc.stdout.on('data', onData);
-    proc.stderr.on('data', onData);
-    proc.on('error', (err) => {
-      tunnelProcess = null;
-      finish(err.code === 'ENOENT' ? new Error('cloudflared não está instalado.') : err);
-    });
-    proc.on('exit', () => {
-      tunnelProcess = null;
-      publicUrl = null;
-      finish(new Error('cloudflared encerrou antes de gerar o link.'));
-    });
-    const timer = setTimeout(() => finish(new Error('cloudflared demorou demais para gerar o link.')), 60000);
-  });
-}
-
-function stopTunnel() {
-  if (tunnelProcess) {
-    tunnelProcess.kill();
-    tunnelProcess = null;
-  }
-}
-
 function normalizeServerUrl(raw) {
   let text = String(raw || '').trim();
   if (!text) return null;
@@ -546,7 +436,7 @@ function normalizeServerUrl(raw) {
 
 async function isTelinhaServer(origin) {
   try {
-    const res = await net.fetch(`${origin}/socket.io/socket.io.js`, { cache: 'no-store' });
+    const res = await net.fetch(`${origin}/socket.io/socket.io.js`, { cache: 'no-store', signal: AbortSignal.timeout(7000) });
     return res.ok;
   } catch {
     return false;
@@ -559,31 +449,27 @@ function showLauncher(error) {
 }
 
 function fromLauncher(event) {
-  return Boolean(event.senderFrame && event.senderFrame.url.startsWith('file:'));
+  return event.senderFrame?.url === pathToFileURL(CONNECT_PAGE).href;
 }
 
 function setupLauncherIpc() {
+  const preview = require('./launcher-preview.cjs').createLauncherPreview({
+    serverUrl: SERVER_ROOM_URL, getPrefs: loadPrefs, fetch: (...args) => net.fetch(...args),
+    thumbnail: async (buffer, crop) => {
+      const image = nativeImage.createFromBuffer(buffer);
+      if (image.isEmpty()) return '';
+      const { imageCropRect } = await import('../public/image-crop.js');
+      const size = image.getSize(), rect = imageCropRect(size.width, size.height, 1, crop);
+      const frame = { x: Math.floor(rect.x), y: Math.floor(rect.y), width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) };
+      return image.crop(frame).resize({ width: 80, height: 80, quality: 'good' }).toDataURL();
+    }
+  });
+  ipcMain.handle('launcher-preview', event => fromLauncher(event) ? preview() : { status: 'denied', friends: [] });
   ipcMain.handle('launcher-state', (event) => {
     if (!fromLauncher(event)) return {};
     const state = { lastServerUrl: loadConfig().lastServerUrl || '', serverRoomUrl: SERVER_ROOM_URL, error: launcherError };
     launcherError = null;
     return state;
-  });
-
-  ipcMain.handle('launcher-host', async (event) => {
-    if (!fromLauncher(event)) return { ok: false, error: 'negado' };
-    let localUrl;
-    try {
-      localUrl = await ensureLocalServer();
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-    try {
-      const url = await startTunnel();
-      return { ok: true, localUrl, publicUrl: url, lanUrls: getLanUrls() };
-    } catch (err) {
-      return { ok: true, localUrl, publicUrl: null, tunnelError: err.message, lanUrls: getLanUrls() };
-    }
   });
 
   ipcMain.handle('launcher-join', async (event, raw) => {
@@ -592,24 +478,11 @@ function setupLauncherIpc() {
     if (!origin) return { ok: false, error: 'Link inválido.' };
     if (!(await isTelinhaServer(origin))) {
       if (origin === SERVER_ROOM_URL) return { ok: false, error: 'A sala do servidor não respondeu. Tente de novo daqui a pouco.' };
-      return { ok: false, error: 'Não encontrei uma sala do Teletela nesse link. Confira se seu amigo está hospedando.' };
+      return { ok: false, error: 'Não encontrei uma sala do Teletela nesse link. Confira o endereço.' };
     }
     saveConfig({ lastServerUrl: origin });
     await mainWindow.loadURL(roomUrl(origin));
     return { ok: true };
-  });
-
-  ipcMain.handle('launcher-open', async (event, url) => {
-    if (!fromLauncher(event)) return { ok: false };
-    if (!/^http:\/\/localhost:\d+$/.test(String(url))) return { ok: false };
-    await mainWindow.loadURL(roomUrl(url));
-    return { ok: true };
-  });
-
-  ipcMain.handle('launcher-copy', (event, text) => {
-    if (!fromLauncher(event)) return false;
-    clipboard.writeText(String(text || ''));
-    return true;
   });
 }
 
@@ -624,9 +497,7 @@ function setupMenu() {
           accelerator: 'CmdOrCtrl+Shift+L',
           click: () => {
             const server = mainWindow && serverFromUrl(mainWindow.webContents.getURL());
-            const isLocal = server && server.startsWith('http://localhost');
-            const link = isLocal ? publicUrl : server;
-            if (link) clipboard.writeText(link);
+            if (server) clipboard.writeText(server);
           }
         },
         { type: 'separator' },
@@ -846,7 +717,6 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
-  stopTunnel();
   unrouteAppAudio();
   stopWinAudio();
   globalShortcut.unregisterAll();

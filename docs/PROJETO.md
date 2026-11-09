@@ -81,8 +81,9 @@ e um admin pra moderar.
 - **SFU** (Go + Pion WebRTC) que repassa voz, tela e câmera: cada um manda uma vez só pro
   servidor e ele distribui pra quem está assistindo.
 - A sala "oficial" roda numa VM grátis da Oracle em **https://colheitafartus.duckdns.org**.
-- Também dá pra **hospedar uma sala no próprio PC** pelo app (sem SFU, tudo P2P), com link
-  público temporário via `cloudflared`.
+- **Protótipo de 09/11/2026:** a abertura prioriza a sala oficial e os amigos online.
+  A hospedagem pelo app foi retirada; o servidor ainda pode ser executado manualmente
+  com `npm start` para desenvolvimento, sem SFU e com mídia P2P.
 
 Repositório público: https://github.com/Castzzz/telinha
 
@@ -130,9 +131,9 @@ Pontos importantes:
   (HMAC com `SFU_SECRET`) pra cada conexão no SFU (evento `sfu-token`). Salas do SFU:
   `<canal>__<id>` (tela 1), `<canal>__<id>__cam`, `<canal>__<id>__voz`, `<canal>__<id>__s2`,
   `<canal>__<id>__s3` (telas extras).
-- **Sala hospedada no PC:** o Electron sobe o próprio `server.js` (`ensureLocalServer`) na
-  porta 8080, sem SFU (`SFU_SECRET` vazio); tudo vai P2P. O link público é um quick tunnel do
-  `cloudflared` (precisa estar instalado).
+- **Servidor local de desenvolvimento:** `npm start`, sem SFU (`SFU_SECRET` vazio),
+  usa mídia P2P. O Electron não inicia mais servidor local nem túnel; na abertura, o fluxo
+  principal entra na sala oficial e **Entrar por outro link** aceita outro endereço.
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
   no volume geral. Os avisos de entrada/saída da call vão direto ao `outputGain` e continuam
@@ -207,13 +208,15 @@ public/                    A interface (vai dentro do app E é servida pelo serv
   vendor/noise-suppressor/ RNNoise, WASM local e licenças
 
 electron/
-  main.cjs                 Processo principal: janela, tela inicial, hospedar sala, túnel,
+  main.cjs                 Processo principal: janela, tela inicial e prévia de amigos,
                            captura de tela/áudio, atalhos globais, auto-update, preferências
   game-activity.cjs         Catálogo de jogos, leitura local dos processos e tempo da atividade
   preferences.cjs          Preferências atômicas e cópia independente da identidade
   preload.cjs              Ponte segura (window.electronAPI) entre a página e o main
   app-protocol.cjs         Protocolo telinha://app que serve public/ empacotado
-  connect.html             Tela inicial (entrar na sala do servidor / hospedar / colar link)
+  connect.html             Tela inicial (sala principal, amigos e outro endereço)
+  connect.css / connect.js  Visual e interação da abertura
+  launcher-preview.cjs      Consulta autenticada de amigos, sem anunciar presença
   bin/                     telinha-audio.exe compilado (FORA DO GIT, gerado no build)
 
 native/win-audio/          Auxiliar do Windows que captura o som de UM programa só (C++)
@@ -437,7 +440,7 @@ pessoal ou de outros sites; não reabrir a sessão exportada no navegador. Um en
 forçado do Node pode deixar cópias em `/tmp`; removê-las como operador com o bot parado.
 Quando a sessão expirar, renovar via login manual e atualizar a variável com reinício
 autorizado do servidor. Não há garantia contra novos bloqueios ou restrições da conta.
-Salas hospedadas pelo app continuam com música desativada por padrão; as ferramentas
+Servidores locais de desenvolvimento continuam com música desativada por padrão; as ferramentas
 nativas não vão dentro dos instaladores desktop.
 
 ## 5. Testes
@@ -522,7 +525,7 @@ atrás se esquecer).
 |---|---|---|
 | `public/` (interface) | **sim** | sim (pra quem usa pelo navegador) |
 | `server.js` | não | **sim** |
-| `permission-store.js` | **sim** (também vai no servidor hospedado pelo app) | **sim** |
+| `permission-store.js` | **sim** (incluído no pacote desktop) | **sim** |
 | `sfu/` | não | **sim** |
 | `electron/`, `build/`, `package.json` (build) | **sim** | não |
 | `android/` | APK Android separado (`npm run build:android`) | não |
@@ -942,7 +945,7 @@ de ruído, e 11 inicialização (`initApp`).
 | Modo leve e pausa de animações | `applyPerformancePrefs`, `syncAppVisibility`, `setupPerformanceSelect`, `freezeAvatar`; CSS: `light-mode`, `pause-in-background` |
 | Configurações (abas) | `openSettings`, `selectSettingsTab`; `#modal-settings` no `index.html`, abas `data-settings-tab` |
 | Popup de novidades | `showWhatsNewOnce` (automático), `openWhatsNew`/`setupWhatsNew` (reabertura no início e configurações), `#modal-whats-new` |
-| Tela inicial, hospedar sala, túnel | `electron/connect.html`, `ensureLocalServer`, `startTunnel` no `main.cjs` |
+| Tela inicial e amigos online | `electron/connect.html`/`.css`/`.js`, `launcher-preview.cjs` e IPCs do início no `main.cjs` |
 | Som de um app só | Linux: `routeAppAudio` (PipeWire/Pulse); Windows: `native/win-audio` + `start-win-audio` |
 | Auto-update | `electron-updater` no `main.cjs` (lê o `latest*.yml` do release) |
 
@@ -1749,3 +1752,44 @@ anteriores de áudio. Sem release/deploy; versão permanece 4.3.3.
 - Conferência no Electron: todos os selects recebem `base-select`; listas de atividade
   abertas nos três temas, seleção por teclado, presets sem texto, texto personalizado,
   limpeza, menu rápido desktop/celular, edição do perfil e invisibilidade sincronizada.
+
+
+### Redesign de canais, configurações e abertura (09/11/2026, protótipo)
+
+- `electron/connect.html`, `connect.css` e `connect.js`: nova abertura com sala principal,
+  amigos online e outro endereço recolhido no rodapé. Sem **Hospedar no meu PC**; removidos
+  IPCs `launcher-host/open/copy`, inicialização local e ciclo de vida do túnel. O comando
+  `npm start`, P2P e entrada por endereço continuam úteis no desenvolvimento.
+- `launcher-preview` só aceita a página exata do início. `electron/launcher-preview.cjs`
+  usa a sessão salva da sala oficial, consulta HTTP sem abrir socket e não anuncia presença.
+  Atualiza a cada 30 s com a página visível; cache de consulta por 10 s. Estados de sessão
+  expirada, falta de conta, servidor antigo, ninguém online e falha de rede têm mensagens próprias.
+  A entrada continua disponível se a prévia falhar.
+- `GET /api/launcher/friends` exige `Authorization: Bearer <sessão de conta>` e membro
+  autorizado na sala, como o handshake da conta. Só retorna amigos online com amizade aceita da própria conta,
+  sem canal, atividade, credenciais ou perfil completo; presença respeita invisibilidade.
+- `GET /api/launcher/friend-avatar/:accountId` exige a mesma sessão e amizade aceita.
+  Respostas privadas e sem cache HTTP. O processo principal baixa fotos da origem fixa
+  (sem seguir redirecionamentos), recorta conforme o enquadramento salvo, reduz para PNG de 80×80 e devolve só a miniatura ao início.
+  Até oito amigos são mostrados, com iniciais se a imagem faltar; mais amigos aparecem no contador.
+  O cache em memória guarda até 16 miniaturas e separa sessões. Nenhum dado novo em disco.
+- `public/redesign.css` e `renderChannelsTree/renderTextChannels`: ícones SVG consistentes,
+  nomes com até duas linhas, contexto de Ausentes/Restrito abaixo e ações ao passar mouse/focar.
+  Categorias, permissões, ordenação e canais privados preservados.
+- `public/settings-layout.js`: agrupa a navegação e recolhe explicações estáticas não interativas
+  em **Como funciona**. Perfil/admin e mensagens dinâmicas de erro/estado continuam visíveis.
+  O cadastro manual de jogos fica em **Adicionar um jogo não reconhecido**. Modo invisível
+  mantém o aviso curto de que a call continua visível; a explicação completa continua acessível.
+- Requer release para a interface instalada e deploy para a prévia HTTP. Sem publicação
+  nesta etapa. No servidor antigo, o app oferece entrar normalmente e explica que a prévia
+  virá com a atualização. Sem conexão, não reutiliza amigos como se estivessem online.
+- Testes: `tests/launcher-preview.test.js`, `tests/cinema-music-connect-browser.cjs`,
+  `tests/server-members-browser.cjs`, canais/permissões e regressões móveis.
+
+
+Validação desta etapa: runner 62/62 e regressões de servidor/mídia/contas/atividades 87/87
+(`--test-concurrency=1`), além das interfaces de início, canais, configurações, três temas e
+celular. Uma execução paralela do teste antigo de desconexão rápida falhou no prazo de
+convergência; o mesmo teste passou isolado e na execução sequencial, sem mudança no protocolo.
+Capturas de teste em `/tmp/teletela-inicio-*.png`, `/tmp/teletela-canais-redesign.png` e
+`/tmp/teletela-config-*-redesign.png` usam dados locais de exemplo.

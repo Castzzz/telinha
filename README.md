@@ -10,7 +10,8 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**Protótipo local (ainda não publicado):** clique no seu perfil no rodapé para trocar
+**Protótipo local (ainda não publicado):** nova abertura com amigos online, lateral de
+canais renovada e configurações com menos texto. Clique no seu perfil no rodapé para trocar
 atividade e presença rapidamente (no celular: Você → Trocar atividade e presença).
 Escolha “Estudando”, “Trabalhando” e outras atividades prontas; só “Outra atividade…” pede
 um texto. As opções também ficam em Configurações → Atividade. Todos os seletores da sala,
@@ -190,21 +191,17 @@ O servidor e os aplicativos precisam ser atualizados para todas as opções func
 
 ## 🚪 Entrar na sala
 
-1. Peça o **link da sala** pra quem está hospedando. Ele é parecido com `https://palavra-palavra-palavra.trycloudflare.com`.
-2. No Teletela, cole o link em **Entrar na sala de um amigo** e clique em **Entrar**.
-3. Na primeira vez, o Teletela pede seu **perfil** (nome, foto, cor). Dá pra mudar depois.
+Na abertura do app, clique em **Entrar na sala**. Você escolhe um canal de voz depois;
+abrir a sala não liga seu microfone nem entra automaticamente na call.
 
-> ⚠️ **O link muda toda vez** que alguém abre a sala. Se der erro, peça o link novo.
+No protótipo atual, o início também mostra os **amigos online da sua conta**, com foto ou
+iniciais. Consulte sem aparecer online; o modo invisível dos amigos é respeitado.
+Sem conta salva, entre na sala para entrar/criar sua conta e adicionar amigos.
+A prévia depende da atualização do servidor; a entrada continua funcionando sem ela.
 
-<details>
-<summary>Quero hospedar a sala eu mesmo</summary>
-
-1. Instale o [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) (no Arch/CachyOS: `sudo pacman -S cloudflared`; no Windows: `winget install --id Cloudflare.cloudflared`).
-2. No Teletela, clique em **🏠 Hospedar no meu PC** e espere o link aparecer (pode levar até 1 minuto).
-3. Clique em **📋 Copiar link**, mande pros amigos e clique em **Entrar na sala**.
-
-A sala só existe enquanto o seu Teletela estiver aberto: se você fechar, todo mundo cai.
-</details>
+A hospedagem pelo próprio PC foi retirada do protótipo. Para um endereço diferente,
+use **Entrar por outro link**, no rodapé. As configurações mostram os controles primeiro;
+explicações ficam em **Como funciona** e cadastro de jogos em uma seção recolhida.
 
 ---
 

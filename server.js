@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { PermissionStore, PERMISSIONS } from './permission-store.js';
 import { DiceStore, installDice } from './dice-store.js';
-import { AccountStore, createAccountLimiter } from './account-store.js';
+import { AccountStore, createAccountLimiter, accountClientAddress } from './account-store.js';
 import { installAccountHandlers, installAccountHttp, sendAccountState } from './accounts-protocol.js';
 
 // Process-Level Defensive Error Boundaries
@@ -1043,6 +1043,34 @@ app.get('/api/channels', (req, res) => {
   // Sala com senha: a lista de quem está online não fica aberta pra qualquer um
   if (roomPassword) return res.status(401).json({ error: 'Sala com senha' });
   res.json(getChannelsSummary());
+});
+
+// A prévia do início só lê amigos aceitos de uma conta já autorizada na sala.
+function launcherSession(req, res, next) {
+  res.set('Cache-Control', 'private, no-store');
+  const token = /^Bearer ([a-f0-9]{64})$/.exec(req.get('authorization') || '')?.[1];
+  const session = accounts.resolveSessionMeta(token);
+  if (!session || !permissions.data.members[session.account.accessId]) return res.status(401).json({ error: 'Entre na conta para ver seus amigos.' });
+  const address = accountClientAddress(req.socket.remoteAddress, req.headers['x-forwarded-for']);
+  if (accountLimit(`launcher:${address}`, 90)) return res.status(429).json({ error: 'Tente novamente daqui a pouco.' });
+  req.launcherAccount = session.account;
+  next();
+}
+app.get('/api/launcher/friends', launcherSession, (req, res) => {
+  const account = accounts.data.accounts.find(item => item.id === req.launcherAccount.id);
+  const friends = accounts.friends(account.id, friendOnline).friends.filter(friend => friend.online).map(friend => {
+    const profile = accounts.data.accounts.find(item => item.id === friend.id);
+    return { ...friend, color: profile.profile.color, avatarCrop: normalizeImageCrop(profile.profile.avatarCrop), avatarV: profile.profile.avatar ? profile.profileUpdatedAt || profile.createdAt : 0 };
+  });
+  res.json({ supported: true, name: account.profile.name, friends });
+});
+app.get('/api/launcher/friend-avatar/:accountId', launcherSession, (req, res) => {
+  if (!accounts.friends(req.launcherAccount.id).friends.some(friend => friend.id === req.params.accountId)) return res.status(404).end();
+  const profile = accounts.data.accounts.find(item => item.id === req.params.accountId)?.profile;
+  const match = typeof profile?.avatar === 'string' && profile.avatar.match(AVATAR_RE);
+  if (!match) return res.status(404).end();
+  res.set({ 'Content-Type': match[1], 'X-Content-Type-Options': 'nosniff' });
+  res.send(Buffer.from(match[2], 'base64'));
 });
 
 app.get('/api/chat-image/:file', (req, res) => {

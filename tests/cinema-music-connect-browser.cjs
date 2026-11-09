@@ -424,198 +424,55 @@ async function runStageAndMusicTests(baseUrl) {
 }
 
 async function runConnectHtmlTests() {
-  const win = new BrowserWindow({
-    width: 900,
-    height: 680,
-    show: false,
-    webPreferences: {
-      offscreen: true,
-      backgroundThrottling: false
-    }
-  });
-
-  await win.loadFile(connectHtmlPath);
-
-  const connectResult = await win.webContents.executeJavaScript(`(async () => {
-    const requiredIds = [
-      'btn-server-room',
-      'btn-host',
-      'link-box',
-      'public-link',
-      'btn-copy',
-      'btn-enter-host',
-      'server-url',
-      'btn-join',
-      'msg'
-    ];
-    const missingIds = requiredIds.filter((id) => !document.getElementById(id));
-    const svgCount = document.querySelectorAll('svg.icon-svg').length;
-
-    // Testa alternância dos 3 temas por tokens CSS
-    const btnTheme = document.getElementById('btn-theme');
-    const initialTheme = document.documentElement.dataset.theme;
-    btnTheme.click();
-    const secondTheme = document.documentElement.dataset.theme;
-    btnTheme.click();
-    const thirdTheme = document.documentElement.dataset.theme;
-
-    // Simula os métodos de window.telinhaLauncher (que no connect.html real vêm do preload)
-    // Como connect.html captura const api = window.telinhaLauncher no carregamento, vamos testar recarregando com mock injetado
-    return {
-      missingIds,
-      svgCount,
-      themesVisited: [initialTheme, secondTheme, thirdTheme]
-    };
-  })()`);
-
-  assert.deepEqual(connectResult.missingIds, [], 'Todos os IDs existentes em connect.html devem ser preservados');
-  assert.ok(connectResult.svgCount >= 6, 'connect.html deve usar ícones SVG (.icon-svg) no estilo do app');
-  assert.deepEqual(connectResult.themesVisited, ['escuro', 'preto', 'claro']);
-
-  // Agora injeta um preload temporário para testar todos os fluxos interativos do connect.html
   const preloadMockPath = path.join(tmpDir, 'preload-connect-mock.cjs');
   fs.writeFileSync(preloadMockPath, `
     const { contextBridge } = require('electron');
-    const calls = { joined: [], opened: [], copied: [], hostCount: 0 };
-    contextBridge.exposeInMainWorld('__testCalls', {
-      get: () => calls
-    });
-    contextBridge.exposeInMainWorld('electronAPI', {
-      getPrefs: async () => ({ theme: 'preto' }),
-      setPrefs: async () => true
-    });
+    const calls = { joined: [], previews: 0 };
+    let preview = { status: 'ready', name: 'Cast', onlineCount: 3, friends: [
+      { id: '1', name: 'Nanda', color: '#7c3aed' },
+      { id: '2', name: 'Neves', color: '#047857' },
+      { id: '3', name: 'Rafa', color: '#b45309' }
+    ] };
+    contextBridge.exposeInMainWorld('__testCalls', { get: () => calls, setPreview: value => { preview = value; } });
+    contextBridge.exposeInMainWorld('electronAPI', { getPrefs: async () => ({ theme: 'preto' }), setPrefs: async () => true });
     contextBridge.exposeInMainWorld('telinhaLauncher', {
-      getState: async () => ({
-        lastServerUrl: 'https://amigo-antigo.trycloudflare.com',
-        serverRoomUrl: 'https://colheitafartus.duckdns.org',
-        error: null
-      }),
-      join: async (url) => {
-        calls.joined.push(url);
-        if (url.includes('falha')) return { ok: false, error: 'Não foi possível abrir essa sala.' };
-        return { ok: true };
-      },
-      host: async () => {
-        calls.hostCount++;
-        if (calls.hostCount === 1) {
-          return {
-            ok: true,
-            localUrl: 'http://localhost:8080',
-            publicUrl: 'https://minha-sala.trycloudflare.com',
-            lanUrls: ['http://192.168.1.10:8080']
-          };
-        }
-        return {
-          ok: true,
-          localUrl: 'http://localhost:8080',
-          publicUrl: null,
-          lanUrls: ['http://192.168.1.10:8080'],
-          tunnelError: 'Túnel indisponível no momento.'
-        };
-      },
-      copy: async (txt) => {
-        calls.copied.push(txt);
-      },
-      open: async (url) => {
-        calls.opened.push(url);
-      }
+      getState: async () => ({ lastServerUrl: 'https://outra-sala.test', serverRoomUrl: 'https://colheitafartus.duckdns.org' }),
+      getPreview: async () => { calls.previews++; return preview; },
+      join: async url => { calls.joined.push(url); return url.includes('falha') ? { ok: false, error: 'Não foi possível abrir essa sala.' } : { ok: true }; }
     });
   `);
-
-  const winFlow = new BrowserWindow({
-    width: 900,
-    height: 680,
-    show: false,
-    webPreferences: {
-      offscreen: true,
-      preload: preloadMockPath,
-      contextIsolation: true
-    }
-  });
-
-  await winFlow.loadFile(connectHtmlPath);
-  await new Promise((r) => setTimeout(r, 80));
-
-  await fs.promises.writeFile('/tmp/teletela-tela-inicial.png', (await winFlow.webContents.capturePage()).toPNG());
-  const flowResult = await winFlow.webContents.executeJavaScript(`(async () => {
-    const $ = (id) => document.getElementById(id);
-    const initialInputVal = $('server-url').value;
-    const themeFromPrefs = document.documentElement.dataset.theme;
-
-    // 1. Validação de link de amigo vazio
-    $('server-url').value = '   ';
-    $('btn-join').click();
-    const emptyUrlError = $('msg').textContent;
-    const emptyUrlHasErrorClass = $('msg').classList.contains('error');
-
-    // 2. Entrar na sala do servidor
-    $('btn-server-room').click();
-    await new Promise((r) => setTimeout(r, 30));
-
-    // 3. Entrar na sala de um amigo com falha e depois com sucesso
-    $('server-url').value = 'https://sala-falha.trycloudflare.com';
-    $('btn-join').click();
-    await new Promise((r) => setTimeout(r, 30));
-    const joinFailMsg = $('msg').textContent;
-
-    $('server-url').value = 'https://sala-ok.trycloudflare.com';
-    $('btn-join').click();
-    await new Promise((r) => setTimeout(r, 30));
-
-    // 4. Hospedar com link público + copiar + entrar
-    $('btn-host').click();
-    await new Promise((r) => setTimeout(r, 40));
-    const publicLinkText = $('public-link').textContent;
-    const linkBoxVisible = getComputedStyle($('link-box')).display !== 'none';
-    $('btn-copy').click();
-    await new Promise((r) => setTimeout(r, 20));
-    const copyFeedbackText = $('btn-copy').textContent.trim();
-    $('btn-enter-host').click();
-
-    // 5. Hospedar quando túnel falha (fallback LAN)
-    $('btn-host').click();
-    await new Promise((r) => setTimeout(r, 40));
-    const lanFallbackText = $('public-link').textContent;
-    const copyHiddenOnLan = getComputedStyle($('btn-copy')).display === 'none';
-    const tunnelErrorMsg = $('msg').textContent;
-
-    const calls = window.__testCalls.get();
-    return {
-      initialInputVal,
-      themeFromPrefs,
-      emptyUrlError,
-      emptyUrlHasErrorClass,
-      joinFailMsg,
-      publicLinkText,
-      linkBoxVisible,
-      copyFeedbackText,
-      lanFallbackText,
-      copyHiddenOnLan,
-      tunnelErrorMsg,
-      calls
-    };
-  })()`);
-
-  assert.equal(flowResult.initialInputVal, 'https://amigo-antigo.trycloudflare.com');
-  assert.equal(flowResult.themeFromPrefs, 'preto', 'Deve sincronizar tema inicial com electronAPI.getPrefs()');
-  assert.equal(flowResult.emptyUrlError, 'Cole o link que seu amigo mandou.');
-  assert.equal(flowResult.emptyUrlHasErrorClass, true);
-  assert.equal(flowResult.joinFailMsg, 'Não foi possível abrir essa sala.');
-  assert.equal(flowResult.publicLinkText, 'https://minha-sala.trycloudflare.com');
-  assert.equal(flowResult.linkBoxVisible, true);
-  assert.match(flowResult.copyFeedbackText, /Copiado/i);
-  assert.deepEqual(flowResult.calls.copied, ['https://minha-sala.trycloudflare.com']);
-  assert.deepEqual(flowResult.calls.opened, ['http://localhost:8080']);
-  assert.deepEqual(flowResult.calls.joined, [
-    'https://colheitafartus.duckdns.org',
-    'https://sala-falha.trycloudflare.com',
-    'https://sala-ok.trycloudflare.com'
-  ]);
-  assert.match(flowResult.lanFallbackText, /Só na rede local: http:\/\/192\.168\.1\.10:8080/);
-  assert.equal(flowResult.copyHiddenOnLan, true);
-  assert.equal(flowResult.tunnelErrorMsg, 'Túnel indisponível no momento.');
-
-  winFlow.destroy();
+  const win = new BrowserWindow({ width: 960, height: 760, show: false, webPreferences: {
+    offscreen: true, backgroundThrottling: false, preload: preloadMockPath, contextIsolation: true
+  } });
+  const js = code => win.webContents.executeJavaScript(code, true);
+  async function until(code) { for (let i = 0; i < 100; i++) { if (await js(code)) return; await new Promise(resolve => setTimeout(resolve, 30)); } throw new Error(code); }
+  await win.loadFile(connectHtmlPath);
+  await until("document.querySelectorAll('.friend-button').length === 3");
+  assert(await js("!document.querySelector('#btn-host') && !document.querySelector('#public-link')"), 'Hospedagem saiu do início.');
+  assert.equal(await js("document.querySelector('#server-url').value"), 'https://outra-sala.test');
+  assert.equal(await js("document.documentElement.dataset.theme"), 'preto');
+  assert.equal(await js("document.querySelector('#online-count').textContent"), '3');
+  for (const theme of ['escuro', 'preto', 'claro']) {
+    await js(`while(document.documentElement.dataset.theme !== '${theme}') document.querySelector('#btn-theme').click();void 0`);
+    await new Promise(resolve => setTimeout(resolve, 60));
+    assert(await js('document.documentElement.scrollWidth <= innerWidth'));
+    fs.writeFileSync(`/tmp/teletela-inicio-${theme}.png`, (await win.webContents.capturePage()).toPNG());
+  }
+  await js("document.querySelector('.other-room').open=true;document.querySelector('#server-url').value='';document.querySelector('#form-other-room').requestSubmit();void 0");
+  assert.equal(await js("document.querySelector('#msg').textContent"), 'Cole o link da sala.');
+  await js("document.querySelector('#btn-server-room').click();void 0");
+  await until("window.__testCalls.get().joined.length === 1");
+  await js("document.querySelector('.friend-button').click();void 0");
+  await until("window.__testCalls.get().joined.length === 2");
+  await js("document.querySelector('#server-url').value='https://sala-falha.test';document.querySelector('#form-other-room').requestSubmit();void 0");
+  await until("document.querySelector('#msg').textContent === 'Não foi possível abrir essa sala.'");
+  assert.deepEqual(await js('window.__testCalls.get().joined'), ['https://colheitafartus.duckdns.org', 'https://colheitafartus.duckdns.org', 'https://sala-falha.test']);
+  for (const status of ['guest', 'expired', 'unsupported', 'offline', 'ready']) {
+    await js(`window.__testCalls.setPreview({ status: '${status}', friends: [], onlineCount: 0 });document.querySelector('#btn-refresh-friends').click();void 0`);
+    await until("!document.querySelector('#btn-refresh-friends').disabled");
+    assert(await js("document.querySelector('#launcher-friends').hidden && !document.querySelector('#friends-empty').hidden"));
+    assert(await js("!document.querySelector('#btn-server-room').disabled"), 'A prévia não bloqueia entrar na sala.');
+  }
   win.destroy();
 }
 

@@ -15,6 +15,9 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
   texto livre somente em “Outra atividade…”.
 - [x] Troca rápida pelo próprio perfil no rodapé; no celular, pela página Você.
 - [x] Todos os seletores da sala com lista aberta no tema do app, incluindo áudio/canais/cargos.
+- [x] Redesenhar lateral de canais e configurações, com explicações recolhidas.
+- [x] Novo início do desktop com prévia autenticada dos amigos online e avatares.
+- [x] Retirar a hospedagem no PC e o código de túnel do desktop.
 - [x] Evitar reconstruir a atividade quando a detecção retorna o mesmo jogo.
 - [x] Separar pendências atuais dos registros históricos e corrigir ideias já publicadas.
 - [ ] Validar o protótipo com o dono e a amiga antes de decidir uma publicação.
