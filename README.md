@@ -28,7 +28,15 @@ A escolha é por aparelho; outro aparelho pode manter sua conta online.
 A sala da abertura se chama **Colheita Fartus**. Em **Servidor e cargos → Imagem do servidor**,
 quem pode gerenciar o servidor troca a imagem ou restaura o ícone padrão. A imagem aparece
 na abertura e na lateral da sala. Atividade manual tem prioridade sobre o jogo detectado
-e termina ao fechar/recarregar a janela. [Pendências atuais](docs/PENDENCIAS.md).
+e termina ao fechar/recarregar a janela.
+
+O histórico dos canais de texto usa a identidade estável do autor para mostrar foto/GIF,
+inclusive offline. Fotos antigas nunca guardadas só podem ser recuperadas quando o autor
+volta com o perfil. Em **Microfone → Testar microfone**, grave quatro segundos e ouça o
+resultado localmente, com dispositivo, filtro e volume atuais, sem entrar na call.
+A lateral de **Membros** também pode ser redimensionada pelo arraste da borda esquerda,
+pelas setas do teclado ou restaurada com duplo clique; a largura fica salva neste aparelho.
+[Pendências atuais](docs/PENDENCIAS.md).
 
 
 **4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
@@ -323,7 +331,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Cargo: mover pessoas de call** | Arraste a pessoa da lista e solte em outro canal de voz |
 | **Cargo: mutar / ensurdecer pra todos** | Clique na pessoa → *Mutar pra todos* / *Ensurdecer pra todos*. Vale até a moderação desfazer, mesmo se ela reconectar (🛡️ do lado do ícone) |
 | **Criar e apagar canal** | Use o **＋** ao lado de *Canais de Voz* ou *Canais de Texto*. Pra apagar, passe o mouse no canal e clique na 🗑️ (aparece pra quem criou ou gerencia canais). Quem gerencia canais também pode apagar o Geral; ele não volta ao reiniciar |
-| **Pessoas do servidor** | Botão **Membros**, no topo: lista na lateral direita, com online/offline, busca e perfil ao clicar. Inclui quem está fora da call e conta cada identidade uma vez entre aparelhos. Dá para recolher; no celular, abre em um painel. Canais privados não aparecem nessa lista |
+| **Pessoas do servidor** | Botão **Membros**, no topo: lista na lateral direita, com online/offline, busca e perfil ao clicar. Inclui quem está fora da call e conta cada identidade uma vez entre aparelhos. Dá para recolher e ajustar a largura pela borda esquerda; no celular, abre em um painel. Canais privados não aparecem nessa lista |
 | **Dono e cargos** | ⚙️ → *Servidor e cargos*. O dono assume a propriedade e delega moderação e administração pelos cargos |
 | **Trocar microfone, fone ou filtro de ruído** | ⚙️ Configurações. Todas as abas mantêm o mesmo tamanho da janela de Perfil, adaptado à tela |
 | **Trocar os atalhos** | ⚙️ → *Atalhos* → clique no botão e aperte a tecla nova. Vale qualquer tecla, até `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita). `Esc` tira o atalho |
@@ -334,6 +342,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
 | **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–300%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
+| **Testar seu microfone** | ⚙️ → *Microfone* → **Testar microfone**: grava 4 segundos e reproduz só para você, com medidor de nível. Funciona fora da call e preserva seu mute; parar ou fechar as configurações libera a captura do teste |
 | **Volume do seu microfone** | ⚙️ → *Microfone*: ajuste manual de 0–300%, aplicado na hora. Na 3.9.0, o processamento voltou ao da 3.7, com RNNoise opcional e sem reforço automático de volume |
 | **Som de entrada/saída** | Toca um áudio dos amigos quando alguém entra ou sai da call: o servidor sorteia e todo mundo do canal (inclusive quem entrou ou saiu) ouve o mesmo. Desliga em ⚙️ |
 | **Câmera** | Botão 📷 no canto de baixo: aparece *📷 CÂMERA* do seu lado e os amigos clicam pra ver. Dá pra ligar junto com a transmissão de tela (são dois selos separados) |

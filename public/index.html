@@ -1181,13 +1181,12 @@
               <p class="form-help">Só afeta a sua voz. O som da transmissão de tela nunca passa por filtro.</p>
             </div>
 
-            <!-- VAD Test Meter -->
-            <div class="form-group">
-              <label>Teste de voz</label>
-              <div class="vad-meter-container">
-                <div id="vad-meter-bar" class="vad-meter-bar"></div>
-              </div>
-              <p class="form-help">Entre numa call e ligue o microfone para testar. A barra acompanha a voz enviada; o anel verde no seu avatar acende quando você fala.</p>
+            <div class="form-group microphone-test">
+              <label>Teste de microfone</label>
+              <p class="form-help">Grava 4 segundos com seu volume e filtro e reproduz só para você, sem entrar na call.</p>
+              <div class="mic-test-meter" role="progressbar" aria-label="Nível do teste de microfone" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="mic-test-level"></span></div>
+              <button type="button" id="btn-mic-test" class="btn-secondary" data-phase="idle">Testar microfone</button>
+              <p id="mic-test-status" class="form-help" role="status"></p>
             </div>
 
           </section>

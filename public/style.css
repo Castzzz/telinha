@@ -1828,22 +1828,6 @@ ul {
   color: var(--text-header);
 }
 
-/* VAD METER BAR */
-.vad-meter-container {
-  height: 12px;
-  background: var(--bg-tertiary);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-  border: 1px solid var(--border-medium);
-}
-
-.vad-meter-bar {
-  height: 100%;
-  width: 0%;
-  background: var(--accent-green);
-  transition: width 0.05s ease;
-}
-
 .modal-actions {
   display: flex;
   justify-content: flex-end;
@@ -4270,3 +4254,7 @@ select option, select optgroup { color: var(--text-normal); background-color: va
 .friend-row > div:not(.friend-actions) { flex: 1; min-width: 0; }
 
 .user-info .user-status-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.mic-test-meter { height: 7px; border-radius: 6px; overflow: hidden; background: var(--border-medium); margin: 8px 0; }
+.mic-test-meter span { display: block; width: 0; height: 100%; background: var(--accent-green); border-radius: inherit; }
+.microphone-test #btn-mic-test { align-self: flex-start; }

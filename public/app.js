@@ -1,3 +1,4 @@
+import { setupMicrophoneTest } from './microphone-test.js';
 import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js';
 import { setupServerBranding } from './server-branding.js';
 import { setupSettingsLayout } from './settings-layout.js';
@@ -1970,7 +1971,10 @@ function buildChatMessage(msg) {
     ? hour
     : `${when.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${hour}`;
   const color = safeColor(msg.userColor);
-  const author = { id: msg.senderId || msg.userId, name: msg.userName || msg.senderName, avatarV: msg.userAvatarV };
+  const current = msg.authorMemberId ? serverMembersUI?.findMember(msg.authorMemberId) : findUser(msg.senderId || msg.userId);
+  const author = { ...current, id: current?.id || (msg.profileId === myProfile.id ? appState.myId : msg.senderId || msg.userId),
+    name: msg.userName || msg.senderName, avatarV: msg.userAvatarV, avatarCrop: msg.userAvatarCrop || current?.avatarCrop,
+    memberAvatarUrl: msg.authorMemberId && msg.userAvatarV ? `${SERVER_URL}/api/member-avatar/${encodeURIComponent(msg.authorMemberId)}?v=${encodeURIComponent(msg.userAvatarV)}&access=${encodeURIComponent(appState.assetKey || '')}` : '' };
   const mine = isMyMessage(msg);
   // Responder e reagir precisam do servidor novo (mensagem com id e perfil)
   const actions = msg.id ? [
@@ -5265,19 +5269,45 @@ function setupSidebarResize() {
   setupPanelResize($('#chat-drawer'), $('#chat-resizer'), {
     min: CHAT_MIN_WIDTH, max: CHAT_MAX_WIDTH, prefKey: 'chatWidth', edge: 'left'
   });
+  setupPanelResize($('#server-members'), $('#members-resizer'), {
+    min: 180, max: 420, prefKey: 'membersWidth', edge: 'left', fit: true, defaultWidth: 224, cssVar: '--members-width', enabled: () => innerWidth >= 1280
+  });
 }
 
-function setupPanelResize(sidebar, handle, { min, max, prefKey, edge }) {
+function setupPanelResize(sidebar, handle, { min, max, prefKey, edge, fit = false, defaultWidth, cssVar, enabled = () => true }) {
   if (!sidebar || !handle) return;
   // Borda esquerda: arrastar pra esquerda alarga
   const dir = edge === 'left' ? -1 : 1;
-  const clamp = (w) => Math.round(Math.min(max, Math.max(min, w)));
-  const apply = (w) => { sidebar.style.width = w ? `${clamp(w)}px` : ''; };
-  const save = () => savePrefs({ [prefKey]: sidebar.style.width ? parseInt(sidebar.style.width, 10) : null });
-  apply(prefs[prefKey]);
+  let desired = prefs[prefKey];
+  const limit = () => {
+    if (!fit || !enabled()) return max;
+    const layout = $('#app-layout');
+    const occupied = ['sidebar-channels', 'chat-drawer'].reduce((sum, id) => {
+      const panel = document.getElementById(id);
+      if (!panel || (id === 'chat-drawer' && layout.classList.contains('text-full'))) return sum;
+      return sum + panel.getBoundingClientRect().width;
+    }, 0);
+    return Math.max(min, Math.min(max, layout.clientWidth - occupied - 280 - 32));
+  };
+  const clamp = width => Math.round(Math.min(limit(), Math.max(min, Number(width) || min)));
+  const apply = width => {
+    desired = width;
+    const actual = width || defaultWidth;
+    sidebar.style.width = actual ? `${clamp(actual)}px` : '';
+    if (cssVar) document.documentElement.style.setProperty(cssVar, sidebar.style.width || `${defaultWidth}px`);
+    handle.setAttribute('aria-valuemin', String(min)); handle.setAttribute('aria-valuemax', String(limit()));
+    handle.setAttribute('aria-valuenow', String(actual ? clamp(actual) : Math.round(sidebar.getBoundingClientRect().width)));
+  };
+  const save = () => savePrefs({ [prefKey]: desired ? clamp(desired) : null });
+  apply(desired);
+  if (fit) {
+    const observer = new ResizeObserver(() => apply(desired));
+    for (const node of [$('#app-layout'), $('#sidebar-channels'), $('#chat-drawer')]) if (node) observer.observe(node);
+    window.addEventListener('resize', () => apply(desired));
+  }
 
   handle.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || !enabled()) return;
     e.preventDefault();
     const startX = e.clientX;
     const startWidth = sidebar.getBoundingClientRect().width;
@@ -5296,10 +5326,10 @@ function setupPanelResize(sidebar, handle, { min, max, prefKey, edge }) {
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) handle.addEventListener(type, onUp);
     window.addEventListener('blur', onUp);
   });
-  handle.addEventListener('dblclick', () => { apply(null); save(); });
+  handle.addEventListener('dblclick', () => { if (enabled()) { apply(null); save(); } });
   handle.addEventListener('keydown', (e) => {
     const step = (e.key === 'ArrowLeft' ? -20 : e.key === 'ArrowRight' ? 20 : 0) * dir;
-    if (!step) return;
+    if (!step || !enabled()) return;
     e.preventDefault();
     apply(sidebar.getBoundingClientRect().width + step);
     save();
@@ -6923,13 +6953,6 @@ async function onMicrophoneToggle(isMicOn) {
             appState.myUser.isSpeaking = speaking;
             updateSpeakingIndicators(appState.myId, speaking);
             socket.emit('user-state-changed', { isSpeaking: speaking });
-          },
-          onVolumeLevel: (norm) => {
-            const meter = document.getElementById('vad-meter-bar');
-            if (meter && meter.offsetParent !== null) {
-              meter.style.width = `${Math.round(norm * 100)}%`;
-              meter.style.background = norm > 0.35 ? 'var(--accent-green)' : 'var(--text-muted)';
-            }
           }
         });
       } else if (appState.vadDetector) {
@@ -8098,6 +8121,12 @@ function initApp() {
   setupSidebarResize();
   setupMasterVolume();
   setupMicGain();
+  setupMicrophoneTest({ getOptions: () => ({
+    deviceId: appState.audioManager?.selectedMicrophoneId,
+    outputId: appState.audioManager?.selectedOutputId,
+    noiseMode: noiseMode(), gain: Math.max(0, Math.min(3, Number($('#input-mic-gain').value) / 100)),
+    playbackVolume: Math.max(0, Math.min(1, Number($('#input-master-volume').value) / 100 * .7))
+  }) });
   setupThemeSelect();
   setupAutostart();
   setupPersonalization({ prefs, savePrefs, showToast });

@@ -19,6 +19,7 @@ import { PermissionStore, PERMISSIONS } from './permission-store.js';
 import { DiceStore, installDice } from './dice-store.js';
 import { normalizePresence, effectivePresence, presencePriority, PRESENCE_IDLE_MS } from './public/presence.js';
 import { SERVER_NAME, MAX_SERVER_ICON_BYTES, SERVER_ICON_RE, validServerIcon } from './public/server-branding.js';
+import { MemberAvatarStore } from './member-avatar-store.js';
 import { AccountStore, createAccountLimiter, accountClientAddress } from './account-store.js';
 import { installAccountHandlers, installAccountHttp, sendAccountState } from './accounts-protocol.js';
 
@@ -48,6 +49,7 @@ const permissions = new PermissionStore(DATA_DIR);
 const accounts = new AccountStore(DATA_DIR);
 const dailyCalls = new DailyCallStore(DATA_DIR);
 const accountLimit = createAccountLimiter();
+const memberAvatars = new MemberAvatarStore(DATA_DIR);
 
 function verifiedProfileKey(socket) {
   const proof = socket.handshake.auth?.profileProof;
@@ -872,7 +874,29 @@ function applyProfile(user, raw) {
       changed = true;
     }
   }
+  if (user.profileId && (Object.hasOwn(profile, 'avatar') || Object.hasOwn(profile, 'avatarCrop'))) {
+    try { memberAvatars.set(user); }
+    catch (error) { console.warn('[Avatar] Não consegui preservar a foto para o histórico:', error.message); }
+  }
   return changed;
+}
+
+function messageAuthor(message) {
+  let memberId = message.authorMemberId;
+  if (!memberId && message.profileId) {
+    memberId = accounts.accountForProfileId(message.profileId)?.accessId;
+    if (!memberId) {
+      const known = Object.entries(permissions.data.members).filter(([, member]) => member.profileId === message.profileId);
+      if (known.length === 1) memberId = known[0][0];
+    }
+    memberId ||= memberAvatars.memberForProfile(message.profileId);
+  }
+  if (!memberId || !permissions.data.members[memberId]) return message;
+  const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === memberId && !client.data.accountEnding)?.data.user;
+  const account = accounts.data.accounts.find(item => item.accessId === memberId), stored = memberAvatars.info(memberId);
+  const version = active ? active.avatar ? active.avatarV : 0 : account ? account.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0 : stored?.version || 0;
+  const crop = active?.avatarCrop || account?.profile.avatarCrop || stored?.crop;
+  return { ...message, authorMemberId: memberId, userAvatarV: version, userAvatarCrop: normalizeImageCrop(crop) };
 }
 
 function getChannelsSummary(viewer = null, presence = null) {
@@ -933,13 +957,13 @@ function serverMembers() {
   const ids = new Set([...Object.keys(permissions.data.members), ...online.keys()]);
   const result = [];
   for (const memberId of ids) {
-    const active = online.get(memberId), account = accountsByMember.get(memberId), saved = permissions.data.members[memberId];
+    const active = online.get(memberId), account = accountsByMember.get(memberId), saved = permissions.data.members[memberId], archived = memberAvatars.info(memberId);
     if (!active && !account && (!saved?.name || saved.name === 'Visitante')) continue;
     const profile = active || account?.profile || { name: saved.name, color: USER_COLORS[0] };
     const row = { memberId, id: active?.id || `member-${memberId}`, online: Boolean(active), presence: active ? effectivePresence(active) : 'offline',
       name: profile.name, color: profile.color || USER_COLORS[0], bio: profile.bio || '',
-      avatarV: active ? active.avatar ? active.avatarV : 0 : account?.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0,
-      avatarCrop: normalizeImageCrop(profile.avatarCrop),
+      avatarV: active ? active.avatar ? active.avatarV : 0 : account ? account.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0 : archived?.version || 0,
+      avatarCrop: normalizeImageCrop(profile.avatarCrop || archived?.crop),
       isOwner: permissions.isOwner({ accessId: memberId }),
       roles: permissions.roles({ accessId: memberId }).map(({ id, name }) => ({ id, name })) };
     for (const key of ['nameColor', 'nameColor2', 'frame', 'frameColor', 'displayRoleId']) row[key] = profile[key] || '';
@@ -1132,9 +1156,10 @@ app.get('/api/member-avatar/:memberId', (req, res) => {
   const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === req.params.memberId && !client.data.accountEnding)?.data.user;
   let media = active?.avatar;
   if (!active) {
-    const value = accounts.data.accounts.find(account => account.accessId === req.params.memberId)?.profile.avatar;
-    const match = typeof value === 'string' && value.match(AVATAR_RE);
+    const account = accounts.data.accounts.find(account => account.accessId === req.params.memberId);
+    const match = typeof account?.profile.avatar === 'string' && account.profile.avatar.match(AVATAR_RE);
     if (match) media = { mime: match[1], data: Buffer.from(match[2], 'base64') };
+    else if (!account) media = memberAvatars.read(req.params.memberId);
   }
   if (!media) return res.status(404).end();
   res.set({ 'Access-Control-Allow-Origin': '*', 'Content-Type': media.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -2327,6 +2352,7 @@ io.on('connection', (socket) => {
       userColor: user.color,
       userNameColor: user.nameColor || '',
       userNameColor2: user.nameColor2 || '',
+      authorMemberId: user.accessId, userAvatarCrop: normalizeImageCrop(user.avatarCrop),
       userAvatarV: user.avatar ? user.avatarV : 0,
       text: rawText.slice(0, 600),
       timestamp: Date.now()
@@ -2432,7 +2458,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: updated });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
     cb({ success: true });
   }));
 
@@ -2492,7 +2518,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: updated });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
     cb({ success: true });
   }));
 
@@ -2518,7 +2544,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: updated });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
     cb({ success: true });
   }));
 
@@ -2528,7 +2554,7 @@ io.on('connection', (socket) => {
     const ch = typeof id === 'string' ? textChannels.get(id) : null;
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [] });
     const messages = readTextMessages(ch.id).filter((m) => m.pinned).sort((a, b) => b.pinned.at - a.pinned.at);
-    cb({ success: true, messages });
+    cb({ success: true, messages: messages.map(messageAuthor) });
   }));
 
   // "Fulano está digitando…": o app manda a cada ~3 s enquanto a pessoa digita
@@ -2668,7 +2694,7 @@ io.on('connection', (socket) => {
       if (normalize(msg.text).includes(needle) && (normalize(msg.userName || msg.senderName).includes(person) || normalize(msg.profileName).includes(person))
         && (!Number.isFinite(since) || msg.timestamp >= since)) matches.push(msg);
     }
-    cb({ success: true, messages: matches.slice(0, 30), hasMore: matches.length > 30 });
+    cb({ success: true, messages: matches.slice(0, 30).map(messageAuthor), hasMore: matches.length > 30 });
   }));
 
   socket.on('message-context', safeHandler((raw, callback) => {
@@ -2679,7 +2705,7 @@ io.on('connection', (socket) => {
     const all = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
     const index = all.findIndex(m => m.id === payload.messageId);
     if (index < 0) return cb({ success: false, error: 'Essa mensagem não está mais disponível.' });
-    cb({ success: true, messages: all.slice(Math.max(0, index - 3), index + 4) });
+    cb({ success: true, messages: all.slice(Math.max(0, index - 3), index + 4).map(messageAuthor) });
   }));
 
   // Histórico: sem "before", as últimas; com "before" (id de mensagem), as anteriores a ela
@@ -2690,13 +2716,13 @@ io.on('connection', (socket) => {
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [], hasMore: false });
     if (typeof payload.before !== 'string') {
       const messages = ch.recent.slice(-TEXT_PAGE_SIZE);
-      return cb({ success: true, messages, hasMore: ch.count > messages.length });
+      return cb({ success: true, messages: messages.map(messageAuthor), hasMore: ch.count > messages.length });
     }
     const all = readTextMessages(ch.id);
     const idx = all.findIndex((m) => m.id === payload.before);
     if (idx <= 0) return cb({ success: true, messages: [], hasMore: false });
     const start = Math.max(0, idx - TEXT_PAGE_SIZE);
-    cb({ success: true, messages: all.slice(start, idx), hasMore: start > 0 });
+    cb({ success: true, messages: all.slice(start, idx).map(messageAuthor), hasMore: start > 0 });
   }));
 
   // Até 5 mensagens a cada 3 s por pessoa (texto e anexos juntos)
@@ -2720,6 +2746,7 @@ io.on('connection', (socket) => {
     userColor: user.color,
     userNameColor: user.nameColor || '',
     userNameColor2: user.nameColor2 || '',
+    authorMemberId: user.accessId, userAvatarCrop: normalizeImageCrop(user.avatarCrop),
     userAvatarV: user.avatar ? user.avatarV : 0,
     timestamp: Date.now()
   });
@@ -2856,6 +2883,7 @@ io.on('connection', (socket) => {
       userColor: user.color,
       userNameColor: user.nameColor || '',
       userNameColor2: user.nameColor2 || '',
+      authorMemberId: user.accessId, userAvatarCrop: normalizeImageCrop(user.avatarCrop),
       userAvatarV: user.avatar ? user.avatarV : 0,
       text: typeof payload.text === 'string' ? payload.text.trim().slice(0, 600) : '',
       image: { url: `/api/chat-image/${file}`, width: dim(payload.width), height: dim(payload.height) },

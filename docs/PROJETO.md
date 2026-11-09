@@ -632,6 +632,7 @@ trocar: apague a linha `OWNER_KEY` desse arquivo e rode o deploy. **Ela nunca va
 | `text/files/` | vídeos e arquivos dos canais de texto (20 MB por envio, até 5 GB no total) |
 | `soundboard/index.json` + arquivos | sons do soundboard (16 por pessoa, até 1 MB, 300 no total) |
 | `room.json` | senha da sala (só o hash scrypt) e o segredo das chaves de membro |
+| `member-avatars/<memberId>.json` | última foto/GIF, recorte, perfil público e versão por identidade; arquivo atômico, até 15 MB por arquivo/256 MB no conjunto; entra no backup |
 | `accounts.json` | contas opcionais, accessId original, perfil completo, scrypt e hashes dos códigos/tokens; arquivo atômico 0600, falha fechada se ilegível |
 | `dice.json` | últimas 30 rolagens gerais do servidor (formato v2); autor, horário, dados individuais, modificador e total; arquivo atômico 0600 |
 | `permissions.json` | segredo HMAC, dono (`ownerId`), cargos, nomes, vínculos e hash das chaves públicas; acesso 0600 |
@@ -1845,3 +1846,43 @@ interface de permissões e regressão móvel. A interface confirma cores compart
 membros e dock, menção recebida silenciosamente em DND, aviso restaurado em Online,
 upload de PNG pelo seletor de arquivo e restauração do ícone. As capturas de `/tmp` usam
 perfis/arquivos de teste; os dados da sala oficial não foram alterados.
+
+
+### Ajustes finais: avatares do chat, teste de mic e largura de Membros (09/11/2026, local)
+
+- Mensagens novas incluem `authorMemberId` e `userAvatarCrop`, preenchidos pelo servidor.
+  O ID temporário do socket continua para compatibilidade, mas o cliente usa a rota
+  autenticada `/api/member-avatar/:memberId?access=...` para a foto do autor. O histórico,
+  paginação, busca, contexto e mensagens fixadas recebem metadados atuais ao serem lidos;
+  edições/reações também mantêm a referência. Não há base64 de imagem em cada mensagem.
+- `member-avatar-store.js` conserva a última imagem/recorte dos visitantes e ajuda a localizar
+  autores de mensagens antigas. Novas referências usam a identidade autenticada; antigas
+  usam a conta/perfil conhecido e só associam índices sem ambiguidade. Quando nunca houve
+  foto salva, é preciso o autor voltar com o perfil; não é possível reconstruir a imagem perdida.
+- `member-avatars/` guarda um JSON por identidade, com troca atômica e remoção registrada,
+  preservando os bytes do GIF (sem converter a animação). Limites: 15 MB por arquivo, 256 MB
+  no conjunto e cache de mídia em memória até 32 MB. Não usa nomes de arquivo do cliente.
+  Perfil sem mudança não regrava. Em falha de gravação, o arquivo anterior é mantido e há
+  aviso no log; contas continuam com o perfil persistido em `accounts.json`. Somente uma
+  conexão válida da sala pode ler as imagens; a chave de uma conexão encerrada não funciona.
+- O novo módulo consta nos arquivos do instalador e na preparação do deploy. O backup já
+  inclui a pasta dentro de `data/`; não houve mudança nos segredos nem nos arquivos de voz.
+- `public/microphone-test.js` abre captura própria usando as mesmas restrições, RNNoise/ganho
+  da voz. Não usa `AudioManager.acquireMicrophoneStream`, que pertenceria à call. Grava 4 s,
+  encerra a captura e depois reproduz com a saída escolhida e volume geral; não publica faixa
+  no Socket.IO/P2P/SFU. Ganho muda durante a gravação; trocar dispositivo/filtro cancela o teste.
+  Parar, trocar de aba, fechar/minimizar ou sair da página encerra os recursos, inclusive uma
+  permissão que termine de abrir depois do cancelamento. O antigo medidor restrito à call foi
+  substituído pelo teste independente; a indicação de fala nos avatares continua.
+- `membersWidth` é uma preferência local (180–420 px, padrão 224). A alça esquerda usa o
+  mesmo controle de arraste/teclado das laterais, atualiza `aria-valuenow`, salva e restaura
+  com duplo clique. Limita a largura ao espaço disponível, preservando 280 px para o centro;
+  o deslocamento do miniplayer usa `--members-width`. No painel móvel a largura é responsiva
+  e a alça fica escondida, sem aplicar uma largura desktop maior que a tela.
+- Testes: `node --test tests/message-avatars.test.js` verifica persistência após reinício,
+  GIF/recorte, identidade preenchida pelo servidor, chave expirada e falha de gravação;
+  `electron tests/final-adjustments-browser.cjs` verifica imagens carregadas no histórico
+  offline, arraste/teclado/persistência, gravação e reprodução reais, permissão negada/tardia,
+  fechamento e preservação do mute da call. Conferidos desktop, três temas e celular.
+- Validação: runner 62/62, regressões 95/95, integração m4 e interfaces de membros, microfone
+  e navegação móvel. Sem release/deploy; a versão continua 4.3.3 até preparar a publicação.

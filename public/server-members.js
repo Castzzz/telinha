@@ -5,7 +5,7 @@ const narrow = window.matchMedia('(max-width: 1279px)');
 export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName, openProfile, serverUrl, assetKey }) {
   const panel = document.createElement('aside'); panel.id = 'server-members'; panel.className = 'server-members';
   panel.setAttribute('aria-labelledby', 'server-members-title');
-  panel.innerHTML = `<div class="server-members-header"><div>${PEOPLE}<h2 id="server-members-title">Membros</h2><span id="server-members-count"></span></div><button type="button" id="server-members-close" class="btn-icon-close" aria-label="Recolher membros">✕</button></div>
+  panel.innerHTML = `<div id="members-resizer" class="members-resizer" role="separator" aria-orientation="vertical" aria-label="Largura da lista de membros" tabindex="0" title="Arraste para ajustar a largura; duplo clique restaura"></div><div class="server-members-header"><div>${PEOPLE}<h2 id="server-members-title">Membros</h2><span id="server-members-count"></span></div><button type="button" id="server-members-close" class="btn-icon-close" aria-label="Recolher membros">✕</button></div>
     <label class="server-members-search"><span class="sr-only">Buscar membro</span><input type="search" id="server-members-search" placeholder="Buscar membro" maxlength="80" autocomplete="off"></label>
     <p id="server-members-status" role="status"></p><div id="server-members-groups" class="server-members-groups"></div>`;
   document.getElementById('app-layout').append(panel);
@@ -85,6 +85,6 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
   socket.on('disconnect', () => { members = []; received = false; render(); });
   socket.on('connect', () => { supported = null; render(); });
   renderVisibility(); render();
-  return { find(id) { const member = members.find(member => member.id === id); return member ? shown(member) : null; },
+  return { findMember(id) { const member = members.find(member => member.memberId === id); return member ? shown(member) : null; }, find(id) { const member = members.find(member => member.id === id); return member ? shown(member) : null; },
     closeOverlay() { if (!narrow.matches || !overlayOpen) return false; setOpen(false); return true; } };
 }

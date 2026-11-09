@@ -14,6 +14,9 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 - [x] Não perturbe silencia avisos e menções; Offline oculta presença/atividade e preserva call.
 - [x] Abertura com nome Colheita Fartus e imagem do servidor personalizável por quem gerencia.
 - [x] Remover as faixas/bordas cinzas das configurações.
+- [x] Foto/GIF dos autores no histórico, com identidade estável e cópia persistente da última imagem.
+- [x] Teste de microfone com gravação/reprodução local, fora da call e sem alterar o mute.
+- [x] Membros com largura ajustável, persistência, teclado e restauração por duplo clique.
 - [x] Anotar para depois os dois servidores extras, ID/senha e capacidade de até oito pessoas.
 - [x] Atividades prontas sem descrição: estudar, trabalhar, assistir, ouvir e jogar;
   texto livre somente em “Outra atividade…”.
@@ -34,7 +37,7 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
   pode facilitar manutenção, mas fica fora deste protótipo para reduzir regressões.
 - Não foi identificada evidência para remover módulos de áudio, contas ou transmissão nesta
   revisão. Os documentos duplicavam principalmente estados históricos já concluídos.
-- Verificações locais: runner 62/62 e 93 regressões de servidor/mídia/contas/presença,
+- Verificações locais: runner 62/62 e 95 regressões de servidor/mídia/contas/presença/avatares,
   incluindo imagem do servidor. Interface nos três temas/celular, upload e restauração da
   imagem, menções silenciosas em Não perturbe e retorno da notificação em Online passaram.
   Os testes simulados de áudio não substituem a escuta em aparelhos físicos.

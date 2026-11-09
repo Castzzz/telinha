@@ -72,6 +72,7 @@
       "channel-extras.js",
       "daily-call-store.js",
       "account-store.js",
+      "member-avatar-store.js",
       "accounts-protocol.js",
       "dice-store.js",
       "music/**",
