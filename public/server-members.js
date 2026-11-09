@@ -86,5 +86,6 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
   socket.on('connect', () => { supported = null; render(); });
   renderVisibility(); render();
   return { findMember(id) { const member = members.find(member => member.memberId === id); return member ? shown(member) : null; }, find(id) { const member = members.find(member => member.id === id); return member ? shown(member) : null; },
+    list() { return members.map(shown); },
     closeOverlay() { if (!narrow.matches || !overlayOpen) return false; setOpen(false); return true; } };
 }

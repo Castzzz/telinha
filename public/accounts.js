@@ -24,7 +24,7 @@ function freshGuest() {
 }
 
 export function setupAccounts({ socket, prefs, savePrefs, serverUrl, getProfile, getMemberId = () => null,
-  onProfile = () => {}, showToast, selectSettingsTab, reconnect = () => window.location.reload() }) {
+  assetKey = () => '', onProfile = () => {}, showToast, selectSettingsTab, reconnect = () => window.location.reload() }) {
   const $ = selector => document.querySelector(selector);
   const tabs = $('.settings-sidebar') || $('[data-settings-tab="perfil"]')?.parentElement;
   const body = $('[data-settings-section="perfil"]')?.parentElement;
@@ -241,7 +241,7 @@ export function setupAccounts({ socket, prefs, savePrefs, serverUrl, getProfile,
     .then(info => { if (!ready && info) { ready = true; supported = info.supported === true; render(); } })
     .catch(() => { if (!ready) { ready = true; supported = false; render(); } });
   setMode('login'); render();
-  setupFriends({ socket, tabs, body, getAccount: () => current, selectSettingsTab });
+  setupFriends({ socket, tabs, body, getAccount: () => current, selectSettingsTab, serverUrl, assetKey });
   return { get ready() { return ready && (!accountSession(prefs, serverUrl) || profileLoaded); }, get account() { return current; },
     open() { selectSettingsTab?.('conta'); tab.focus(); } };
 }

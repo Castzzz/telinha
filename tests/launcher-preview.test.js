@@ -90,6 +90,20 @@ test('prévia HTTP exige conta da sala, respeita invisível e só entrega fotos 
   const snapshot = await preview();
   assert.equal(snapshot.status, 'ready'); assert.equal(snapshot.friends[0].name, 'segundo'); assert.equal(decoded, true);
   assert.equal(snapshot.friends[0].avatar, png);
+  // Entrar em call com profile sem avatar embutido (snapshot local de conta) não apaga a foto salva no servidor
+  await emit(b, 'join-channel', { channelId: 'geral', userName: 'segundo', profile: { profileId: bb.profile.id, name: 'segundo', color: '#5865f2', avatar: '' } });
+  const afterJoin = await (await get('/api/launcher/friends')).json();
+  assert.ok(afterJoin.friends[0]?.avatarV > 0, 'join-channel não deve zerar avatarV da conta');
+  assert.equal((await get(`/api/launcher/friend-avatar/${bb.account.id}`)).status, 200);
+  // Avatar WebP (padrão do prepareProfileImage no Teletela): funciona mesmo quando nativeImage retorna vazio
+  const webp = 'data:image/webp;base64,' + Buffer.from('RIFF\x14\x00\x00\x00WEBPVP8 \x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 'binary').toString('base64');
+  await emit(b, 'update-profile', { profileId: bb.profile.id, name: 'segundo', avatar: webp, avatarCrop: { x: 0.3, y: 0.7, zoom: 1.5 } });
+  const webpPreview = createLauncherPreview({ serverUrl: url, getPrefs: () => ({ accountSessions: { [url]: { token: aa.token } } }), fetch,
+    thumbnail: async () => ''
+  });
+  const webpSnap = await webpPreview();
+  assert.equal(webpSnap.friends[0].avatar, webp);
+  assert.deepEqual(webpSnap.friends[0].avatarCrop, { x: 0.3, y: 0.7, zoom: 1.5 });
   for (const key of ['accessId', 'profileId', 'channelId', 'activity', 'token', 'avatar']) assert.equal(key in data.friends[0], false, key);
   assert.equal((await get(`/api/launcher/friend-avatar/${bb.account.id}`)).status, 200);
   assert.equal((await get(`/api/launcher/friend-avatar/${cc.account.id}`)).status, 404);

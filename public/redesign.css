@@ -495,20 +495,24 @@
 .app-layout { position: relative; }
 .stream-preview-toolbar { display: none; }
 .app-layout.text-full.text-with-stream #stage-section {
-  display: flex; position: absolute; right: 20px; bottom: 92px;
+  display: flex; position: absolute;
+  left: var(--stream-preview-left, auto); top: var(--stream-preview-top, auto);
+  right: var(--stream-preview-right, 20px); bottom: var(--stream-preview-bottom, 92px);
   width: min(360px, 32vw); height: 234px; min-height: 0; flex: none;
   z-index: 160; border: 1px solid var(--border-medium); border-radius: var(--radius-lg);
   box-shadow: 0 8px 28px rgba(0,0,0,.4); background: var(--bg-secondary);
+  touch-action: none; user-select: none; cursor: grab;
 }
-.text-with-stream .stream-preview-toolbar { display: flex; align-items: center; justify-content: space-between; flex: 0 0 38px; gap: 8px; padding: 4px 8px; color: var(--text-muted); font-size: 11px; }
-.stream-preview-toolbar button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; font-size: 11px; }
+.app-layout.text-full.text-with-stream #stage-section.is-dragging-preview,
+.app-layout.text-full.text-with-stream #stage-section.is-dragging-preview * { cursor: grabbing !important; }
+.text-with-stream .stream-preview-toolbar { display: flex; align-items: center; justify-content: space-between; flex: 0 0 38px; gap: 8px; padding: 4px 8px; color: var(--text-muted); font-size: 11px; cursor: grab; }
+.stream-preview-toolbar button { display: inline-flex; align-items: center; gap: 5px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
 .stream-preview-toolbar .icon-svg { width: 14px; height: 14px; }
 .text-with-stream #videos-grid { min-height: 0; flex: 1; padding: 0; gap: 2px; }
 .text-with-stream #stage-controls-bar, .text-with-stream #video-stage,
 .text-with-stream #voice-lounge, .text-with-stream .video-tile-overlay,
 .text-with-stream .tile-badge, .text-with-stream .tile-volume,
 .text-with-stream .tile-btn { display: none; }
-.text-with-stream #chat-messages { padding-bottom: 246px; }
 
 /* Canais: nome e contexto ocupam o espaço; ações aparecem ao interagir. */
 [data-look="novo"] .sidebar-header { height: 68px; padding: 16px; gap: 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 14px; }

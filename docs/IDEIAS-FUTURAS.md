@@ -23,3 +23,15 @@ Bot de música, GIF ampliado, recorte de perfil/banner, ping, atividade de jogos
 modo cinema, privacidade dos canais, dados de RPG, ícones, launcher, contas opcionais e os
 ajustes de cinema/chat já entraram nas versões 3.5–4.2. Os pedidos originais continuam no
 [histórico de ideias](historico/IDEIAS-FUTURAS.md).
+
+- **Comandos e mensagens privadas no chat (implementado no protótipo de 09/11/2026, branch `prototipo/comandos-chat-e-fotos-amigos`):**
+  `/t <segundos> <mensagem>` (1 a 600 s = até 10 min) envia uma mensagem temporária com
+  contagem regressiva, removida automaticamente ao expirar e sem gravação em disco.
+  `/w @pessoa ... <mensagem>` ou `/whisper @pessoa ... <mensagem>` envia mensagem privada
+  visível apenas ao remetente e aos destinatários marcados, sem vazar no histórico em disco,
+  busca, contexto, mensagens fixadas, citações públicas de resposta ou texto de notificação.
+- **Fotos dos amigos na tela inicial (implementado no protótipo de 09/11/2026, branch `prototipo/comandos-chat-e-fotos-amigos`):**
+  fotos de perfil dos amigos (incluindo WebP e GIF) aparecem na tela inicial (`connect.html`)
+  e na aba Amigos das configurações (`/api/launcher/friend-avatar/:accountId` e
+  `/api/friend-avatar/:accountId`), resolvendo a imagem pelo socket ativo, pelo perfil da
+  conta ou pelo `MemberAvatarStore` em disco sem perder a foto ao entrar em call.

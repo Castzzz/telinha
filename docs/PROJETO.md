@@ -85,7 +85,11 @@ e um admin pra moderar.
 - A sala "oficial" roda numa VM grátis da Oracle em **https://colheitafartus.duckdns.org**.
 - **Protótipo de 09/11/2026:** a abertura prioriza a sala oficial e os amigos online.
   A hospedagem pelo app foi retirada; o servidor ainda pode ser executado manualmente
-  com `npm start` para desenvolvimento, sem SFU e com mídia P2P.
+  com `npm start` para desenvolvimento, sem SFU e com mídia P2P. Na branch
+  `prototipo/comandos-chat-e-fotos-amigos`, a miniatura da transmissão em canais de texto é
+  arrastável, o chat suporta `/t <1..600> <msg>` (temporária) e `/w` / `/whisper @pessoa <msg>`
+  (privada sem persistência em disco), e as fotos dos amigos (inclusive WebP/GIF) são
+  resolvidas na tela inicial e na aba Amigos via `resolveFriendAvatar` (`server.js`).
 
 Repositório público: https://github.com/Castzzz/telinha
 
@@ -1291,7 +1295,9 @@ no fallback CSS a barra permanece fixa embaixo. Não subir a camada de participa
 da barra: popovers filhos não conseguem escapar do contexto de empilhamento do pai.
 
 `updateTextLayout()` usa `text-full` para canais de texto abertos e `text-with-stream`
-quando existe transmissão. A prévia é o próprio `#stage-section` reduzido por CSS: nenhum
+quando existe transmissão. A prévia é o próprio `#stage-section` reduzido por CSS (arrastável
+pela tela via `--stream-preview-left`/`--stream-preview-top`, sem reservar folga gigante no
+final de `#chat-messages`): nenhum
 vídeo, MediaStream, captura ou conexão é recriado ao mudar a conversa. O chat da call usa
 a lateral e conserva a largura salva; o canal independente ocupa o centro. No celular,
 a prévia fica acima do chat e abaixo da barra da call, escondendo-se com o teclado aberto.

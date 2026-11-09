@@ -105,7 +105,8 @@ h2 { margin: 0; color: var(--text-header); font-size: 16px; font-weight: 700; le
 .friend-button { display: flex; flex-direction: column; align-items: center; gap: 9px; width: 100%; border: 1px solid var(--border-subtle); background: var(--bg-elevated); color: var(--text-normal); border-radius: 12px; padding: 18px 10px; }
 .friend-button:hover { border-color: var(--accent-brand); background: var(--accent-soft); }
 .friend-avatar { position: relative; width: 48px; height: 48px; border-radius: 17px; display: grid; place-items: center; font-size: 15px; font-weight: 700; color: #fff; }
-.friend-avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.friend-avatar-photo { width: 100%; height: 100%; border-radius: inherit; overflow: hidden; display: block; }
+.friend-avatar img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; display: block; }
 .friend-avatar::after { content: ''; position: absolute; width: 9px; height: 9px; border: 3px solid var(--bg-elevated); border-radius: 50%; background: var(--accent-green); right: -2px; bottom: -2px; box-sizing: content-box; }
 .friend-name { max-width: 100%; font-size: 13px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .friends-empty { flex: 1; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 32px 12px; color: var(--text-muted); text-align: center; line-height: 1.6; font-size: 13px; }

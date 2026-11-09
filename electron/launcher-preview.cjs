@@ -1,5 +1,14 @@
 // Consulta sem Socket.IO: abrir o início não anuncia presença nem entra na call.
-function createLauncherPreview({ serverUrl, getPrefs, fetch, thumbnail = async () => '', now = Date.now }) {
+function bufferToDataUrl(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 6) return '';
+  if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return `data:image/png;base64,${buffer.toString('base64')}`;
+  if (buffer[0] === 255 && buffer[1] === 216 && buffer[2] === 255) return `data:image/jpeg;base64,${buffer.toString('base64')}`;
+  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') return `data:image/webp;base64,${buffer.toString('base64')}`;
+  if (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a') return `data:image/gif;base64,${buffer.toString('base64')}`;
+  return '';
+}
+
+function createLauncherPreview({ serverUrl, getPrefs, fetch, thumbnail = async (buf) => bufferToDataUrl(buf), now = Date.now }) {
   let cached, pending, pendingToken;
   const pictures = new Map();
   function remember(key, value) {
@@ -57,10 +66,12 @@ function createLauncherPreview({ serverUrl, getPrefs, fetch, thumbnail = async (
           if (!friend.avatar) try {
             const photo = await request(`/api/launcher/friend-avatar/${encodeURIComponent(friend.id)}`);
             if (photo.ok && Number(photo.headers.get('content-length')) <= 10 * 1024 * 1024) {
-              friend.avatar = await thumbnail(Buffer.from(await photo.arrayBuffer()), person.avatarCrop);
+              const raw = Buffer.from(await photo.arrayBuffer());
+              friend.avatar = (await thumbnail(raw, person.avatarCrop)) || bufferToDataUrl(raw);
               if (friend.avatar) remember(key, friend.avatar);
             }
           } catch { /* Foto indisponível mantém as iniciais. */ }
+          if (/^data:image\/(webp|gif);base64,/i.test(friend.avatar) && person.avatarCrop) friend.avatarCrop = person.avatarCrop;
           return friend;
         }));
         return { status: 'ready', name: String(data.name || saved.profile?.name || '').slice(0, 80), friends,

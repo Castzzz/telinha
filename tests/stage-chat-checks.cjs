@@ -48,6 +48,15 @@ module.exports = async function checkStageChat(win) {
   await js("document.querySelector('#btn-add-text-channel').click();document.querySelector('#input-channel-name').value='Mesa RPG';document.querySelector('#form-create-channel').requestSubmit();void 0");
   await until("appState.textView === 'mesa-rpg' && document.querySelector('#app-layout').classList.contains('text-with-stream')");
   assert(await js("document.querySelector('#chat-drawer').getBoundingClientRect().width > 800"), 'Canal de texto deve ocupar o centro');
+  assert(await js("parseFloat(getComputedStyle(document.querySelector('#chat-messages')).paddingBottom) <= 20"), 'Chat não deve reservar espaço gigante embaixo');
+  const previewBefore = await rect('.stream-preview-toolbar');
+  win.webContents.sendInputEvent({type:'mouseMove',x:previewBefore.x,y:previewBefore.y});
+  win.webContents.sendInputEvent({type:'mouseDown',x:previewBefore.x,y:previewBefore.y,button:'left',clickCount:1});
+  win.webContents.sendInputEvent({type:'mouseMove',x:previewBefore.x-180,y:previewBefore.y-120}); await pause(60);
+  win.webContents.sendInputEvent({type:'mouseUp',x:previewBefore.x-180,y:previewBefore.y-120,button:'left',clickCount:1});
+  await pause(100);
+  const previewAfter = await rect('.stream-preview-toolbar');
+  assert(previewAfter.x <= previewBefore.x - 140 && previewAfter.y <= previewBefore.y - 90, 'Prévia da transmissão deve poder ser arrastada pela tela');
   const live = "document.querySelector('#video-tile-stage-fixture video').srcObject === stageFixtureStream && stageFixtureStream.getVideoTracks()[0].readyState === 'live' && !document.querySelector('#video-tile-stage-fixture video').paused";
   assert(await js(live), 'Trocar layout deve preservar o vídeo');
   await pause(150);

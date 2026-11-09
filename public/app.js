@@ -518,12 +518,15 @@ appState.legacyAdmin = false;
 appState.ownershipSupported = false;
 appState.serverHasAdmin = false;
 const accountUI = setupAccounts({
-  socket, prefs, savePrefs, serverUrl: SERVER_URL, getProfile: () => ({ ...myProfile }),
-  getMemberId: () => appState.memberId, showToast, selectSettingsTab,
+  socket, prefs, savePrefs, serverUrl: SERVER_URL, assetKey: () => appState.assetKey || '',
+  getProfile: () => ({ ...myProfile }), getMemberId: () => appState.memberId, showToast, selectSettingsTab,
   onProfile: profile => {
     Object.assign(myProfile, profile);
     Object.assign(appState.myUser, { name: myProfile.name, color: myProfile.color });
     updateUserDockProfile();
+    renderChannelsTree();
+    updateVoiceLounge();
+    renderServerHome();
   }
 });
 
@@ -1961,8 +1964,11 @@ const ACTION_ICONS = {
 
 function buildChatMessage(msg) {
   const div = document.createElement('div');
-  div.className = `chat-msg${mentionsMe(msg) ? ' mention-me' : ''}`;
+  const isWhisper = Array.isArray(msg.whisperTo) && msg.whisperTo.length > 0;
+  const isTemp = Number.isFinite(msg.expiresAt) && msg.expiresAt > 0;
+  div.className = `chat-msg${mentionsMe(msg) ? ' mention-me' : ''}${isWhisper ? ' is-whisper' : ''}${isTemp ? ' is-temporary' : ''}`;
   if (msg.id) div.dataset.msgId = msg.id;
+  if (isTemp) div.dataset.expiresAt = String(msg.expiresAt);
 
   const when = new Date(msg.timestamp || Date.now());
   const hour = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -1980,10 +1986,12 @@ function buildChatMessage(msg) {
   const actions = msg.id ? [
     ['reply', 'Responder'],
     ['react', 'Reagir'],
-    ...(appState.textView ? [['pin', msg.pinned ? 'Desfixar' : 'Fixar']] : []),
+    ...(appState.textView && !isWhisper && !isTemp ? [['pin', msg.pinned ? 'Desfixar' : 'Fixar']] : []),
     ...(mine && msg.text !== undefined ? [['edit', 'Editar']] : []),
     ...(mine || hasPermission(appState, 'manageMessages') ? [['delete', 'Apagar']] : [])
   ] : [];
+  const whisperNames = isWhisper ? msg.whisperTo.map((r) => escapeHtml(r?.name || 'Amigo')).join(', ') : '';
+  const tempLeftSec = isTemp ? Math.max(1, Math.ceil((Number(msg.expiresAt) - Date.now()) / 1000)) : 0;
 
   div.innerHTML = `
     <div class="chat-msg-avatar${frameClass(findUser(author.id))}" data-user-id="${escapeHtml(author.id || '')}" style="background-color: ${color};${frameStyle(findUser(author.id))}">
@@ -1994,6 +2002,8 @@ function buildChatMessage(msg) {
       <div class="chat-msg-header">
         <span class="chat-author" title="${escapeHtml(msg.profileName || msg.userName || msg.senderName)}" style="${nameCss({ nameColor: msg.userNameColor, nameColor2: msg.userNameColor2 }) || `color: ${color};`}">${escapeHtml(msg.userName || msg.senderName)}</span>
         <span class="chat-time">${time}</span>
+        ${isWhisper ? `<span class="chat-badge chat-badge-whisper" title="Mensagem privada: só você e quem foi marcado veem">🔒 Privada para ${whisperNames}</span>` : ''}
+        ${isTemp ? `<span class="chat-badge chat-badge-temp" data-expires-at="${Number(msg.expiresAt)}" title="Mensagem temporária: some sozinha"><span aria-hidden="true">⏱️</span> <span class="chat-temp-countdown">${tempLeftSec}s</span></span>` : ''}
         ${msg.pinned ? `<span class="chat-pinned" title="Fixada por ${escapeHtml(msg.pinned.by || '')}">${ACTION_ICONS.pin}</span>` : ''}
       </div>
       ${msg.text ? `<div class="chat-text">${linkifyText(msg.text)}${msg.editedAt ? ' <span class="chat-edited" title="Editada">(editado)</span>' : ''}</div>` : ''}
@@ -2171,12 +2181,15 @@ const MENTION_ALL = ['todos', 'everyone', 'galera'];
 function onlineNames() {
   const names = new Set();
   for (const ch of appState.channels.values()) for (const u of ch.users.values()) if (u.name) names.add(u.name);
+  for (const m of serverMembersUI?.list() || []) if (m.name) names.add(m.name);
   if (appState.myUser.name) names.add(appState.myUser.name);
   return [...names];
 }
 
 function mentionsMe(msg) {
-  if (!msg?.text || isMyMessage(msg)) return false;
+  if (!msg || isMyMessage(msg)) return false;
+  if (Array.isArray(msg.whisperTo) && msg.whisperTo.length) return true;
+  if (!msg.text) return false;
   const text = msg.text.toLocaleLowerCase('pt-BR');
   const me = (appState.myUser.name || myProfile.name || '').toLocaleLowerCase('pt-BR');
   if (me && text.includes(`@${me}`)) return true;
@@ -2202,15 +2215,17 @@ function notifyMention(msg, where, open) {
   if (savedPresence(prefs) === 'dnd') return;
   playMentionPing();
   const who = msg.userName || msg.senderName || 'Alguém';
-  const body = (msg.text || '').slice(0, 140);
+  const isWhisper = Array.isArray(msg.whisperTo) && msg.whisperTo.length > 0;
+  const title = isWhisper ? `${who} te mandou uma mensagem privada em ${where}` : `${who} te marcou em ${where}`;
+  const body = isWhisper ? 'Abra o Teletela para ler a mensagem privada.' : (msg.text || '').slice(0, 140);
   if (document.hasFocus()) {
-    showToast(`💬 ${who} te marcou em ${where}`);
+    showToast(`${isWhisper ? '🔒' : '💬'} ${title}`);
     return;
   }
   try {
     const show = () => {
       if (savedPresence(prefs) === 'dnd') return;
-      const n = new Notification(`${who} te marcou em ${where}`, { body, icon: 'icon.png', silent: true });
+      const n = new Notification(title, { body, icon: 'icon.png', silent: true });
       n.onclick = () => {
         window.focus();
         open?.();
@@ -2287,6 +2302,12 @@ function setupMentionAutocomplete() {
         seen.add(u.name);
         people.push(u);
       }
+    }
+    for (const m of serverMembersUI?.list() || []) {
+      if (m.id === appState.myId || (appState.memberId && m.memberId === appState.memberId) || seen.has(m.name) || !m.name?.toLocaleLowerCase('pt-BR').startsWith(needle)) continue;
+      if (!appState.textView && !m.online && !/^\/(?:w|whisper)\b/i.test(input.value.trimStart())) continue;
+      seen.add(m.name);
+      people.push(m);
     }
     people.sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
     items = [...people.slice(0, 7), ...('todos'.startsWith(needle) ? [{ name: 'todos', isAll: true, color: '#5865F2' }] : [])];
@@ -2604,16 +2625,49 @@ function renderTyping() {
   el.innerHTML = `<span class="typing-dots"><i></i><i></i><i></i></span>${who} digitando…`;
 }
 
+function tickTemporaryMessages() {
+  const now = Date.now();
+  for (const list of appState.channelChats.values()) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.expiresAt && list[i].expiresAt <= now) list.splice(i, 1);
+    }
+  }
+  for (const state of appState.textMessages.values()) {
+    const list = state?.messages;
+    if (!Array.isArray(list)) continue;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i]?.expiresAt && list[i].expiresAt <= now) list.splice(i, 1);
+    }
+  }
+  const container = $('#chat-messages');
+  if (!container) return;
+  container.querySelectorAll('.chat-badge-temp[data-expires-at]').forEach((badge) => {
+    const exp = Number(badge.dataset.expiresAt);
+    if (!exp) return;
+    const left = Math.ceil((exp - now) / 1000);
+    if (left <= 0) {
+      badge.closest('.chat-msg')?.remove();
+    } else {
+      const countEl = badge.querySelector('.chat-temp-countdown');
+      if (countEl) countEl.textContent = `${left}s`;
+    }
+  });
+}
+
 function setupTyping() {
   $('#chat-input')?.addEventListener('input', (e) => {
-    if (!e.target.value.trim()) return;
+    const val = e.target.value.trim();
+    if (!val || /^\/(?:w|whisper)(?:\s|$)/i.test(val)) return;
     const now = Date.now();
     if (now - lastTypingSentAt < 3000) return;
     if (!appState.textView && !appState.currentChannelId) return;
     lastTypingSentAt = now;
     socket.emit('typing', chatScope());
   });
-  setInterval(renderTyping, 1000);
+  setInterval(() => {
+    renderTyping();
+    tickTemporaryMessages();
+  }, 1000);
 }
 
 socket.on('typing', ({ userId, name, scope, channelId } = {}) => {
@@ -3032,6 +3086,36 @@ function renderTextChannels() {
 }
 
 // O canal de texto ocupa o centro; a transmissão continua no mesmo vídeo, reduzida.
+let streamPreviewPos = null;
+let suppressNextPreviewClick = false;
+
+function applyStreamPreviewPosition(pos = streamPreviewPos) {
+  const layout = $('#app-layout');
+  const stage = $('#stage-section');
+  if (!layout || !stage) return;
+  if (!pos) {
+    stage.style.removeProperty('--stream-preview-left');
+    stage.style.removeProperty('--stream-preview-top');
+    stage.style.removeProperty('--stream-preview-right');
+    stage.style.removeProperty('--stream-preview-bottom');
+    return;
+  }
+  if (!layout.classList.contains('text-with-stream')) return;
+  const layoutRect = layout.getBoundingClientRect();
+  const stageRect = stage.getBoundingClientRect();
+  if (!layoutRect.width || !stageRect.width) return;
+  const margin = 8;
+  const maxX = Math.max(margin, layoutRect.width - stageRect.width - margin);
+  const maxY = Math.max(margin, layoutRect.height - stageRect.height - margin);
+  const x = Math.round(Math.min(maxX, Math.max(margin, pos.x)));
+  const y = Math.round(Math.min(maxY, Math.max(margin, pos.y)));
+  streamPreviewPos = { x, y };
+  stage.style.setProperty('--stream-preview-left', `${x}px`);
+  stage.style.setProperty('--stream-preview-top', `${y}px`);
+  stage.style.setProperty('--stream-preview-right', 'auto');
+  stage.style.setProperty('--stream-preview-bottom', 'auto');
+}
+
 function updateTextLayout() {
   const watching = appState.activeStreams.size > 0;
   const available = Boolean(appState.currentChannelId || appState.textView);
@@ -3045,6 +3129,7 @@ function updateTextLayout() {
   const central = Boolean(appState.textView) && chatOpen;
   $('#app-layout')?.classList.toggle('text-full', central);
   $('#app-layout')?.classList.toggle('text-with-stream', central && watching);
+  if (central && watching && streamPreviewPos) applyStreamPreviewPosition();
 }
 
 // Balão do canal de voz: abre o chat da call no canto
@@ -3144,6 +3229,63 @@ function renderTextChat() {
 function setupTextChannels() {
   $('#btn-chat-back-voice')?.addEventListener('click', closeTextView);
   $('#btn-return-to-stream')?.addEventListener('click', () => { closeTextView(); setMobileView('sala'); });
+  const stage = $('#stage-section');
+  const layout = $('#app-layout');
+  stage?.addEventListener('click', (e) => {
+    if (suppressNextPreviewClick) {
+      suppressNextPreviewClick = false;
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, true);
+  stage?.querySelector('.stream-preview-toolbar')?.addEventListener('dblclick', (e) => {
+    if (e.target.closest('button')) return;
+    streamPreviewPos = null;
+    applyStreamPreviewPosition(null);
+  });
+  stage?.addEventListener('pointerdown', (e) => {
+    suppressNextPreviewClick = false;
+    if (!layout?.classList.contains('text-with-stream')) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    if (e.target.closest('button, input, a, select, textarea, .video-tile.is-zoomed')) return;
+    const layoutRect = layout.getBoundingClientRect();
+    const stageRect = stage.getBoundingClientRect();
+    if (!layoutRect.width || !stageRect.width) return;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const originX = stageRect.left - layoutRect.left;
+    const originY = stageRect.top - layoutRect.top;
+    let moved = false;
+    const onMove = (ev) => {
+      const dx = ev.clientX - startX;
+      const dy = ev.clientY - startY;
+      if (!moved) {
+        if (Math.hypot(dx, dy) < 4) return;
+        moved = true;
+        stage.classList.add('is-dragging-preview');
+        try { stage.setPointerCapture(e.pointerId); } catch {}
+      }
+      ev.preventDefault();
+      applyStreamPreviewPosition({ x: originX + dx, y: originY + dy });
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      for (const type of ['pointerup', 'pointercancel']) window.removeEventListener(type, onUp);
+      window.removeEventListener('blur', onUp);
+      try { if (stage.hasPointerCapture(e.pointerId)) stage.releasePointerCapture(e.pointerId); } catch {}
+      stage.classList.remove('is-dragging-preview');
+      if (moved) {
+        suppressNextPreviewClick = true;
+        setTimeout(() => { suppressNextPreviewClick = false; }, 0);
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    for (const type of ['pointerup', 'pointercancel']) window.addEventListener(type, onUp);
+    window.addEventListener('blur', onUp);
+  });
+  window.addEventListener('resize', () => {
+    if (streamPreviewPos && layout?.classList.contains('text-with-stream')) applyStreamPreviewPosition();
+  });
   // Perto do topo: busca as mensagens mais antigas
   $('#chat-messages')?.addEventListener('scroll', (e) => {
     const id = appState.textView;
@@ -3348,15 +3490,19 @@ function setupChatAndReactions() {
     if (!text) return;
 
     const replyTo = appState.replyingTo?.id;
+    const onAck = (res) => {
+      if (res && !res.success) {
+        showToast(`❌ ${res.error || 'Não deu pra mandar a mensagem.'}`, 'error');
+        if (chatInput && !chatInput.value) chatInput.value = text;
+      }
+    };
     if (appState.textView) {
-      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 4000), replyTo }, (res) => {
-        if (!res?.success) showToast(`❌ ${res?.error || 'Não deu pra mandar a mensagem.'}`, 'error');
-      });
+      socket.emit('text-message', { channelId: appState.textView, text: text.slice(0, 4000), replyTo }, onAck);
     } else {
       socket.emit('chat-message', {
         text: text.slice(0, 600),
         replyTo
-      });
+      }, onAck);
     }
 
     chatInput.value = '';

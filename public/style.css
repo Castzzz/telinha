@@ -1473,6 +1473,7 @@ ul {
 
 .chat-msg-header {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
   margin-bottom: 2px;
@@ -3621,6 +3622,33 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
 .chat-msg.mention-me {
   background: color-mix(in srgb, var(--accent-yellow) 10%, transparent);
   box-shadow: inset 2px 0 0 var(--accent-yellow);
+}
+
+.chat-msg.is-whisper {
+  background: color-mix(in srgb, var(--accent-brand) 12%, transparent);
+  box-shadow: inset 2px 0 0 var(--accent-brand);
+}
+
+.chat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.chat-badge-whisper {
+  background: color-mix(in srgb, var(--accent-brand) 20%, transparent);
+  color: var(--text-header);
+}
+
+.chat-badge-temp {
+  background: color-mix(in srgb, var(--accent-yellow) 20%, transparent);
+  color: var(--text-header);
+  font-variant-numeric: tabular-nums;
 }
 
 .chat-msg.flash {

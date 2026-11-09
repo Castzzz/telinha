@@ -28,7 +28,7 @@
 #btn-server-members .icon-svg { width: 18px; height: 18px; }
 body.stage-fullscreen .server-members, body.stage-fullscreen .server-members-scrim, body.android-pip .server-members, body.android-pip .server-members-scrim { display: none !important; }
 @media (min-width: 1280px) {
-  body.members-open .app-layout.text-full.text-with-stream #stage-section { right: calc(var(--members-width, 224px) + var(--panel-gap, 12px) * 2); }
+  body.members-open .app-layout.text-full.text-with-stream #stage-section { right: var(--stream-preview-right, calc(var(--members-width, 224px) + var(--panel-gap, 12px) * 2)); }
 }
 @media (max-width: 1279px) {
   .server-members, [data-look="novo"] .server-members { position: fixed; top: 60px; right: 12px; bottom: 12px; z-index: 1301; width: min(310px, calc(100vw - 24px)) !important; border: 1px solid var(--border-subtle); border-radius: 14px; box-shadow: var(--panel-shadow); }

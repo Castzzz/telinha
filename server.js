@@ -507,6 +507,208 @@ loadSavedChannels();
 loadTextStorage();
 const channelExtras = new ChannelExtras(DATA_DIR);
 const chatName = (user, scope, id) => (scope === 'call' ? channelExtras.nickname(user.accessId, scope, id) : '') || user.name;
+
+const MAX_TEMP_MESSAGE_SECONDS = 600;
+const temporaryMessageTimers = new Map();
+
+function isMessageExpired(msg, now = Date.now()) {
+  return Boolean(msg?.expiresAt && msg.expiresAt <= now);
+}
+
+function canSeeChatMessage(viewer, msg, { now = Date.now(), allowExpired = false } = {}) {
+  if (!msg || (!allowExpired && isMessageExpired(msg, now))) return false;
+  if (!Array.isArray(msg.whisperTo) || !msg.whisperTo.length) return true;
+  if (!viewer) return false;
+  if ((viewer.accessId && msg.authorMemberId === viewer.accessId)
+    || (viewer.profileId && msg.profileId === viewer.profileId)
+    || (viewer.id && msg.userId === viewer.id)) {
+    return true;
+  }
+  return msg.whisperTo.some(r =>
+    (r.accessId && viewer.accessId === r.accessId)
+    || (r.profileId && viewer.profileId === r.profileId)
+  );
+}
+
+function emitScopedChatMessage(scope, channel, event, payload, msg = null, { allowExpired = false } = {}) {
+  if (scope === 'call') {
+    if (!msg?.whisperTo?.length) {
+      io.to(channel.id).emit(event, payload);
+      return;
+    }
+    for (const client of io.sockets.sockets.values()) {
+      const u = client.data.user;
+      if (u?.channelId === channel.id && canSeeChatMessage(u, msg, { allowExpired })) client.emit(event, payload);
+    }
+    return;
+  }
+  for (const client of io.sockets.sockets.values()) {
+    const u = client.data.user;
+    if (permissions.visible(u, channel) && (!msg || canSeeChatMessage(u, msg, { allowExpired }))) client.emit(event, payload);
+  }
+}
+
+function clearTemporaryMessageTimer(id) {
+  const timer = temporaryMessageTimers.get(id);
+  if (timer) {
+    clearTimeout(timer);
+    temporaryMessageTimers.delete(id);
+  }
+}
+
+function scheduleTemporaryMessageExpiry(scope, channel, msg) {
+  if (!msg?.expiresAt) return;
+  clearTemporaryMessageTimer(msg.id);
+  const delay = Math.max(100, msg.expiresAt - Date.now());
+  const timer = setTimeout(() => {
+    temporaryMessageTimers.delete(msg.id);
+    const list = scope === 'call' ? channel.messages : channel.recent;
+    const idx = list ? list.findIndex(m => m.id === msg.id) : -1;
+    if (idx !== -1) list.splice(idx, 1);
+    if (scope === 'call') {
+      emitScopedChatMessage('call', channel, 'chat-message-deleted', { messageId: msg.id }, msg, { allowExpired: true });
+    } else {
+      emitScopedChatMessage('text', channel, 'text-message-deleted', { channelId: channel.id, messageId: msg.id }, msg, { allowExpired: true });
+    }
+  }, delay);
+  timer.unref?.();
+  temporaryMessageTimers.set(msg.id, timer);
+}
+
+function resolveCommandCandidates(scope, channel) {
+  const map = new Map();
+  const addCandidate = (entry) => {
+    if (!entry?.accessId && !entry?.profileId && !entry?.id) return;
+    const key = entry.accessId || entry.profileId || entry.id;
+    const existing = map.get(key) || {
+      id: entry.id || '',
+      accessId: entry.accessId || '',
+      profileId: entry.profileId || '',
+      name: entry.name || 'Amigo',
+      handles: new Set()
+    };
+    if (entry.id && !existing.id) existing.id = entry.id;
+    if (entry.accessId && !existing.accessId) existing.accessId = entry.accessId;
+    if (entry.profileId && !existing.profileId) existing.profileId = entry.profileId;
+    if (entry.name) existing.name = entry.name;
+    for (const h of entry.handles || []) {
+      const clean = String(h || '').trim();
+      if (clean) existing.handles.add(clean);
+    }
+    map.set(key, existing);
+  };
+  if (scope === 'call') {
+    for (const u of channel.users.values()) {
+      const account = accounts.data.accounts.find(a => a.accessId === u.accessId);
+      addCandidate({
+        id: u.id,
+        accessId: u.accessId,
+        profileId: u.profileId,
+        name: chatName(u, 'call', channel.id),
+        handles: [chatName(u, 'call', channel.id), u.name, account?.username]
+      });
+    }
+  } else {
+    for (const client of io.sockets.sockets.values()) {
+      const u = client.data.user;
+      if (!u || client.data.accountEnding || !permissions.visible(u, channel)) continue;
+      const account = accounts.data.accounts.find(a => a.accessId === u.accessId);
+      addCandidate({
+        id: u.id,
+        accessId: u.accessId,
+        profileId: u.profileId,
+        name: u.name,
+        handles: [u.name, account?.username]
+      });
+    }
+    for (const account of accounts.data.accounts) {
+      const viewer = { accessId: account.accessId, profileId: account.profile?.id };
+      if (!permissions.visible(viewer, channel)) continue;
+      addCandidate({
+        accessId: account.accessId,
+        profileId: account.profile?.id,
+        name: account.profile?.name || account.username,
+        handles: [account.profile?.name, account.username]
+      });
+    }
+  }
+  return [...map.values()];
+}
+
+function parseChatCommand(rawText, { scope, channel, sender }) {
+  let rest = String(rawText || '').trim();
+  let temporarySeconds = 0;
+  let whisperTo = null;
+
+  while (/^\/(t|w|whisper)(?=\s|$)/i.test(rest)) {
+    const cmdMatch = /^\/(t|w|whisper)(?:\s+([\s\S]*))?$/i.exec(rest);
+    const cmd = cmdMatch[1].toLowerCase();
+    const afterCmd = (cmdMatch[2] || '').trim();
+
+    if (cmd === 't') {
+      const parts = /^(\S+)(?:\s+([\s\S]+))?$/.exec(afterCmd);
+      if (!parts || !/^\d+$/.test(parts[1])) {
+        return { ok: false, error: `Use /t <segundos> <mensagem> (de 1 a ${MAX_TEMP_MESSAGE_SECONDS} segundos).` };
+      }
+      const secs = Number(parts[1]);
+      if (!Number.isInteger(secs) || secs < 1 || secs > MAX_TEMP_MESSAGE_SECONDS) {
+        return { ok: false, error: `O tempo da mensagem temporária deve ser entre 1 e ${MAX_TEMP_MESSAGE_SECONDS} segundos (até 10 min).` };
+      }
+      if (!parts[2] || !parts[2].trim()) {
+        return { ok: false, error: 'Digite a mensagem depois do tempo. Ex.: /t 10 oi!' };
+      }
+      temporarySeconds = secs;
+      rest = parts[2].trim();
+      continue;
+    }
+
+    if (!afterCmd.startsWith('@')) {
+      return { ok: false, error: 'Use /w @pessoa mensagem para enviar uma mensagem privada.' };
+    }
+    const candidates = resolveCommandCandidates(scope, channel);
+    const handlePairs = [];
+    for (const cand of candidates) {
+      for (const h of cand.handles) {
+        handlePairs.push({ handle: h, lower: h.toLocaleLowerCase('pt-BR'), cand });
+      }
+    }
+    handlePairs.sort((a, b) => b.handle.length - a.handle.length);
+
+    const recipients = new Map();
+    let cursor = afterCmd;
+    while (cursor.startsWith('@')) {
+      const withoutAt = cursor.slice(1);
+      const lowerWithoutAt = withoutAt.toLocaleLowerCase('pt-BR');
+      const matched = handlePairs.find(({ lower }) =>
+        lowerWithoutAt.startsWith(lower) && (withoutAt.length === lower.length || /\s/.test(withoutAt[lower.length]))
+      );
+      if (!matched) {
+        const badToken = /^@(\S+)/.exec(cursor)?.[1] || '';
+        return { ok: false, error: badToken ? `Não encontrei @${badToken} neste canal.` : 'Marque a pessoa com @nome.' };
+      }
+      const cand = matched.cand;
+      const key = cand.accessId || cand.profileId || cand.id;
+      recipients.set(key, { accessId: cand.accessId, profileId: cand.profileId, name: cand.name });
+      cursor = withoutAt.slice(matched.handle.length).trimStart();
+    }
+    const finalRecipients = [...recipients.values()].filter(r =>
+      !((r.accessId && r.accessId === sender.accessId) || (r.profileId && r.profileId === sender.profileId))
+    );
+    if (!finalRecipients.length) {
+      return { ok: false, error: 'Escolha outra pessoa para enviar a mensagem privada.' };
+    }
+    if (!cursor) {
+      return { ok: false, error: 'Digite a mensagem privada depois de marcar a pessoa.' };
+    }
+    whisperTo = finalRecipients;
+    rest = cursor;
+  }
+
+  if (!rest) {
+    return { ok: false, error: 'Mensagem vazia.' };
+  }
+  return { ok: true, text: rest, temporarySeconds, whisperTo };
+}
 function visiblePlacements(type, viewer) {
   const ranks = new Map(), map = type === 'voice' ? channels : textChannels;
   return Object.fromEntries(channelExtras.ordered(type, map.values()).filter(ch => permissions.visible(viewer, ch)).map(ch => {
@@ -894,7 +1096,7 @@ function messageAuthor(message) {
   if (!memberId || !permissions.data.members[memberId]) return message;
   const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === memberId && !client.data.accountEnding)?.data.user;
   const account = accounts.data.accounts.find(item => item.accessId === memberId), stored = memberAvatars.info(memberId);
-  const version = active ? active.avatar ? active.avatarV : 0 : account ? account.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0 : stored?.version || 0;
+  const version = active?.avatar ? active.avatarV : account?.profile?.avatar ? (account.profileUpdatedAt || account.createdAt) : (stored?.version || 0);
   const crop = active?.avatarCrop || account?.profile.avatarCrop || stored?.crop;
   return { ...message, authorMemberId: memberId, userAvatarV: version, userAvatarCrop: normalizeImageCrop(crop) };
 }
@@ -962,7 +1164,7 @@ function serverMembers() {
     const profile = active || account?.profile || { name: saved.name, color: USER_COLORS[0] };
     const row = { memberId, id: active?.id || `member-${memberId}`, online: Boolean(active), presence: active ? effectivePresence(active) : 'offline',
       name: profile.name, color: profile.color || USER_COLORS[0], bio: profile.bio || '',
-      avatarV: active ? active.avatar ? active.avatarV : 0 : account ? account.profile.avatar ? account.profileUpdatedAt || account.createdAt : 0 : archived?.version || 0,
+      avatarV: active?.avatar ? active.avatarV : account?.profile?.avatar ? (account.profileUpdatedAt || account.createdAt) : (archived?.version || 0),
       avatarCrop: normalizeImageCrop(profile.avatarCrop || archived?.crop),
       isOwner: permissions.isOwner({ accessId: memberId }),
       roles: permissions.roles({ accessId: memberId }).map(({ id, name }) => ({ id, name })) };
@@ -1093,21 +1295,75 @@ function launcherSession(req, res, next) {
   req.launcherAccount = session.account;
   next();
 }
+function resolveFriendAvatar(account) {
+  if (!account) return null;
+  const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === account.accessId && !client.data.accountEnding)?.data.user;
+  if (active?.avatar) {
+    return {
+      mime: active.avatar.mime,
+      data: active.avatar.data,
+      version: active.avatarV || account.profileUpdatedAt || account.createdAt || 1,
+      crop: normalizeImageCrop(active.avatarCrop || account.profile?.avatarCrop)
+    };
+  }
+  const match = typeof account.profile?.avatar === 'string' && account.profile.avatar.match(AVATAR_RE);
+  if (match) {
+    return {
+      mime: match[1].toLowerCase(),
+      data: Buffer.from(match[2], 'base64'),
+      version: account.profileUpdatedAt || account.createdAt || 1,
+      crop: normalizeImageCrop(account.profile.avatarCrop)
+    };
+  }
+  const stored = memberAvatars.info(account.accessId);
+  const media = stored && memberAvatars.read(account.accessId);
+  if (media) {
+    return {
+      mime: media.mime,
+      data: media.data,
+      version: stored.version || account.profileUpdatedAt || account.createdAt || 1,
+      crop: normalizeImageCrop(stored.crop || account.profile?.avatarCrop)
+    };
+  }
+  return null;
+}
+
 app.get('/api/launcher/friends', launcherSession, (req, res) => {
   const account = accounts.data.accounts.find(item => item.id === req.launcherAccount.id);
   const friends = friendState(account.id).friends.filter(friend => friend.online).map(friend => {
     const profile = accounts.data.accounts.find(item => item.id === friend.id);
-    return { ...friend, color: profile.profile.color, avatarCrop: normalizeImageCrop(profile.profile.avatarCrop), avatarV: profile.profile.avatar ? profile.profileUpdatedAt || profile.createdAt : 0 };
+    const avatar = resolveFriendAvatar(profile);
+    return {
+      ...friend,
+      color: profile?.profile?.color || '#5865f2',
+      avatarCrop: avatar ? avatar.crop : normalizeImageCrop(profile?.profile?.avatarCrop),
+      avatarV: avatar ? avatar.version : 0
+    };
   });
   res.json({ supported: true, name: account.profile.name, friends });
 });
 app.get('/api/launcher/friend-avatar/:accountId', launcherSession, (req, res) => {
   if (!accounts.friends(req.launcherAccount.id).friends.some(friend => friend.id === req.params.accountId)) return res.status(404).end();
-  const profile = accounts.data.accounts.find(item => item.id === req.params.accountId)?.profile;
-  const match = typeof profile?.avatar === 'string' && profile.avatar.match(AVATAR_RE);
-  if (!match) return res.status(404).end();
-  res.set({ 'Content-Type': match[1], 'X-Content-Type-Options': 'nosniff' });
-  res.send(Buffer.from(match[2], 'base64'));
+  const account = accounts.data.accounts.find(item => item.id === req.params.accountId);
+  const avatar = resolveFriendAvatar(account);
+  if (!avatar) return res.status(404).end();
+  res.set({ 'Content-Type': avatar.mime, 'X-Content-Type-Options': 'nosniff' });
+  res.send(avatar.data);
+});
+app.get('/api/friend-avatar/:accountId', (req, res) => {
+  if (typeof req.query.access !== 'string' || !/^[a-f0-9]{64}$/.test(req.query.access)) return res.status(404).end();
+  const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access && !client.data.accountEnding);
+  const session = viewer && accounts.resolveSessionMeta(viewer.handshake.auth?.accountToken);
+  if (!session || !/^[a-f0-9-]{36}$/.test(req.params.accountId)) return res.status(404).end();
+  const state = accounts.friends(session.account.id);
+  const allowed = session.account.id === req.params.accountId
+    || [...state.friends, ...state.incoming, ...state.outgoing].some(item => item.id === req.params.accountId);
+  if (!allowed) return res.status(404).end();
+  const account = accounts.data.accounts.find(item => item.id === req.params.accountId);
+  const avatar = resolveFriendAvatar(account);
+  if (!avatar) return res.status(404).end();
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Content-Type': avatar.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
+  res.send(avatar.data);
 });
 
 app.get('/api/chat-image/:file', (req, res) => {
@@ -1155,11 +1411,11 @@ app.get('/api/member-avatar/:memberId', (req, res) => {
   if (!viewer || !/^[a-f0-9-]{36}$/.test(req.params.memberId)) return res.status(404).end();
   const active = [...io.sockets.sockets.values()].find(client => client.data.user?.accessId === req.params.memberId && !client.data.accountEnding)?.data.user;
   let media = active?.avatar;
-  if (!active) {
+  if (!media) {
     const account = accounts.data.accounts.find(account => account.accessId === req.params.memberId);
     const match = typeof account?.profile.avatar === 'string' && account.profile.avatar.match(AVATAR_RE);
     if (match) media = { mime: match[1], data: Buffer.from(match[2], 'base64') };
-    else if (!account) media = memberAvatars.read(req.params.memberId);
+    else media = memberAvatars.read(req.params.memberId);
   }
   if (!media) return res.status(404).end();
   res.set({ 'Access-Control-Allow-Origin': '*', 'Content-Type': media.mime, 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -1347,6 +1603,13 @@ function storedAccountProfile(user) {
   for (const key of ['name', 'color', 'bio', 'nameColor', 'nameColor2', 'frame', 'frameColor', 'bannerColor', 'displayRoleId', 'avatarCrop', 'bannerCrop']) profile[key] = user[key];
   for (const key of ['avatar', 'banner', 'joinSound']) profile[key] = user[key]
     ? `data:${user[key].mime};base64,${user[key].data.toString('base64')}` : '';
+  if (!profile.avatar && user.accessId) {
+    const stored = memberAvatars.info(user.accessId), media = stored && memberAvatars.read(user.accessId);
+    if (media) {
+      profile.avatar = `data:${media.mime};base64,${media.data.toString('base64')}`;
+      profile.avatarCrop = normalizeImageCrop(stored.crop || user.avatarCrop);
+    }
+  }
   return profile;
 }
 
@@ -1506,6 +1769,14 @@ io.on('connection', (socket) => {
   if (accountSession) {
     user.accountProfileId = accountSession.profile.id;
     applyProfile(user, { ...accountSession.profile, profileId: accountSession.profile.id });
+    if (!user.avatar && user.accessId) {
+      const stored = memberAvatars.info(user.accessId), media = stored && memberAvatars.read(user.accessId);
+      if (media) {
+        user.avatar = media;
+        user.avatarV = stored.version || Date.now();
+        user.avatarCrop = normalizeImageCrop(stored.crop || user.avatarCrop);
+      }
+    }
   }
   socket.data.user = user;
   scheduleMembers();
@@ -1963,7 +2234,12 @@ io.on('connection', (socket) => {
     }
 
     const userName = safeString(payload.userName, '', 25);
-    if (payload.profile) applyProfile(user, payload.profile);
+    if (payload.profile) {
+      const incomingProfile = isPlainObject(payload.profile) && accountSession && payload.profile.avatar === '' && user.avatar
+        ? { ...payload.profile, avatar: undefined }
+        : payload.profile;
+      applyProfile(user, incomingProfile);
+    }
     const isMicOn = safeBoolean(payload.isMicOn);
     const isDeafened = safeBoolean(payload.isDeafened);
     const isSharing = safeBoolean(payload.isSharing);
@@ -2031,7 +2307,7 @@ io.on('connection', (socket) => {
       callStartedAt: channel.callStartedAt,
       me: publicUser(user),
       users: getChannelUsersList(cleanChannelId),
-      recentMessages: channel.messages.slice(-50),
+      recentMessages: channel.messages.filter(m => canSeeChatMessage(user, m)).slice(-50),
       soundSeed
     });
 
@@ -2329,18 +2605,23 @@ io.on('connection', (socket) => {
   }));
 
   // Channel Text Chat
-  socket.on('chat-message', safeHandler((rawPayload) => {
-    if (!isPlainObject(rawPayload) || !user.channelId) return;
-    if (typeof rawPayload.text !== 'string') return;
+  socket.on('chat-message', safeHandler((rawPayload, maybeCallback) => {
+    const cb = safeCallback(maybeCallback);
+    if (!isPlainObject(rawPayload) || !user.channelId) return cb({ success: false, error: 'Entre numa call pra conversar.' });
+    if (typeof rawPayload.text !== 'string') return cb({ success: false, error: 'Mensagem vazia.' });
 
     const rawText = rawPayload.text.trim();
-    if (!rawText) return;
+    if (!rawText) return cb({ success: false, error: 'Mensagem vazia.' });
 
     const channel = channels.get(user.channelId);
-    if (!channel || !permissions.canWrite(user, channel)) return;
+    if (!channel || !permissions.canWrite(user, channel)) return cb({ success: false, error: 'Você não pode escrever neste canal.' });
 
+    const parsed = parseChatCommand(rawText, { scope: 'call', channel, sender: user });
+    if (!parsed.ok) return cb({ success: false, error: parsed.error });
+
+    const now = Date.now();
     const chatMsg = {
-      id: `msg-${Date.now()}-${randomUUID().slice(0, 8)}`,
+      id: `msg-${now}-${randomUUID().slice(0, 8)}`,
       channelId: user.channelId,
       senderId: socket.id,
       userId: socket.id,
@@ -2354,18 +2635,23 @@ io.on('connection', (socket) => {
       userNameColor2: user.nameColor2 || '',
       authorMemberId: user.accessId, userAvatarCrop: normalizeImageCrop(user.avatarCrop),
       userAvatarV: user.avatar ? user.avatarV : 0,
-      text: rawText.slice(0, 600),
-      timestamp: Date.now()
+      text: parsed.text.slice(0, 600),
+      ...(parsed.temporarySeconds > 0 ? { temporarySeconds: parsed.temporarySeconds, expiresAt: now + parsed.temporarySeconds * 1000 } : {}),
+      ...(parsed.whisperTo?.length ? { whisperTo: parsed.whisperTo } : {}),
+      timestamp: now
     };
 
-    user.lastActiveAt = Date.now(); touchPresence(user);
+    user.lastActiveAt = now; touchPresence(user);
     indexAssets(channel, [chatMsg], 'voice');
     channel.messages.push(chatMsg);
     if (channel.messages.length > 50) {
-      channel.messages.shift();
+      const removed = channel.messages.shift();
+      if (removed?.id) clearTemporaryMessageTimer(removed.id);
     }
+    if (chatMsg.expiresAt) scheduleTemporaryMessageExpiry('call', channel, chatMsg);
 
-    io.to(user.channelId).emit('chat-message', chatMsg);
+    emitScopedChatMessage('call', channel, 'chat-message', chatMsg, chatMsg);
+    cb({ success: true });
   }));
 
   // ---------------- Responder, editar, apagar e reagir (chat da call e canais de texto) ----------------
@@ -2403,17 +2689,19 @@ io.on('connection', (socket) => {
 
   const findChatMessage = (target, id) => {
     if (typeof id !== 'string') return null;
-    if (target.scope === 'call') return target.channel.messages.find((m) => m.id === id) || null;
-    return target.ch.recent.find((m) => m.id === id) || readTextMessages(target.ch.id).find((m) => m.id === id) || null;
+    const found = target.scope === 'call'
+      ? target.channel.messages.find((m) => m.id === id) || null
+      : target.ch.recent.find((m) => m.id === id) || readTextMessages(target.ch.id).find((m) => m.id === id) || null;
+    return found && canSeeChatMessage(user, found) ? found : null;
   };
   function replySnippet(target, id) {
     const m = findChatMessage(target, id);
-    if (!m) return undefined;
+    if (!m || m.whisperTo?.length || m.expiresAt) return undefined;
     return { id: m.id, userName: m.userName, text: (m.text || m.attachment?.name || '').slice(0, 140), image: Boolean(m.image) };
   }
-  const announceChat = (target, event, data) => {
-    if (target.scope === 'call') io.to(target.channel.id).emit(`chat-${event}`, data);
-    else emitText(target.ch, `text-${event}`, { channelId: target.ch.id, ...data });
+  const announceChat = (target, event, data, msg = null) => {
+    if (target.scope === 'call') emitScopedChatMessage('call', target.channel, `chat-${event}`, data, msg);
+    else emitScopedChatMessage('text', target.ch, `text-${event}`, { channelId: target.ch.id, ...data }, msg);
   };
   // A cópia que está na memória (call ou as recentes do canal de texto) também muda
   const patchChatMessage = (target, message) => {
@@ -2451,14 +2739,15 @@ io.on('connection', (socket) => {
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, max) : '';
     if (!text && !msg.image && !msg.attachment) return cb({ success: false, error: 'Mensagem vazia: use apagar.' });
     const updated = { ...msg, text, editedAt: Date.now() };
+    const ephemeral = Boolean(msg.whisperTo?.length || msg.expiresAt);
     try {
-      if (target.scope === 'text') appendTextOp(target.ch, { op: 'edit', id: msg.id, text, editedAt: updated.editedAt });
+      if (target.scope === 'text' && !ephemeral) appendTextOp(target.ch, { op: 'edit', id: msg.id, text, editedAt: updated.editedAt });
     } catch (err) {
       console.error('⚠️ [Texto] Não deu pra salvar a edição:', err.message);
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) }, updated);
     cb({ success: true });
   }));
 
@@ -2469,13 +2758,15 @@ io.on('connection', (socket) => {
     const { target, msg } = ctx;
     const mine = msg.profileId && msg.profileId === user.profileId;
     if (!mine && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só dá pra apagar as suas mensagens.' });
+    const ephemeral = Boolean(msg.whisperTo?.length || msg.expiresAt);
+    clearTemporaryMessageTimer(msg.id);
     try {
       if (target.scope === 'text') {
-        appendTextOp(target.ch, { op: 'delete', id: msg.id });
+        if (!ephemeral) appendTextOp(target.ch, { op: 'delete', id: msg.id });
         const file = textImageFileOf(msg);
         if (file) removeTextImage(file);
         removeTextAttachment(msg);
-        target.ch.count = Math.max(0, target.ch.count - 1);
+        if (!ephemeral) target.ch.count = Math.max(0, target.ch.count - 1);
       } else if (msg.attachment) {
         const file = msg.attachment.url.split('/').pop();
         if (ATTACHMENT_FILE_RE.test(file)) chatAttachments.remove(file);
@@ -2487,7 +2778,7 @@ io.on('connection', (socket) => {
     const list = target.scope === 'call' ? target.channel.messages : target.ch.recent;
     const i = list.findIndex((m) => m.id === msg.id);
     if (i !== -1) list.splice(i, 1);
-    announceChat(target, 'message-deleted', { messageId: msg.id });
+    announceChat(target, 'message-deleted', { messageId: msg.id }, msg);
     cb({ success: true });
   }));
 
@@ -2511,14 +2802,15 @@ io.on('connection', (socket) => {
     if (list.length) reactions[emoji] = list;
     else delete reactions[emoji];
     const updated = { ...msg, reactions };
+    const ephemeral = Boolean(msg.whisperTo?.length || msg.expiresAt);
     try {
-      if (target.scope === 'text') appendTextOp(target.ch, { op: 'reactions', id: msg.id, reactions });
+      if (target.scope === 'text' && !ephemeral) appendTextOp(target.ch, { op: 'reactions', id: msg.id, reactions });
     } catch (err) {
       console.error('⚠️ [Texto] Não deu pra salvar a reação:', err.message);
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) }, updated);
     cb({ success: true });
   }));
 
@@ -2529,6 +2821,9 @@ io.on('connection', (socket) => {
     const ctx = chatOpPrelude({ ...safeObject(rawPayload), scope: 'text' }, cb);
     if (!ctx) return;
     const { payload, target, msg } = ctx;
+    if (msg.whisperTo?.length || msg.expiresAt) {
+      return cb({ success: false, error: 'Mensagens temporárias ou privadas não podem ser fixadas.' });
+    }
     const pin = payload.pinned === true;
     if (pin && !msg.pinned && readTextMessages(target.ch.id).filter((m) => m.pinned).length >= MAX_PINS_PER_CHANNEL) {
       return cb({ success: false, error: `Esse canal já tem ${MAX_PINS_PER_CHANNEL} fixadas: desfixe alguma.` });
@@ -2544,7 +2839,7 @@ io.on('connection', (socket) => {
       return cb({ success: false, error: 'O servidor não conseguiu salvar.' });
     }
     patchChatMessage(target, updated);
-    announceChat(target, 'message-updated', { message: messageAuthor(updated) });
+    announceChat(target, 'message-updated', { message: messageAuthor(updated) }, updated);
     cb({ success: true });
   }));
 
@@ -2553,7 +2848,7 @@ io.on('connection', (socket) => {
     const id = safeObject(rawPayload).channelId;
     const ch = typeof id === 'string' ? textChannels.get(id) : null;
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [] });
-    const messages = readTextMessages(ch.id).filter((m) => m.pinned).sort((a, b) => b.pinned.at - a.pinned.at);
+    const messages = readTextMessages(ch.id).filter((m) => m.pinned && canSeeChatMessage(user, m)).sort((a, b) => b.pinned.at - a.pinned.at);
     cb({ success: true, messages: messages.map(messageAuthor) });
   }));
 
@@ -2684,7 +2979,8 @@ io.on('connection', (socket) => {
     if (!query && !author) return cb({ success: false, error: 'Digite um texto ou o nome de uma pessoa.' });
     const since = typeof payload.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.since) ? Date.parse(payload.since + 'T00:00:00Z') : NaN;
     const normalize = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR');
-    const all = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const rawAll = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const all = rawAll.filter(m => !m.whisperTo?.length && canSeeChatMessage(user, m));
     const before = typeof payload.before === 'string' ? all.findIndex(m => m.id === payload.before) : all.length;
     if (before < 0) return cb({ success: false, error: 'O histórico mudou. Faça a busca novamente.' });
     const needle = normalize(query), person = normalize(author);
@@ -2702,7 +2998,8 @@ io.on('connection', (socket) => {
     if (!target) return cb({ success: false, error: 'Você não tem acesso a esse canal.' });
     if (Date.now() - lastSearchAt < 700) return cb({ success: false, error: 'Espere um instante e tente novamente.' });
     lastSearchAt = Date.now();
-    const all = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const rawAll = target.scope === 'text' ? readTextMessages(target.ch.id) : target.channel.messages;
+    const all = rawAll.filter(m => !m.whisperTo?.length && canSeeChatMessage(user, m));
     const index = all.findIndex(m => m.id === payload.messageId);
     if (index < 0) return cb({ success: false, error: 'Essa mensagem não está mais disponível.' });
     cb({ success: true, messages: all.slice(Math.max(0, index - 3), index + 4).map(messageAuthor) });
@@ -2715,10 +3012,10 @@ io.on('connection', (socket) => {
     const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
     if (!ch || !permissions.visible(user, ch)) return cb({ success: false, messages: [], hasMore: false });
     if (typeof payload.before !== 'string') {
-      const messages = ch.recent.slice(-TEXT_PAGE_SIZE);
+      const messages = ch.recent.filter(m => canSeeChatMessage(user, m)).slice(-TEXT_PAGE_SIZE);
       return cb({ success: true, messages: messages.map(messageAuthor), hasMore: ch.count > messages.length });
     }
-    const all = readTextMessages(ch.id);
+    const all = readTextMessages(ch.id).filter(m => canSeeChatMessage(user, m));
     const idx = all.findIndex((m) => m.id === payload.before);
     if (idx <= 0) return cb({ success: true, messages: [], hasMore: false });
     const start = Math.max(0, idx - TEXT_PAGE_SIZE);
@@ -2753,6 +3050,19 @@ io.on('connection', (socket) => {
 
   const publishTextMessage = (ch, msg, cb) => {
     user.lastActiveAt = Date.now(); touchPresence(user);
+    const ephemeral = Boolean(msg.whisperTo?.length || msg.expiresAt);
+    if (ephemeral) {
+      indexAssets(ch, [msg]);
+      ch.recent.push(msg);
+      if (ch.recent.length > TEXT_RECENT_IN_MEMORY) {
+        const removed = ch.recent.shift();
+        if (removed?.id) clearTemporaryMessageTimer(removed.id);
+      }
+      if (!msg.whisperTo?.length) ch.lastMessageAt = msg.timestamp;
+      if (msg.expiresAt) scheduleTemporaryMessageExpiry('text', ch, msg);
+      emitScopedChatMessage('text', ch, 'text-message', messageAuthor(msg), msg);
+      return cb({ success: true });
+    }
     try {
       appendTextMessage(ch, msg);
     } catch (err) {
@@ -2768,10 +3078,20 @@ io.on('connection', (socket) => {
     const payload = safeObject(rawPayload);
     const ch = typeof payload.channelId === 'string' ? textChannels.get(payload.channelId) : null;
     if (!ch || !permissions.canWrite(user, ch)) return cb({ success: false, error: 'Canal indisponível ou sem permissão para enviar.' });
-    const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, MAX_TEXT_LENGTH) : '';
-    if (!text) return cb({ success: false, error: 'Mensagem vazia.' });
+    const rawText = typeof payload.text === 'string' ? payload.text.trim() : '';
+    if (!rawText) return cb({ success: false, error: 'Mensagem vazia.' });
+    const parsed = parseChatCommand(rawText, { scope: 'text', channel: ch, sender: user });
+    if (!parsed.ok) return cb({ success: false, error: parsed.error });
+    const text = parsed.text.slice(0, MAX_TEXT_LENGTH);
     if (textRateLimited()) return cb({ success: false, error: 'Calma, muitas mensagens seguidas.' });
-    publishTextMessage(ch, { ...textMessageBase(ch), replyTo: replySnippet({ scope: 'text', ch }, payload.replyTo), text }, cb);
+    const base = textMessageBase(ch);
+    publishTextMessage(ch, {
+      ...base,
+      replyTo: replySnippet({ scope: 'text', ch }, payload.replyTo),
+      text,
+      ...(parsed.temporarySeconds > 0 ? { temporarySeconds: parsed.temporarySeconds, expiresAt: base.timestamp + parsed.temporarySeconds * 1000 } : {}),
+      ...(parsed.whisperTo?.length ? { whisperTo: parsed.whisperTo } : {})
+    }, cb);
   }));
 
   socket.on('text-image', safeHandler((rawPayload, maybeCallback) => {

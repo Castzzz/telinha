@@ -41,7 +41,7 @@ $('form-other-room').addEventListener('submit', event => {
 function renderPreview(state = {}) {
   $('server-room-name').textContent = state.server?.name || 'Colheita Fartus';
   const icon = $('server-room-icon'); icon.innerHTML = defaultRoomIcon;
-  if (/^data:image\/png;base64,/.test(state.server?.icon || '')) {
+  if (/^data:image\/(png|jpeg|webp|gif);base64,/i.test(state.server?.icon || '')) {
     const image = document.createElement('img'); image.src = state.server.icon; image.alt = '';
     image.addEventListener('error', () => { icon.innerHTML = defaultRoomIcon; }, { once: true });
     icon.replaceChildren(image);
@@ -61,9 +61,21 @@ function renderPreview(state = {}) {
     const avatar = document.createElement('span'); avatar.className = 'friend-avatar'; avatar.dataset.presence = friend.presence || 'online'; avatar.setAttribute('aria-hidden', 'true');
     avatar.style.backgroundColor = /^#[0-9a-f]{6}$/i.test(friend.color) ? friend.color : '#5865f2';
     avatar.textContent = friend.name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-    if (/^data:image\/png;base64,/.test(friend.avatar || '')) {
+    if (/^data:image\/(png|jpeg|webp|gif);base64,/i.test(friend.avatar || '')) {
+      const wrap = document.createElement('span'); wrap.className = 'friend-avatar-photo';
       const photo = document.createElement('img'); photo.src = friend.avatar; photo.alt = '';
-      avatar.replaceChildren(photo);
+      if (friend.avatarCrop) {
+        const x = Number.isFinite(friend.avatarCrop.x) ? Math.min(1, Math.max(0, friend.avatarCrop.x)) : 0.5;
+        const y = Number.isFinite(friend.avatarCrop.y) ? Math.min(1, Math.max(0, friend.avatarCrop.y)) : 0.5;
+        const zoom = Number.isFinite(friend.avatarCrop.zoom) ? Math.min(4, Math.max(1, friend.avatarCrop.zoom)) : 1;
+        photo.style.objectPosition = `${(x * 100).toFixed(2)}% ${(y * 100).toFixed(2)}%`;
+        if (zoom > 1) {
+          photo.style.transformOrigin = photo.style.objectPosition;
+          photo.style.transform = `scale(${zoom.toFixed(3)})`;
+        }
+      }
+      wrap.append(photo);
+      avatar.replaceChildren(wrap);
     }
     const name = document.createElement('strong'); name.className = 'friend-name'; name.textContent = friend.name;
     button.append(avatar, name); button.addEventListener('click', () => join(serverRoomUrl, button));

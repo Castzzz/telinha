@@ -1,5 +1,5 @@
 import { PRESENCE_LABELS, normalizePresence } from './presence.js';
-export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab }) {
+export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab, serverUrl = '', assetKey = () => '' }) {
   const tab = document.createElement('button');
   tab.type = 'button'; tab.className = 'settings-tab'; tab.dataset.settingsTab = 'amigos';
   tab.innerHTML = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-2a8 8 0 0 1 16 0v2M17 4a4 4 0 0 1 0 8M23 21v-2a7 7 0 0 0-4-6"/></svg><span>Amigos</span>';
@@ -42,6 +42,15 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
       name.textContent = person.name || person.username;
       detail.textContent = `@${person.username}${kind === 'friends' ? ` · ${!socket.connected ? 'Sem conexão' : person.online ? PRESENCE_LABELS[normalizePresence(person.presence || 'online')] : 'Offline'}` : ''}`;
       const avatar = document.createElement('span'); avatar.className = 'friend-initials'; avatar.textContent = (person.name || person.username).slice(0, 2).toUpperCase();
+      const key = assetKey();
+      if (serverUrl && key && person.id) {
+        const photo = document.createElement('img');
+        photo.className = 'friend-avatar-img';
+        photo.src = `${serverUrl}/api/friend-avatar/${encodeURIComponent(person.id)}?access=${encodeURIComponent(key)}`;
+        photo.alt = '';
+        photo.addEventListener('error', () => photo.remove(), { once: true });
+        avatar.append(photo);
+      }
       if (kind === 'friends') { const dot = document.createElement('span'); dot.className = 'user-presence-dot'; dot.dataset.presence = socket.connected && person.online ? normalizePresence(person.presence || 'online') : 'offline'; avatar.append(dot); }
       info.append(name, detail); row.append(avatar, info);
       const actions = document.createElement('div'); actions.className = 'friend-actions';
@@ -85,6 +94,7 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
   $('#friends-form').addEventListener('submit', event => { event.preventDefault(); request('request', { username: $('#friend-username').value.trim() }); });
   socket.on('friends-state', next => { supported = next?.supported === true; state = { friends: next?.friends || [], incoming: next?.incoming || [], outgoing: next?.outgoing || [] }; render(); });
   socket.on('account-state', () => { if (!getAccount()) state = { friends: [], incoming: [], outgoing: [] }; render(); });
+  socket.on('room-info', ({ assetKey: key } = {}) => { if (key) render(); });
   socket.on('connect', () => { supported = false; state = { friends: [], incoming: [], outgoing: [] }; render(); });
   socket.on('disconnect', render);
   render();

@@ -3,6 +3,17 @@
 Atualizado em 09/11/2026. Última versão publicada registrada: **4.4.0**.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
+## Em preparação para a próxima versão (branch `prototipo/comandos-chat-e-fotos-amigos`)
+
+Guardado localmente sem release e sem deploy, aguardando o dono definir mais itens para entrar junto na próxima atualização:
+
+- [x] **Miniatura da transmissão arrastável e ajuste do chat de texto:** ao assistir uma transmissão dentro de um canal de texto (`.text-with-stream #stage-section`), a janelinha pode ser arrastada para qualquer canto da tela (duplo clique na barra **Transmissão** restaura a posição padrão). Removido o espaço vazio de `246px` no final de `#chat-messages` (`public/redesign.css`, `public/server-members.css`, `public/mobile.css`, `public/app.js`).
+- [x] **Comandos de mensagem `/t` e `/w` (`/whisper`) nos chats (call e texto):**
+  - `/t <segundos> <mensagem>`: duração configurável de `1` a `600` segundos (máximo de 10 minutos), selo com contagem regressiva (`⏱️ Xs`), remoção automática ao expirar, bloqueio de fixação e sem gravação em disco.
+  - `/w @pessoa ... <mensagem>` ou `/whisper @pessoa ... <mensagem>`: mensagem privada para uma ou mais pessoas marcadas (inclusive nomes compostos), visível só para o remetente e destinatários marcados (`🔒 Privada para ...`), sem indicador de "digitando…" e sem vazar no arquivo em disco, histórico, busca, contexto, mensagens fixadas, citações públicas de resposta ou texto de notificação do sistema.
+- [x] **Fotos dos amigos na tela inicial e na aba Amigos:** resolução de avatar pelo ID estável da conta/membro no servidor (`resolveFriendAvatar` em `server.js`, consultando socket ativo, `account.profile.avatar` e `MemberAvatarStore` em disco), preservando a foto ao entrar em call e suportando imagens WebP, GIF, PNG e JPEG com recorte (`avatarCrop`) em `electron/connect.html` (`/api/launcher/friend-avatar/:accountId`) e em `public/friends.js` (`/api/friend-avatar/:accountId`).
+- [ ] Aguardar novas ideias do dono para acumular nesta branch antes de aumentar a versão, atualizar o popup de novidades e publicar (`release` + `deploy:oracle`).
+
 ## Incluído na 4.4.0
 
 Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações locais anteriores preservadas:

@@ -457,11 +457,19 @@ function setupLauncherIpc() {
     serverUrl: SERVER_ROOM_URL, getPrefs: loadPrefs, fetch: (...args) => net.fetch(...args),
     thumbnail: async (buffer, crop) => {
       const image = nativeImage.createFromBuffer(buffer);
-      if (image.isEmpty()) return '';
-      const { imageCropRect } = await import('../public/image-crop.js');
-      const size = image.getSize(), rect = imageCropRect(size.width, size.height, 1, crop);
-      const frame = { x: Math.floor(rect.x), y: Math.floor(rect.y), width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) };
-      return image.crop(frame).resize({ width: 80, height: 80, quality: 'good' }).toDataURL();
+      if (!image.isEmpty()) {
+        const { imageCropRect } = await import('../public/image-crop.js');
+        const size = image.getSize(), rect = imageCropRect(size.width, size.height, 1, crop);
+        const frame = { x: Math.floor(rect.x), y: Math.floor(rect.y), width: Math.max(1, Math.floor(rect.width)), height: Math.max(1, Math.floor(rect.height)) };
+        return image.crop(frame).resize({ width: 80, height: 80, quality: 'good' }).toDataURL();
+      }
+      if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+        return `data:image/webp;base64,${buffer.toString('base64')}`;
+      }
+      if (buffer.length >= 6 && (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a')) {
+        return `data:image/gif;base64,${buffer.toString('base64')}`;
+      }
+      return '';
     }
   });
   ipcMain.handle('launcher-preview', event => fromLauncher(event) ? preview() : { status: 'denied', friends: [] });

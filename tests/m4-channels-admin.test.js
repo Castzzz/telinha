@@ -590,6 +590,60 @@ async function runTests() {
     pinner.emit('typing', { scope: 'text', channelId: 'papo' });
     assert.deepEqual(await typingText, { userId: pinner.id, name: 'gabi-profile-0007', scope: 'text', channelId: 'papo' });
 
+    // 14b. Comandos de mensagem: /t (temporária de 1 a 600s) e /w ou /whisper (privada)
+    const outsider = await connect();
+    clients.push(outsider);
+    await join(outsider, 'geral', 'igor-profile-0009');
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/t 0 inválido' })).success, false, '0s não vale');
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/t 601 inválido' })).success, false, 'acima de 600s não vale');
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/t 10' })).success, false, 'sem texto não vale');
+    const tempGot = new Promise((resolve) => watcher.once('text-message', resolve));
+    const tempDel = new Promise((resolve) => watcher.once('text-message-deleted', resolve));
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/t 1 segredo-temporario' })).success, true);
+    const tempMsg = await tempGot;
+    assert.equal(tempMsg.text, 'segredo-temporario');
+    assert.equal(tempMsg.temporarySeconds, 1);
+    assert.ok(tempMsg.expiresAt > Date.now());
+    assert.equal((await emit(pinner, 'message-pin', { channelId: 'papo', messageId: tempMsg.id, pinned: true })).success, false, 'temporária não fixa');
+    assert.ok(!fs.readFileSync(path.join(DATA_DIR, 'text', 'papo.jsonl'), 'utf8').includes('segredo-temporario'), 'temporária não vai pro disco');
+    assert.equal((await tempDel).messageId, tempMsg.id, 'some sozinha após o tempo');
+
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/w sem-arroba' })).success, false);
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/w @ninguem oi' })).success, false);
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/w @hugo-profile-0008' })).success, false);
+    let outsiderSawWhisper = false;
+    const onOutsiderText = (m) => { if (m.text?.includes('so-pro-hugo')) outsiderSawWhisper = true; };
+    outsider.on('text-message', onOutsiderText);
+    const whisperGot = new Promise((resolve) => watcher.once('text-message', resolve));
+    assert.equal((await emit(pinner, 'text-message', { channelId: 'papo', text: '/w @hugo-profile-0008 so-pro-hugo' })).success, true);
+    const whisperMsg = await whisperGot;
+    await new Promise((r) => setTimeout(r, 80));
+    outsider.off('text-message', onOutsiderText);
+    assert.equal(outsiderSawWhisper, false, 'terceiro não recebe o whisper');
+    assert.equal(whisperMsg.text, 'so-pro-hugo');
+    assert.equal(whisperMsg.whisperTo?.length, 1);
+    assert.equal(whisperMsg.whisperTo[0].name, 'hugo-profile-0008');
+    assert.ok(!fs.readFileSync(path.join(DATA_DIR, 'text', 'papo.jsonl'), 'utf8').includes('so-pro-hugo'), 'whisper não vai pro disco');
+    assert.equal((await emit(pinner, 'message-pin', { channelId: 'papo', messageId: whisperMsg.id, pinned: true })).success, false, 'whisper não fixa');
+    const histOutsider = await emit(outsider, 'text-history', { channelId: 'papo' });
+    assert.ok(!histOutsider.messages.some((m) => m.id === whisperMsg.id), 'whisper não aparece no histórico de terceiros');
+    const searchOutsider = await emit(outsider, 'message-search', { channelId: 'papo', query: 'so-pro-hugo' });
+    assert.equal(searchOutsider.messages?.length || 0, 0, 'whisper não vaza na busca');
+    const ctxOutsider = await emit(outsider, 'message-context', { channelId: 'papo', messageId: whisperMsg.id });
+    assert.equal(ctxOutsider.success, false, 'whisper não abre no contexto');
+
+    // Whisper para mais de uma pessoa no chat da call (/whisper)
+    const callWhisperWatcher = new Promise((resolve) => watcher.once('chat-message', resolve));
+    const callWhisperOutsider = new Promise((resolve) => outsider.once('chat-message', resolve));
+    assert.equal((await emit(pinner, 'chat-message', { text: '/whisper @hugo-profile-0008 @igor-profile-0009 segredo-duplo' })).success, true);
+    const cw1 = await callWhisperWatcher;
+    const cw2 = await callWhisperOutsider;
+    assert.equal(cw1.text, 'segredo-duplo');
+    assert.equal(cw2.text, 'segredo-duplo');
+    assert.equal(cw1.whisperTo.length, 2);
+    outsider.disconnect();
+    console.log('  ✓ Comandos /t (temporária 1..600s) e /w /whisper (privada sem vazar no disco/busca/histórico)');
+
     // 15. Senha da sala: só admin define; sem ela não conecta (a senha de admin também entra)
     const tryConnect = (auth) => new Promise((resolve) => {
       const c = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false, auth });
