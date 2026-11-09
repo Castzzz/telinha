@@ -1,6 +1,6 @@
 # Teletela: documentação do projeto
 
-**4.4.0 em publicação autorizada (09/11/2026):** presença, atividades, redesign, avatares do histórico, teste de microfone e Membros redimensionável. Testes anteriores aproveitados a pedido do dono.
+**[4.4.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.4.0):** presença, atividades, redesign, avatares do histórico, teste de microfone e Membros redimensionável. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
 
 **[4.3.3 publicada em 05/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.3.3):** canal de Ausentes bloqueia o microfone de todos,
 inclusive administradores, e restaura o estado anterior ao sair. Novo bundle Flatpak
@@ -1888,3 +1888,26 @@ perfis/arquivos de teste; os dados da sala oficial não foram alterados.
   fechamento e preservação do mute da call. Conferidos desktop, três temas e celular.
 - Validação: runner 62/62, regressões 95/95, integração m4 e interfaces de membros, microfone
   e navegação móvel. Sem release/deploy; a versão continua 4.3.3 até preparar a publicação.
+
+
+### Publicação e deploy da 4.4.0 concluídos (09/11/2026)
+
+Autorizados pelo dono, sem repetir os testes já concluídos (runner 62/62, regressões
+95/95 e interfaces). Integração do protótipo por avanço direto na `main`, publicada no
+commit `a97a81602154ba5338bc5143609df07034dae9e3`, tag
+[v4.4.0](https://github.com/Castzzz/telinha/releases/tag/v4.4.0), sem rascunho/pré-release
+e marcada como versão mais recente.
+
+- `npm run release` gerou e publicou Windows Setup/Portátil, AppImage, tar.gz, blockmap
+  e manifests de atualização. Flatpak experimental e APK de teste foram gerados e anexados;
+  Android passa a 4.4.0/código 14, preservando assinatura. O build Android pulou `lintDebug`
+  por pedido de não repetir verificações; não houve nova execução de suítes de teste.
+- Nove arquivos confirmados como enviados: tamanhos e SHA-256 do GitHub iguais aos locais;
+  `latest.yml` e `latest-linux.yml` apontam para 4.4.0, com tamanhos/SHA-512 conferidos.
+  Os sons estão nos pacotes e continuam fora do Git. Código enviado à `main` e à branch
+  `prototipo/presenca-e-atividades`, preservada para referência.
+- Deploy com Node v24.22.1 e Caddy 2.11.7 preservados. Backup anterior íntegro:
+  `~/Teletela-backups/teletela-dados-2026-11-09_17-39-42.tar.gz` (26 MB).
+  Node/SFU/Caddy ativos e `/api/health` público com `status: ok` após a instalação.
+  SHA-256 de `server.js`, `package.json`, `public/app.js`, `public/index.html` e
+  `member-avatar-store.js` iguais entre a VM e o código publicado. Segredos preservados.

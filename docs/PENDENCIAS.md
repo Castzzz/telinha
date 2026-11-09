@@ -1,6 +1,6 @@
 # Pendências atuais
 
-Atualizado em 09/11/2026. Versão **4.4.0** em publicação autorizada pelo dono.
+Atualizado em 09/11/2026. Última versão publicada registrada: **4.4.0**.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
 ## Incluído na 4.4.0
@@ -51,11 +51,12 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 - [ ] Validar troca de rede, áudio em segundo plano, CPU e consumo de bateria em aparelho físico.
 - [ ] Definir distribuição/atualização dos APKs; hoje é manual. Preservar a assinatura existente.
 
-## Publicação autorizada
+## Publicação concluída
 
-O protótipo muda cliente e servidor: precisa de release e deploy em conjunto para funcionar
-nos apps instalados. Versão e novidades preparadas para a 4.4.0.
-Release e deploy autorizados em 09/11/2026, sem repetir os testes já concluídos.
+Release 4.4.0 publicada e servidor atualizado em 09/11/2026, com autorização do dono.
+Windows, AppImage, tar.gz, Flatpak e APK Android/código 14 disponíveis no GitHub.
+Backup anterior ao deploy preservado; serviços e saúde pública conferidos. Os testes
+já concluídos foram aproveitados, sem nova execução, conforme pedido.
 
 O filtro experimental GTCRN foi revertido; o pendente de escuta atual é RNNoise/volume mono.
 Ideias sem implementação ficam em [IDEIAS-FUTURAS.md](IDEIAS-FUTURAS.md).
