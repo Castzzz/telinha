@@ -729,7 +729,7 @@ function publicUser(u) {
     bannerCrop: normalizeImageCrop(u.bannerCrop),
     joinSoundV: u.joinSound ? u.joinSoundV : 0,
     bio: u.bio,
-    activity: u.activity || null,
+    activity: u.invisible ? null : u.activity || null,
     profileId: u.profileId,
     isAdmin: permissions.isOwner(u),
     isOwner: permissions.isOwner(u),
@@ -923,7 +923,7 @@ function serverMembers() {
   const online = new Map();
   for (const client of io.sockets.sockets.values()) {
     const user = client.data.user;
-    if (user?.profileId && !client.data.accountEnding) online.set(user.accessId, user);
+    if (user?.profileId && !user.invisible && !client.data.accountEnding) online.set(user.accessId, user);
   }
   const accountsByMember = new Map(accounts.data.accounts.map(account => [account.accessId, account]));
   const ids = new Set([...Object.keys(permissions.data.members), ...online.keys()]);
@@ -1302,7 +1302,7 @@ function revokeAccountSockets({ accountId, accessId, kind, exceptSocketId }) {
 }
 
 function friendOnline(accountId) {
-  return [...io.sockets.sockets.values()].some(client => client.connected && !client.data.accountEnding
+  return [...io.sockets.sockets.values()].some(client => client.connected && !client.data.accountEnding && !client.data.user?.invisible
     && client.data.accountSession?.account.id === accountId && accounts.resolveSessionMeta(client.handshake.auth?.accountToken));
 }
 
@@ -1375,6 +1375,7 @@ io.on('connection', (socket) => {
     color: USER_COLORS[colorIndex],
     bio: '',
     activity: null,
+    invisible: socket.handshake.auth?.invisible === true,
     nameColor: '',
     nameColor2: '', // com as duas cores o nome vira gradiente
     frame: '', // moldura da foto (FRAME_PRESETS)
@@ -1622,7 +1623,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, presenceVersion: 1, assetKey: user.assetKey });
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
     if (!permissions.has(user, 'manageServer')) return cb({ success: false, error: 'Seu cargo não permite fazer isso.' });
@@ -2085,23 +2086,37 @@ io.on('connection', (socket) => {
     cb({ success: true });
   }));
 
+  socket.on('update-presence', safeHandler((raw, callback) => {
+    const cb = safeCallback(callback);
+    if (!isPlainObject(raw) || typeof raw.invisible !== 'boolean') return cb({ success: false });
+    if (user.invisible === raw.invisible) return cb({ success: true });
+    user.invisible = raw.invisible;
+    emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity: user.invisible ? null : user.activity }, user);
+    scheduleMembers();
+    broadcastFriends();
+    if (user.channelId) broadcastChannels();
+    cb({ success: true });
+  }));
+
   let activityChanges = [];
   socket.on('update-activity', safeHandler((raw, callback) => {
     const cb = safeCallback(callback);
     let activity = null;
     if (raw !== null) {
       if (!isPlainObject(raw) || typeof raw.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,99}$/.test(raw.id)
+        || (raw.type !== undefined && !['playing', 'studying', 'working', 'watching', 'listening', 'custom'].includes(raw.type))
         || typeof raw.name !== 'string' || !raw.name.trim() || raw.name.length > 80
         || !Number.isSafeInteger(raw.startedAt) || raw.startedAt < Date.now() - 30 * 86400000
         || raw.startedAt > Date.now() + 60000) return cb({ success: false });
       activity = { id: raw.id, name: raw.name.trim(), startedAt: Math.min(raw.startedAt, Date.now()) };
+      if (raw.type) activity.type = raw.type;
     }
     if (JSON.stringify(activity) === JSON.stringify(user.activity)) return cb({ success: true });
     activityChanges = activityChanges.filter((time) => Date.now() - time < 10000);
     if (activity && activityChanges.length >= 10) return cb({ success: false });
     activityChanges.push(Date.now());
     user.activity = activity;
-    emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity }, user);
+    emitVisibleUserEvent('user-activity-updated', { userId: socket.id, activity: user.invisible ? null : activity }, user);
     if (user.channelId) broadcastChannels();
     cb({ success: true });
   }));

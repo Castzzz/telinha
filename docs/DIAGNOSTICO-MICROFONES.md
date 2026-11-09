@@ -1,5 +1,35 @@
 # Volume baixo do microfone
 
+## Retomada em 08/11/2026: microfone Bluetooth e volume geral
+
+O dono relatou um amigo com microfone Bluetooth muito baixo, provavelmente no Windows,
+e percepção de volume menor após atualizações. O modelo do fone e o nível de captura
+nesse aparelho ainda não foram confirmados. O dono pediu para manter desligado qualquer
+controle que altere o volume automaticamente.
+
+- Reproduzida a perda do RNNoise: `maxChannels: 1` processava só um canal, mas o grafo
+  negociava saída estéreo. O canal vazio reduzia a amplitude na conversão para mono.
+- Correção local: `channelCount: 1` e `channelCountMode: explicit` no filtro, ganho manual
+  e destino. Sem compressores, reforço automático ou alteração do volume no sistema;
+  `autoGainControl: false` permanece na captura. O ganho manual continua em 0–300%.
+- O teste antigo comparava o resultado com o grafo da 3.7 e aceitava a mesma perda.
+  A regressão nova exige recuperar aproximadamente 6 dB e preservar esse nível por Opus.
+- Sem IA, o teste de referência preservou o nível da captura. O mixer geral também
+  preservou o nível em 100%; seu arquivo permanece igual ao da 3.9.0. A retirada do reforço
+  na 3.9.0 é uma possível explicação para diferença em relação à 3.8, não uma confirmação
+  da causa no aparelho do amigo.
+- A correção precisa de escuta no fone Bluetooth real. Ela recupera uma perda do aplicativo,
+  mas não garante resolver uma captura já baixa no dispositivo ou no Windows.
+
+Validação em Electron/Linux: a mesma voz sintética com RNNoise passou de −36,50 para
+−30,52 dBFS (aproximadamente +6 dB); recebida por Opus em −30,37 dBFS. Sem IA, captura,
+envio e mixer ficaram próximos de −39 dBFS. Volume geral em 50%/200% aplicou cerca de
+−6/+6 dB, sem atenuação adicional. Passaram 62 testes do runner, 79 M1/M2/M3, teste de
+áudio real com RNNoise/Opus e controles nos três temas, preservando ganho manual e mute.
+
+As seções abaixo registram o experimento anterior; os reforços descritos nelas continuam
+revertidos. Esta retomada não publica instaladores nem altera a VM.
+
 **Histórico da 3.8, revertido na 3.9.0 a pedido do dono em 27/10/2026:** o áudio ficou
 estranho no uso real. Retirados GTCRN, reforço automático, compressores, limitador e
 mono explícito no grafo. Voltaram RNNoise opcional e ganho manual da 3.7. Os testes

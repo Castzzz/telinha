@@ -153,6 +153,13 @@ export async function run() {
       await pause(200);
       results.mixer = await measure(f.ctx, output.stream);
       check(Math.abs(results.mixer.db - results.received.db) < 1, 'Volume geral e individual em 100% devem preservar a voz');
+      for (const [percent, difference] of [[50, -6.02], [200, 6.02]]) {
+        mixer.setMasterVolume(percent); await pause(200);
+        const level = await measure(f.ctx, output.stream);
+        results['master' + percent] = level;
+        check(Math.abs(level.db - results.mixer.db - difference) < 0.8, 'O volume geral deve aplicar o ganho escolhido sem atenuação extra');
+      }
+      mixer.setMasterVolume(100);
       track.enabled = false; await pause(500);
       check((await measure(f.ctx, peer.stream)).peak < 0.001, 'Mute deve silenciar o áudio recebido');
       check((await measure(f.ctx, output.stream)).peak < 0.001, 'Mute deve silenciar também o mixer');
@@ -172,8 +179,15 @@ export async function run() {
         measure(filtered.ctx, previous.stream, 1600), measure(filtered.ctx, filtered.pipeline.stream, 1600)
       ]);
       results.previousRNNoise = oldLevel; results.rnnoise = newLevel;
-      check(Math.abs(newLevel.db - oldLevel.db) < 0.5, 'RNNoise deve preservar o processamento e nível da 3.7');
+      check(newLevel.db - oldLevel.db > 5 && newLevel.db - oldLevel.db < 7, 'RNNoise mono deve recuperar os 6 dB perdidos pelo canal vazio');
       check(newLevel.peak > 0.001, 'RNNoise precisa preservar a voz de referência');
+      check(filtered.pipeline.stream.getAudioTracks()[0].getSettings().channelCount === 1, 'A voz deve sair em mono, sem um segundo canal vazio');
+      const peer = await peerStream(filtered.pipeline.stream);
+      try {
+        await pause(800);
+        results.rnnoiseReceived = await measure(filtered.ctx, peer.stream, 1600);
+        check(Math.abs(results.rnnoiseReceived.db - newLevel.db) < 2, 'Opus deve preservar o nível corrigido também com RNNoise');
+      } finally { peer.close(); }
     } finally { await previous.close(); }
     filtered.raw.getAudioTracks()[0].dispatchEvent(new Event('ended'));
     check(filtered.pipeline.stream.getAudioTracks()[0].readyState === 'ended', 'Perder a captura deve encerrar a saída');
@@ -184,6 +198,6 @@ export async function run() {
     results.noiseFiltered = await measure(noisy.ctx, noisy.pipeline.stream);
     check(results.noiseRaw.db - results.noiseFiltered.db > 15, 'RNNoise deve reduzir o ruído grave de referência');
   } finally { await noisy.close(); }
-  console.log('Microfone: comparação com 3.7, ganho manual, Opus, mute, mixer, RNNoise e liberação passaram.');
+  console.log('Microfone: nível sem IA, ganho manual, Opus, mute, mixer, RNNoise mono sem perda de volume e liberação passaram.');
   return results;
 }

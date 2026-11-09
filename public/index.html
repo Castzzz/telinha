@@ -1119,7 +1119,19 @@
 
           </section>
           <section class="settings-section hidden" data-settings-section="atividade">
-            <h4 class="settings-section-title">Atividade de jogos</h4>
+            <h4 class="settings-section-title">Presença e atividade</h4>
+            <label class="checkbox-label"><input type="checkbox" id="check-invisible"><span>Ficar invisível neste aparelho</span></label>
+            <p class="form-help">Você aparece offline em Membros e Amigos e sua atividade fica oculta. Na call, nas mensagens e nas transmissões você continua visível. Outros aparelhos conectados podem manter você online.</p>
+            <p id="presence-status" class="form-help" role="status"></p>
+            <form id="form-manual-activity" class="custom-game-form">
+              <div class="form-group"><label for="select-activity-type">O que está fazendo?</label><select id="select-activity-type" class="form-select"><option value="studying">Estudando</option><option value="working">Trabalhando</option><option value="watching">Assistindo</option><option value="listening">Ouvindo</option><option value="playing">Jogando</option><option value="custom">Outra atividade</option></select></div>
+              <div class="form-group"><label for="input-activity-name">Descrição</label><input id="input-activity-name" class="form-input" maxlength="80" placeholder="Ex.: matemática" required></div>
+              <button type="submit" class="btn-secondary">Mostrar atividade</button>
+              <button type="button" id="btn-clear-activity" class="btn-secondary">Limpar atividade</button>
+            </form>
+            <p class="form-help">A atividade manual funciona também no navegador e celular e substitui o jogo detectado até você limpar. Ela termina ao fechar ou recarregar esta janela.</p>
+            <p id="manual-activity-status" class="form-help" role="status"></p>
+            <h5 class="settings-section-title">Detecção de jogos</h5>
             <label class="checkbox-label">
               <input type="checkbox" id="check-game-activity" />
               <span>Mostrar aos amigos o jogo que estou jogando e há quanto tempo</span>

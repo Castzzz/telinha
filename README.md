@@ -10,6 +10,12 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
+**Protótipo local (ainda não publicado):** Configurações → Atividade permite ficar invisível
+neste aparelho e mostrar uma atividade manual, como “Estudando matemática”. Invisível aparece
+offline em Membros/Amigos e oculta a atividade; call, mensagens e transmissões continuam visíveis.
+Outros aparelhos podem manter a conta online. A atividade manual tem prioridade sobre o jogo
+detectado e termina ao fechar/recarregar a janela. [Pendências atuais](docs/PENDENCIAS.md).
+
 **4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
 
 ---
@@ -275,7 +281,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Bot de música na call** | Adicione músicas ou playlists de até 150 faixas na fila, reordene arrastando (`⠿`) ou usando `↑`/`↓`, use os botões rápidos de pausar/pular direto no card do bot na call e acompanhe o visualizador circular reagindo ao som |
 | **Mutar o microfone** | Botão 🎙️ ou tecla `M`. O app lembra se você estava mutado ou desmutado ao fechar e restaura essa escolha ao abrir. Na primeira vez, começa mutado. Entrar, trocar de canal ou reconectar também preserva a escolha. Entrar, sair, mutar/desmutar e ensurdecer/restaurar o áudio atualizam os ícones sem abrir popups; erros e avisos de moderação continuam aparecendo |
 | **Lista de canais** | Canais de voz vazios têm o mesmo espaçamento dos canais de texto; as duas seções ficam próximas na barra lateral |
-| **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas as transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
+| **Parar de ouvir todo mundo** | Botão 🎧 ou tecla `D`. Cala as vozes, mas os avisos de entrada e saída da call continuam tocando, seguindo o volume geral e as preferências de sons. As transmissões continuam tocando (⚙️ tem a opção de calar elas também) |
 | **Virar a câmera do celular** | Ligue **Câmera** na call e toque em **Virar** para alternar frontal/traseira. A ação também fica em **⋯ → Virar câmera**. O microfone continua ligado e os amigos continuam assistindo. Se a outra lente não abrir, o app tenta manter/recuperar a anterior |
 | **Transmitir minha tela** | Entre num canal de voz e use o botão 🖥️ → escolha a qualidade (720p a Nativa, 30 ou 60 fps) e a tela ou a janela. Internet fraca? Use 720p |
 | **Assistir em outra janela** | No app desktop, clique em ⧉ ou aperte `P`: a transmissão abre numa janela que pode redimensionar, maximizar e arrastar para outro monitor. Use **Tela cheia**, `F`, `F11` ou duplo clique no vídeo; `Esc` sai da tela cheia. A janela tem cabeçalho integrado e controles em uma barra flutuante discreta, com ícones; em janelas pequenas, os botões ficam compactos. A barra some após 3 segundos sem interação, mesmo com o mouse parado sobre ela; mouse ou teclado revelam de novo. O áudio e o volume continuam na sala. Fechar a janela mantém a transmissão aberta no Teletela |
@@ -335,12 +341,14 @@ O microfone pode ficar desligado: o som do PC vai separado, em estéreo.
 
 ### 🧠 Cancelamento de ruído
 Em ⚙️ → *Cancelamento de ruído do microfone*:
-- **Com IA** (padrão): RNNoise, com o mesmo processamento da 3.7;
+- **Com IA** (padrão): RNNoise, com entrada e saída mono para evitar perda de volume por um canal vazio;
 - **Básico**: o filtro do navegador;
 - **Desligado**: som cru do microfone.
 
 Só afeta a sua voz, nunca o som da transmissão. Se a IA não carregar, o app avisa e usa
-o básico. A 3.9.0 reverte a IA forte e o reforço automático adicionados na 3.8.
+o básico. O ganho automático continua desligado: o app não ajusta sozinho o volume do
+microfone. Para uma captura baixa, inclusive de fone Bluetooth, ajuste **Microfone → Volume
+do seu microfone** (até 300%). A 3.9.0 reverte a IA forte e o reforço automático adicionados na 3.8.
 
 ### ⌨️ Atalhos com o jogo aberto
 Os atalhos funcionam mesmo com o Teletela minimizado se forem `Ctrl`/`Shift`/`Alt` sozinhos (ex: o `Ctrl` da direita; a tecla continua indo pro jogo), uma combinação com `Ctrl` ou `Alt` (ex: `Ctrl + Alt + M`) ou uma tecla `F1`–`F24`. Letra sozinha (como o `M` padrão) só funciona com o Teletela na frente, senão você não conseguiria digitar essa letra no jogo.

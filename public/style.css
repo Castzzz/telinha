@@ -718,16 +718,18 @@ ul {
   font-size: 13px;
 }
 
-.status-indicator.online {
+.status-indicator {
   position: absolute;
   bottom: -1px;
   right: -1px;
   width: 10px;
   height: 10px;
-  background: var(--accent-green);
+  background: var(--text-muted);
   border: 2px solid var(--bg-tertiary);
   border-radius: 50%;
 }
+
+.status-indicator.online { background: var(--accent-green); }
 
 .user-info {
   display: flex;
@@ -4191,3 +4193,7 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
 .video-tile.idle .tile-zoom-reset {
   opacity: 0;
 }
+
+/* Mantém o texto alinhado mesmo quando a explicação quebra no celular. */
+[data-settings-section="atividade"] .checkbox-label { display: flex; align-items: flex-start; gap: 8px; }
+[data-settings-section="atividade"] .checkbox-label input { flex-shrink: 0; margin-top: 3px; }

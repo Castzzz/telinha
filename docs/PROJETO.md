@@ -22,9 +22,9 @@ amigos, membros na lateral, tempo individual por canal, exclusão do Geral, barr
 cheia e captura nativa Android. APK 4.3.0/código 11. Servidor atualizado e saudável.
 Os registros abaixo de desenvolvimento local descrevem as etapas anteriores à publicação.
 
-**Pedidos e andamento:** [pendências anotadas com o dono](PENDENCIAS.md). PiP Android,
-cargos sem conta e canais invisíveis na 3.7.0. Contas/amigos e reforço de voz estão
-preservados em `teste/contas-amigos-e-canais-com-senha` (commit `08b262e`).
+**Pedidos e andamento:** [pendências atuais](PENDENCIAS.md) e [ideias futuras](IDEIAS-FUTURAS.md).
+Registros antigos dessas listas ficam em `docs/historico/`; datas e branches citadas no
+histórico descrevem a situação daquela época. Contas/amigos já estão publicados desde a 4.3.0.
 
 **Versão 4.1.0 (28/10/2026):** miniplayer, modo cinema, privacidade inclusive para o dono,
 dados de RPG, início/ícones renovados, chat central e contas opcionais. O APK acompanha
@@ -135,13 +135,16 @@ Pontos importantes:
   `cloudflared` (precisa estar instalado).
 - **Áudio no cliente:** Web Audio. Vozes passam por um ganho que o "ensurdecer" zera; as
   transmissões passam por outro (dá pra continuar ouvindo as telas ensurdecido). Tudo termina
-  no volume geral. Veja `VolumeMixerManager` em `public/audio-manager.js`.
+  no volume geral. Os avisos de entrada/saída da call vão direto ao `outputGain` e continuam
+  audíveis ao ensurdecer, respeitando as preferências e o volume desses sons.
+  Veja `VolumeMixerManager` em `public/audio-manager.js`.
 - **Microfone (3.9.0):** revertido ao processamento da 3.7 por relato de áudio estranho.
   `microphone.js` usa RNNoise opcional → ganho manual → destino Web Audio, sem GTCRN,
-  compressão, limitador ou reforço automático. Mantém o formato do destino da 3.7.
+  compressão, limitador ou reforço automático. Correção local de 08/11/2026: filtro e destino
+  explicitamente mono para eliminar a perda de 6 dB causada por um canal vazio no RNNoise.
   `prefs.micOn` lembra o mute; `micGain` controla 0–300%. O modo antigo `ia-leve` é
   tratado como IA/RNNoise. A troca de filtro preserva o mute e libera a captura anterior.
-  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md) guarda o experimento histórico.
+  [DIAGNOSTICO-MICROFONES.md](DIAGNOSTICO-MICROFONES.md) guarda o diagnóstico atual e o experimento histórico.
 - **Celular:** `mobile.css` e `mobile.js` usam navegação própria: Canais e Você.
   A call e o chat abrem em telas separadas; uma faixa compacta mantém mute e saída da call
   disponíveis ao navegar. Os botões móveis disparam os controles originais, sem duplicar
@@ -1697,3 +1700,29 @@ Release solicitada pelo dono e publicada como mais recente, sem pré-release:
   2.11.7. Node/SFU/Caddy ativos; saúde pública saudável e interface 4.3.3 acessível.
   SHA-256 de `server.js`, `package.json`, `public/app.js` e `public/index.html`
   conferidos entre o código local e a VM. Segredos não foram exibidos nem versionados.
+
+
+### Protótipo de presença e atividades (09/11/2026, local)
+
+Branch `prototipo/presenca-e-atividades`, criada da `main` mantendo as alterações locais
+anteriores de áudio. Sem release/deploy; versão permanece 4.3.3.
+
+- `prefs.invisible` é uma preferência por aparelho. O handshake envia `invisible` antes
+  de anunciar presença, evitando aparecer online na reconexão. `room-info.presenceVersion: 1`
+  anuncia suporte e `update-presence: { invisible: boolean }` confirma mudanças por callback.
+- Membros e Amigos só consideram sockets visíveis. Uma conta com outro aparelho visível
+  continua online. O participante permanece na call e pode escrever/transmitir normalmente;
+  o modo não promete ocultar essas ações nem impedir moderação.
+- `publicUser` e eventos de atividade retornam `null` enquanto invisível. A linha offline
+  de membros usa perfil persistido e ID de membro, sem expor o socket invisível.
+- `update-activity` aceita `type` opcional: `playing`, `studying`, `working`, `watching`,
+  `listening`, `custom`. Ausência mantém compatibilidade com jogos dos clientes antigos.
+  ID, nome e início continuam validados; campos extras não são repassados.
+- Atividade manual existe só nesta janela, funciona também em navegador/Android e tem
+  prioridade sobre a detecção. Limpar retoma o jogo detectado, se compartilhamento estiver ligado.
+  Invisível oculta ambas. A detecção idêntica não reconstrói os elementos da atividade;
+  o relógio continua atualizando separadamente.
+- Cliente antigo mostra nomes manuais com o prefixo antigo “Jogando”; publicar o cliente
+  e o servidor juntos ao aprovar este protótipo. Servidor antigo não habilita invisibilidade.
+- Verificações: `node --test tests/presence-activity.test.js tests/server-members.test.js tests/friends.test.js`
+  e `electron tests/server-members-browser.cjs` para formulário, presença, temas e celular.

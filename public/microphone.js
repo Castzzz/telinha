@@ -3,7 +3,7 @@ let rnnoiseBinary;
 
 const safeGain = value => Number.isFinite(value) ? Math.max(0, Math.min(3, value)) : 1;
 
-// Restaura o grafo da 3.7: RNNoise opcional → ganho manual → saída, sem reforço automático.
+// RNNoise opcional → ganho manual → saída mono, sem reforço automático.
 export async function createMicrophonePipeline(raw, { noiseFilter = 'off', gain = 1, onStop } = {}) {
   let rnnoise;
   if (noiseFilter === 'rnnoise') {
@@ -17,13 +17,20 @@ export async function createMicrophonePipeline(raw, { noiseFilter = 'off', gain 
   try {
     const source = ctx.createMediaStreamSource(raw);
     const manual = ctx.createGain();
+    manual.channelCount = 1;
+    manual.channelCountMode = 'explicit';
     manual.gain.value = safeGain(gain);
     if (rnnoise) {
       await ctx.audioWorklet.addModule(`${RNNOISE_DIR}/rnnoise/workletProcessor.js`);
       denoiser = new rnnoise.RnnoiseWorkletNode(ctx, { maxChannels: 1, wasmBinary: rnnoiseBinary });
+      // O filtro processa só um canal; saída estéreo deixava o outro vazio e perdia 6 dB.
+      denoiser.channelCount = 1;
+      denoiser.channelCountMode = 'explicit';
       source.connect(denoiser).connect(manual);
     } else source.connect(manual);
     const dest = ctx.createMediaStreamDestination();
+    dest.channelCount = 1;
+    dest.channelCountMode = 'explicit';
     manual.connect(dest);
     await ctx.resume();
 

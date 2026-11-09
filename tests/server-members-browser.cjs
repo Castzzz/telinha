@@ -13,7 +13,7 @@ async function until(code) { for (let i = 0; i < 180; i++) { if (await js(code))
 const timeout = setTimeout(() => { console.error('Tempo esgotado'); app.exit(1); }, 60000);
 app.whenReady().then(async () => {
   ipcMain.handle('prefs-get', () => prefs); ipcMain.handle('prefs-set', (_event, patch) => { Object.assign(prefs, patch); return true; });
-  ipcMain.handle('get-game-activity', () => ({ activity: null })); ipcMain.handle('set-global-hotkeys', () => ({})); ipcMain.handle('autostart-get', () => ({ supported: false })); ipcMain.handle('system-idle-seconds', () => 0);
+  ipcMain.handle('get-game-activity', () => ({ activity: { id: 'cs2', name: 'Counter-Strike 2', startedAt: Date.now() - 60000 } })); ipcMain.handle('set-global-hotkeys', () => ({})); ipcMain.handle('autostart-get', () => ({ supported: false })); ipcMain.handle('system-idle-seconds', () => 0);
   backend = await import('../server.js'); const server = await backend.startServer(0, '127.0.0.1'); const url = `http://127.0.0.1:${server.address().port}`;
   async function connect(auth = {}) { const socket = io(url, { transports: ['websocket'], auth }); clients.push(socket); await new Promise(resolve => socket.once('connect', resolve)); return socket; }
   const emit = (socket, event, payload = {}) => socket.timeout(5000).emitWithAck(event, payload);
@@ -27,6 +27,32 @@ app.whenReady().then(async () => {
   await js("document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
   await until("document.querySelector('#server-members-groups').textContent.includes('Cast') && document.querySelector('#server-members-groups').textContent.includes('Neves')");
   assert(await js("!appState.currentChannelId && !document.querySelector('#server-members').classList.contains('hidden')"));
+  await until("!document.querySelector('#check-invisible').disabled && appState.myUser.activity?.id === 'cs2'");
+  await js(`document.querySelector('#modal-settings').classList.remove('hidden');document.querySelector('[data-settings-tab="atividade"]').click();
+    document.querySelector('#select-activity-type').value='studying';document.querySelector('#input-activity-name').value='<matemática>';document.querySelector('#form-manual-activity').requestSubmit();void 0`);
+  await until("appState.myUser.activity?.type === 'studying'");
+  assert.equal(await js("document.querySelector('#manual-activity-status').textContent"), 'Estudando <matemática>');
+  for (const theme of ['escuro', 'preto', 'claro']) {
+    await js(`document.querySelector('#select-theme').value='${theme}';document.querySelector('#select-theme').dispatchEvent(new Event('change'));void 0`);
+    await pause(80);
+    fs.writeFileSync(`/tmp/teletela-atividade-${theme}.png`, (await win.webContents.capturePage()).toPNG());
+  }
+  win.setSize(390, 844); await pause(150);
+  assert(await js('document.documentElement.scrollWidth <= innerWidth'));
+  fs.writeFileSync('/tmp/teletela-atividade-celular.png', (await win.webContents.capturePage()).toPNG());
+  win.setSize(1440, 900); await pause(100);
+  await click('#check-invisible'); await until("document.querySelector('#dock-user-status').textContent === 'Invisível'");
+  assert(await js("appState.myUser.activity === null && !document.querySelector('#user-profile .status-indicator').classList.contains('online')"));
+  await click('#check-invisible'); await until("appState.myUser.activity?.type === 'studying'");
+  await click('#btn-clear-activity'); assert(await js("appState.myUser.activity?.id === 'cs2'"));
+  await js("document.querySelector('#modal-settings').classList.add('hidden');void 0");
+  await emit(owner, 'join-channel', { channelId: 'geral' });
+  await emit(owner, 'update-activity', { id: 'manual', type: 'studying', name: '<matemática>', startedAt: Date.now() });
+  await until(`appState.channels.get('geral')?.users.get('${owner.id}')?.activity?.type === 'studying'`);
+  await js("Array.from(document.querySelectorAll('.server-member')).find(el => el.textContent.includes('Neves')).click();void 0");
+  await until("document.querySelector('#profile-card-activity').textContent.includes('Estudando <matemática>')");
+  assert(await js("!document.querySelector('matemática')"));
+  await js("document.querySelector('#modal-user-profile').classList.add('hidden');void 0");
   const memberSelector = `.server-member[data-member-id="${registered.account.accessId}"]`;
   await until(`document.querySelectorAll('${memberSelector}').length === 1`);
   nanda.disconnect(); await pause(80); assert(await js(`document.querySelector('${memberSelector}').getAttribute('aria-label').includes('online')`));
@@ -58,6 +84,6 @@ app.whenReady().then(async () => {
   fs.writeFileSync('/tmp/teletela-membros-celular.png', (await win.webContents.capturePage()).toPNG());
   await js('window.teletelaMobileBack();void 0');
   assert(await js("document.querySelector('#server-members').classList.contains('hidden')"));
-  console.log('Membros: presença fora da call, offline, múltiplos aparelhos, perfil, busca, recolher/persistir, chat central, três temas e celular. Exclusão do Geral pela interface passou.');
+  console.log('Presença invisível, atividade manual, prioridade sobre jogos, limpeza, escape de HTML e três temas/celular passaram. Membros: presença fora da call, offline, múltiplos aparelhos, perfil, busca, recolher/persistir, chat central, três temas e celular. Exclusão do Geral pela interface passou.');
 }).then(() => finish(0)).catch(error => { console.error(error); finish(1); });
-async function finish(code) { clearTimeout(timeout); clients.forEach(socket => socket.disconnect()); win?.destroy(); if (backend) await new Promise(resolve => backend.io.close(resolve)); fs.rmSync(dir, { recursive: true, force: true }); app.exit(code); }
+async function finish(code) { clearTimeout(timeout); clients.forEach(socket => socket.disconnect()); win?.destroy(); if (backend) await new Promise(resolve => backend.io.close(resolve)); fs.rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); app.exit(code); }

@@ -380,6 +380,7 @@ const socket = io(SERVER_URL, {
       if (response.ok && profileCredential) proof = await profileProof(profileCredential, SERVER_URL, (await response.json()).challenge);
     } catch (_) { /* Servidores antigos continuam usando a credencial por sala. */ }
     cb({
+    invisible: prefs.invisible === true,
     accountToken: accountSession(prefs, SERVER_URL)?.token || '',
     profileId: myProfile.id,
     memberKey: roomAccess().memberKey || '',
@@ -830,7 +831,7 @@ socket.on('user-joined', handleUserJoined);
 // Som de quando alguém entra ou sai da call: áudios gravados pelos próprios amigos.
 // O servidor sorteia o número (soundSeed) e manda o mesmo pra todo mundo do canal,
 // inclusive pra quem entrou/saiu: todos ouvem o mesmo áudio. Passa pelo volume geral
-// e fica mudo com o ensurdecer.
+// mesmo com o ensurdecer ligado.
 const CALL_SOUNDS = Array.from({ length: 9 }, (_, i) => `/sounds/amigo-${i + 1}.ogg`);
 const callSoundBuffers = new Map();
 let lastCallSoundAt = 0;
@@ -904,7 +905,7 @@ async function loadSoundBuffer(ctx, url) {
 }
 
 async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 'join' } = {}) {
-  if (!force && (prefs.callSounds === false || appState.myUser.isDeafened)) return;
+  if (!force && prefs.callSounds === false) return;
   const callVolPct = typeof prefs.callSoundsVolume === 'number' ? prefs.callSoundsVolume : 100;
   if (!force && callVolPct <= 0) return;
   const callVolGain = Math.max(0, callVolPct / 100);
@@ -918,7 +919,7 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
   const mixer = appState.mixerManager;
   try {
     const ctx = mixer?.audioContext;
-    if (!ctx || !mixer.masterDeafenGain) {
+    if (!ctx || !mixer.outputGain) {
       const audio = new Audio(url);
       audio.volume = Math.min(1, Math.max(0, callVolGain));
       await audio.play();
@@ -942,8 +943,8 @@ async function playCallSound(soundSeed, customUrl = '', { force = false, kind = 
     source.buffer = buffer;
     const gainNode = ctx.createGain();
     gainNode.gain.value = callVolGain;
-    const dest = force ? (mixer.outputGain || mixer.masterDeafenGain) : mixer.masterDeafenGain;
-    source.connect(gainNode).connect(dest);
+    // Os avisos continuam audíveis ao ensurdecer, respeitando o volume geral.
+    source.connect(gainNode).connect(mixer.outputGain);
     source.start();
   } catch (err) {
     console.warn('[Som] Não tocou o som de entrada/saída:', err);
@@ -3953,6 +3954,15 @@ function findUser(userId) {
 // O relógio muda só o texto; não reconstrói fotos, canais nem conexões de mídia.
 const GAME_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 7h12a3 3 0 0 1 3 2.5l1 8a2 2 0 0 1-3.4 1.7L16 16H8l-2.6 3.2A2 2 0 0 1 2 17.5l1-8A3 3 0 0 1 6 7zM7 10v4M5 12h4M16 11h.01M19 13h.01"/></svg>';
 let localGameActivity = null;
+let manualActivity = null;
+let presenceSupported = false;
+const ACTIVITY_LABELS = { playing: 'Jogando', studying: 'Estudando', working: 'Trabalhando', watching: 'Assistindo', listening: 'Ouvindo', custom: '' };
+function activityLabel(activity) {
+  return [ACTIVITY_LABELS[activity?.type || 'playing'] || '', activity?.name || ''].filter(Boolean).join(' ');
+}
+function currentActivity() {
+  return prefs.invisible === true ? null : manualActivity || (prefs.shareGameActivity === false ? null : localGameActivity);
+}
 let publishedGameActivity;
 let gamePollTimer;
 let gamePollRun = 0;
@@ -3987,18 +3997,18 @@ function userCallTimerHtml(user) {
 }
 
 function userGameBadgeHtml(user) {
-  const activity = user.id === appState.myId ? localGameActivity : user.activity;
-  return `<span class="indicator-icon game-activity-badge${activity ? '' : ' hidden'}" data-activity-badge-user="${escapeHtml(user.id)}" title="Jogando — clique para ver no perfil">${GAME_SVG}</span>`;
+  const activity = user.id === appState.myId ? currentActivity() : user.activity;
+  return `<span class="indicator-icon game-activity-badge${activity ? '' : ' hidden'}" data-activity-badge-user="${escapeHtml(user.id)}" title="Atividade — clique para ver no perfil">${GAME_SVG}</span>`;
 }
 
 function activityContent(activity) {
   if (!activity) return '';
-  return `${GAME_SVG}<span class="activity-game-name"><span class="activity-game-prefix">Jogando </span>${escapeHtml(activity.name)}</span><span class="activity-time" data-activity-start="${Number(activity.startedAt)}">· ${activityElapsed(activity.startedAt)}</span>`;
+  return `${GAME_SVG}<span class="activity-game-name">${escapeHtml(activityLabel(activity))}</span><span class="activity-time" data-activity-start="${Number(activity.startedAt)}">· ${activityElapsed(activity.startedAt)}</span>`;
 }
 
 function userActivityHtml(user) {
-  const activity = user.id === appState.myId ? localGameActivity : user.activity;
-  return `<span class="game-activity${activity ? '' : ' hidden'}" data-activity-user="${escapeHtml(user.id)}" title="${activity ? escapeHtml(`Jogando ${activity.name}`) : ''}">${activityContent(activity)}</span>`;
+  const activity = user.id === appState.myId ? currentActivity() : user.activity;
+  return `<span class="game-activity${activity ? '' : ' hidden'}" data-activity-user="${escapeHtml(user.id)}" title="${activity ? escapeHtml(activityLabel(activity)) : ''}">${activityContent(activity)}</span>`;
 }
 
 function renderUserActivity(userId, activity) {
@@ -4006,7 +4016,7 @@ function renderUserActivity(userId, activity) {
     if (el.dataset.activityUser !== userId) continue;
     el.classList.toggle('hidden', !activity);
     el.innerHTML = activityContent(activity);
-    el.title = activity ? `Jogando ${activity.name}` : '';
+    el.title = activity ? activityLabel(activity) : '';
   }
   for (const el of $$('[data-activity-badge-user]')) {
     if (el.dataset.activityBadgeUser !== userId) continue;
@@ -4015,8 +4025,8 @@ function renderUserActivity(userId, activity) {
 }
 
 function publishGameActivity(force = false) {
-  if (!window.electronAPI?.getGameActivity || !socket.connected) return;
-  const activity = prefs.shareGameActivity === false ? null : localGameActivity;
+  if (!socket.connected) return;
+  const activity = currentActivity();
   const signature = JSON.stringify(activity);
   if (!force && signature === publishedGameActivity) return;
   publishedGameActivity = signature;
@@ -4024,15 +4034,14 @@ function publishGameActivity(force = false) {
 }
 
 function showGameActivity(activity) {
+  const changed = JSON.stringify(localGameActivity) !== JSON.stringify(activity);
   localGameActivity = activity;
-  appState.myUser.activity = activity;
-  renderUserActivity(appState.myId, activity);
+  if (changed) refreshOwnActivity();
   const status = $('#game-activity-status');
   if (status) {
     status.textContent = prefs.shareGameActivity === false ? 'Compartilhamento desligado.'
       : activity ? `Jogando ${activity.name} · ${activityElapsed(activity.startedAt)}` : 'Nenhum jogo reconhecido aberto.';
   }
-  publishGameActivity();
 }
 
 async function pollGameActivity() {
@@ -4055,7 +4064,51 @@ async function pollGameActivity() {
   if (run === gamePollRun) gamePollTimer = setTimeout(pollGameActivity, 15000);
 }
 
+function refreshOwnActivity() {
+  const activity = currentActivity();
+  appState.myUser.activity = activity;
+  renderUserActivity(appState.myId, activity);
+  $('#manual-activity-status').textContent = manualActivity ? `${activityLabel(manualActivity)}${prefs.invisible ? ' · oculta enquanto invisível' : ''}` : 'Nenhuma atividade manual.';
+  $('#dock-user-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : '#Conectado';
+  document.querySelector('#user-profile .status-indicator')?.classList.toggle('online', !(prefs.invisible && presenceSupported));
+  publishGameActivity();
+}
+
 function setupGameActivity() {
+  const invisible = $('#check-invisible');
+  invisible.checked = prefs.invisible === true;
+  invisible.disabled = true;
+  socket.on('room-info', info => {
+    if (!info.assetKey && !Object.hasOwn(info, 'presenceVersion')) return;
+    presenceSupported = info.presenceVersion === 1;
+    invisible.disabled = !presenceSupported;
+    $('#presence-status').textContent = invisible.disabled ? 'Esta sala precisa ser atualizada para usar o modo invisível.' : '';
+    refreshOwnActivity();
+  });
+  socket.on('disconnect', () => { invisible.disabled = true; });
+  invisible.addEventListener('change', async () => {
+    invisible.disabled = true;
+    try {
+      const result = await socket.timeout(5000).emitWithAck('update-presence', { invisible: invisible.checked });
+      if (!result?.success) throw new Error();
+      const saved = await savePrefs({ invisible: invisible.checked });
+      $('#presence-status').textContent = saved === false ? 'Presença alterada, mas não foi possível salvar neste aparelho.' : '';
+      refreshOwnActivity();
+    } catch {
+      invisible.checked = prefs.invisible === true;
+      $('#presence-status').textContent = 'Não consegui alterar a presença. Tente novamente.';
+    } finally { invisible.disabled = !socket.connected; }
+  });
+  $('#form-manual-activity').addEventListener('submit', event => {
+    event.preventDefault();
+    const name = $('#input-activity-name').value.trim();
+    if (!name) return;
+    manualActivity = { id: 'manual', type: $('#select-activity-type').value, name, startedAt: Date.now() };
+    refreshOwnActivity();
+  });
+  $('#btn-clear-activity').addEventListener('click', () => { manualActivity = null; refreshOwnActivity(); });
+  refreshOwnActivity();
+
   const supported = window.electronAPI?.getGameActivity && ['linux', 'win32'].includes(window.electronAPI.platform);
   const check = $('#check-game-activity');
   const form = $('#form-custom-game');
