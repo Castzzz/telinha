@@ -114,6 +114,8 @@ export function syncMobileState(state) {
 }
 
 function back() {
+  const profile = $('#profile-quick-menu');
+  if (profile?.matches(':popover-open')) { profile.hidePopover(); return true; }
   if (window.teletelaExitFullscreen?.()) return true;
   if (hooks.closeMembers?.()) return true;
   if ($('#mobile-message-options')?.open) { $('#mobile-message-options').close(); return true; }

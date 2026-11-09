@@ -78,7 +78,7 @@ app.whenReady().then(async () => {
   await until(owner, 'document.querySelector("#user-popover-roles").textContent.includes("Moderador")');
   await click(owner, '#user-popover-avatar');
   await until(owner, 'document.querySelector("#profile-card-roles").textContent.includes("Moderador")');
-  await js(guest, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#user-profile').click();document.querySelector('#profile-display-role').value='${roleId}';document.querySelector('#form-profile').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
+  await js(guest, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#user-profile').click();document.querySelector('#btn-quick-edit-profile').click();document.querySelector('#profile-display-role').value='${roleId}';document.querySelector('#form-profile').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));void 0`);
   await until(owner, '[...document.querySelectorAll(".channel-user")].find(el=>el.dataset.username === "Pessoa permitida")?.querySelector(".badge-role")?.textContent === "Moderador"');
   await js(owner, "document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));void 0");
   await click(owner, '[data-text-channel-id="texto-reservado"] .channel-settings-btn');

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import activity from '../electron/game-activity.cjs';
-import { activityElapsed } from '../public/game-activity.js';
+import { activityElapsed, activityLabel, manualActivityFor } from '../public/game-activity.js';
 
 const { detectGames, parseTasklist, createActivityTracker, customGameList } = activity;
 
@@ -82,4 +82,17 @@ test('relógio de atividade trata início, minutos e horas sem tempo negativo', 
   assert.equal(activityElapsed(0, 23 * 60000), 'há 23 min');
   assert.equal(activityElapsed(0, 60 * 60000), 'há 1 h');
   assert.equal(activityElapsed(0, 125 * 60000), 'há 2 h 5 min');
+});
+
+test('atividade pronta não exige descrição e texto livre só entra em outra atividade', () => {
+  const studying = manualActivityFor('studying', 'texto ignorado', 123);
+  assert.deepEqual(studying, { id: 'manual', type: 'studying', name: 'Estudando', startedAt: 123 });
+  assert.equal(activityLabel(studying), 'Estudando');
+  assert.equal(activityLabel(manualActivityFor('working')), 'Trabalhando');
+  assert.equal(activityLabel(manualActivityFor('custom', '  Lendo um livro  ')), 'Lendo um livro');
+  assert.equal(manualActivityFor('custom', '   '), null);
+  assert.equal(manualActivityFor('invalida'), null);
+  assert.equal(manualActivityFor(''), null);
+  assert.equal(manualActivityFor('custom', 'x'.repeat(100)).name.length, 80);
+  assert.equal(activityLabel({ name: 'Counter-Strike 2' }), 'Jogando Counter-Strike 2');
 });

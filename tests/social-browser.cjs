@@ -67,6 +67,7 @@ app.whenReady().then(async () => {
   await until(second, 'appState.isOwner && document.querySelector("#account-username")?.textContent === "@aventureiro"');
   if ((await serverUser(second)).data.user.accessId !== accessId) throw new Error('O login não preservou os cargos.');
   await click(first, '#user-profile');
+  await click(first, '#btn-quick-edit-profile');
   await js(first, `document.querySelector('#input-profile-bio').value='Campanha de RPG';document.querySelector('#form-profile').requestSubmit();void 0`);
   await until(first, 'document.querySelector("#toast-container").textContent.includes("Perfil salvo!")');
   await until(second, 'JSON.parse(localStorage.getItem("telinha_prefs")).accountSessions[Object.keys(JSON.parse(localStorage.getItem("telinha_prefs")).accountSessions)[0]].profile.bio === "Campanha de RPG"');

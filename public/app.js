@@ -24,7 +24,7 @@ import {
   setRemoteElementMuted
 } from './audio-manager.js';
 import { normalizeImageCrop, imageCropRect, imageCropStyle } from './image-crop.js';
-import { activityElapsed } from './game-activity.js';
+import { activityElapsed, activityLabel, manualActivityFor } from './game-activity.js';
 import { createMicrophonePipeline } from './microphone.js';
 import { CameraSource } from './camera-source.js';
 import { MobileScreenSource } from './mobile-screen.js';
@@ -3852,7 +3852,7 @@ document.addEventListener('fullscreenchange', () => {
     if (target && (target.id === 'videos-grid' || target.classList.contains('video-tile'))) target.appendChild(controls);
     else stageControlsHome.after(controls);
   }
-  for (const id of ['user-popover', 'modal-user-profile', 'modal-settings', 'image-viewer']) mountStageOverlay(document.getElementById(id));
+  for (const id of ['user-popover', 'modal-user-profile', 'modal-settings', 'image-viewer', 'profile-quick-menu']) mountStageOverlay(document.getElementById(id));
   if (!document.fullscreenElement && !document.webkitFullscreenElement) {
     document.body.classList.remove('stage-fullscreen');
     document.querySelectorAll('.stage-fullscreen-tile').forEach((el) => el.classList.remove('stage-fullscreen-tile'));
@@ -3956,10 +3956,7 @@ const GAME_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="
 let localGameActivity = null;
 let manualActivity = null;
 let presenceSupported = false;
-const ACTIVITY_LABELS = { playing: 'Jogando', studying: 'Estudando', working: 'Trabalhando', watching: 'Assistindo', listening: 'Ouvindo', custom: '' };
-function activityLabel(activity) {
-  return [ACTIVITY_LABELS[activity?.type || 'playing'] || '', activity?.name || ''].filter(Boolean).join(' ');
-}
+let quickProfileTrigger = null;
 function currentActivity() {
   return prefs.invisible === true ? null : manualActivity || (prefs.shareGameActivity === false ? null : localGameActivity);
 }
@@ -4068,45 +4065,121 @@ function refreshOwnActivity() {
   const activity = currentActivity();
   appState.myUser.activity = activity;
   renderUserActivity(appState.myId, activity);
-  $('#manual-activity-status').textContent = manualActivity ? `${activityLabel(manualActivity)}${prefs.invisible ? ' · oculta enquanto invisível' : ''}` : 'Nenhuma atividade manual.';
-  $('#dock-user-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : '#Conectado';
+  const status = manualActivity ? `${activityLabel(manualActivity)}${prefs.invisible ? ' · oculta enquanto invisível' : ''}` : 'Atividade automática: mostra o jogo detectado, se houver.';
+  $('#manual-activity-status').textContent = status;
+  $('#quick-activity-status').textContent = status;
+  $('#dock-user-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : activity ? activityLabel(activity) : '#Conectado';
+  $('#quick-profile-status').textContent = prefs.invisible && presenceSupported ? 'Invisível' : 'Online';
   document.querySelector('#user-profile .status-indicator')?.classList.toggle('online', !(prefs.invisible && presenceSupported));
   publishGameActivity();
 }
 
+function syncActivityForms() {
+  for (const form of $$('[data-activity-form]')) {
+    const type = form.querySelector('[data-activity-type]');
+    const input = form.querySelector('[data-activity-name]');
+    type.value = manualActivity?.type || '';
+    input.value = manualActivity?.type === 'custom' ? manualActivity.name : '';
+    input.disabled = type.value !== 'custom';
+    form.querySelector('[data-activity-custom]').classList.toggle('hidden', input.disabled);
+  }
+}
+
+function positionQuickProfile() {
+  const menu = $('#profile-quick-menu');
+  if (!menu.matches(':popover-open') || !quickProfileTrigger) return;
+  const rect = quickProfileTrigger.getBoundingClientRect();
+  const width = window.visualViewport?.width || innerWidth;
+  const height = window.visualViewport?.height || innerHeight;
+  menu.style.left = `${Math.max(12, Math.min(rect.left, width - menu.offsetWidth - 12))}px`;
+  menu.style.top = `${Math.max(12, Math.min(rect.top - menu.offsetHeight - 10, height - menu.offsetHeight - 12))}px`;
+}
+
+function openQuickProfile(trigger = $('#user-profile')) {
+  const menu = $('#profile-quick-menu');
+  if (menu.matches(':popover-open')) { menu.hidePopover(); return; }
+  syncActivityForms();
+  quickProfileTrigger = trigger;
+  $('#quick-profile-name').textContent = myProfile.name;
+  $('#quick-profile-avatar').innerHTML = $('#dock-user-avatar').innerHTML;
+  $('#quick-profile-avatar').style.backgroundColor = myProfile.color;
+  mountStageOverlay(menu);
+  menu.showPopover();
+  positionQuickProfile();
+  menu.querySelector('[data-activity-type]').focus();
+}
+
 function setupGameActivity() {
-  const invisible = $('#check-invisible');
-  invisible.checked = prefs.invisible === true;
-  invisible.disabled = true;
+  const invisibleInputs = [$('#check-invisible'), $('#quick-check-invisible')];
+  let presencePending = false;
+  const syncPresence = (message = '') => {
+    for (const input of invisibleInputs) {
+      input.checked = prefs.invisible === true;
+      input.disabled = presencePending || !presenceSupported || !socket.connected;
+    }
+    $('#presence-status').textContent = message;
+    $('#quick-presence-status').textContent = message;
+  };
+  syncPresence();
   socket.on('room-info', info => {
     if (!info.assetKey && !Object.hasOwn(info, 'presenceVersion')) return;
     presenceSupported = info.presenceVersion === 1;
-    invisible.disabled = !presenceSupported;
-    $('#presence-status').textContent = invisible.disabled ? 'Esta sala precisa ser atualizada para usar o modo invisível.' : '';
+    syncPresence(presenceSupported ? '' : 'Esta sala precisa ser atualizada para usar o modo invisível.');
     refreshOwnActivity();
   });
-  socket.on('disconnect', () => { invisible.disabled = true; });
-  invisible.addEventListener('change', async () => {
-    invisible.disabled = true;
+  socket.on('disconnect', () => { syncPresence('Sem conexão com a sala.'); });
+  for (const input of invisibleInputs) input.addEventListener('change', async () => {
+    const invisible = input.checked;
+    presencePending = true;
+    invisibleInputs.forEach(control => { control.disabled = true; });
+    let message = '';
     try {
-      const result = await socket.timeout(5000).emitWithAck('update-presence', { invisible: invisible.checked });
+      const result = await socket.timeout(5000).emitWithAck('update-presence', { invisible });
       if (!result?.success) throw new Error();
-      const saved = await savePrefs({ invisible: invisible.checked });
-      $('#presence-status').textContent = saved === false ? 'Presença alterada, mas não foi possível salvar neste aparelho.' : '';
+      const saved = await savePrefs({ invisible });
+      if (saved === false) message = 'Presença alterada, mas não foi possível salvar neste aparelho.';
       refreshOwnActivity();
-    } catch {
-      invisible.checked = prefs.invisible === true;
-      $('#presence-status').textContent = 'Não consegui alterar a presença. Tente novamente.';
-    } finally { invisible.disabled = !socket.connected; }
+    } catch { message = 'Não consegui alterar a presença. Tente novamente.'; }
+    finally { presencePending = false; syncPresence(message); }
   });
-  $('#form-manual-activity').addEventListener('submit', event => {
-    event.preventDefault();
-    const name = $('#input-activity-name').value.trim();
-    if (!name) return;
-    manualActivity = { id: 'manual', type: $('#select-activity-type').value, name, startedAt: Date.now() };
-    refreshOwnActivity();
+  for (const form of $$('[data-activity-form]')) {
+    const select = form.querySelector('[data-activity-type]');
+    const input = form.querySelector('[data-activity-name]');
+    select.addEventListener('change', () => {
+      const custom = select.value === 'custom';
+      input.disabled = !custom;
+      form.querySelector('[data-activity-custom]').classList.toggle('hidden', !custom);
+      if (custom) { input.focus(); return; }
+      manualActivity = manualActivityFor(select.value);
+      syncActivityForms();
+      refreshOwnActivity();
+    });
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const activity = manualActivityFor(select.value, input.value);
+      if (!activity) return;
+      manualActivity = activity;
+      syncActivityForms();
+      refreshOwnActivity();
+    });
+    form.querySelector('[data-activity-clear]').addEventListener('click', () => {
+      manualActivity = null;
+      syncActivityForms();
+      refreshOwnActivity();
+    });
+  }
+  const menu = $('#profile-quick-menu');
+  // O campo de outra atividade e o teclado móvel podem mudar a altura do painel.
+  new ResizeObserver(positionQuickProfile).observe(menu);
+  window.addEventListener('resize', positionQuickProfile);
+  window.visualViewport?.addEventListener('resize', positionQuickProfile);
+  menu.addEventListener('toggle', () => {
+    const open = menu.matches(':popover-open');
+    for (const trigger of [$('#user-profile'), $('#btn-mobile-quick-profile')]) trigger.setAttribute('aria-expanded', String(open));
   });
-  $('#btn-clear-activity').addEventListener('click', () => { manualActivity = null; refreshOwnActivity(); });
+  $('#btn-mobile-quick-profile').addEventListener('click', event => openQuickProfile(event.currentTarget));
+  $('#btn-quick-edit-profile').addEventListener('click', () => { menu.hidePopover(); openProfileSettings(); });
+  syncActivityForms();
   refreshOwnActivity();
 
   const supported = window.electronAPI?.getGameActivity && ['linux', 'win32'].includes(window.electronAPI.platform);
@@ -4682,11 +4755,11 @@ function setupProfileSettings() {
     button.addEventListener('click', () => document.getElementById(button.dataset.profileFile)?.click());
   });
   $('#btn-profile-reset').addEventListener('click', resetProfileDraft);
-  $('#user-profile')?.addEventListener('click', openProfileSettings);
+  $('#user-profile')?.addEventListener('click', event => openQuickProfile(event.currentTarget));
   $('#user-profile')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      openProfileSettings();
+      openQuickProfile(e.currentTarget);
     }
   });
 

@@ -1726,3 +1726,26 @@ anteriores de áudio. Sem release/deploy; versão permanece 4.3.3.
   e o servidor juntos ao aprovar este protótipo. Servidor antigo não habilita invisibilidade.
 - Verificações: `node --test tests/presence-activity.test.js tests/server-members.test.js tests/friends.test.js`
   e `electron tests/server-members-browser.cjs` para formulário, presença, temas e celular.
+
+
+### Ajustes do protótipo de atividades e seletores (09/11/2026, local)
+
+- Atividades prontas são aplicadas ao selecionar e não exigem descrição. O nome enviado
+  é o próprio rótulo (“Estudando”); `activityLabel` evita repetir o prefixo. Somente `custom`
+  pede texto. Conversão e rótulos ficam em `public/game-activity.js`, compartilhados com os testes.
+- O perfil do rodapé abre `#profile-quick-menu` com atividade, invisibilidade e **Editar perfil**.
+  No celular: **Você → Trocar atividade e presença**. O painel usa `popover`, fecha por
+  clique fora/Escape/voltar no Android e acompanha as sobreposições de tela cheia.
+  Os dois formulários usam a mesma lógica e sincronizam atividade e presença entre si.
+- A regra global de `select` em `style.css` também estiliza `::picker(select)`, opções,
+  destaque, seta e marca da seleção por tokens. Abrange todos os seletores da sala,
+  inclusive os preenchidos dinamicamente. Preserva controles nativos, eventos e teclado,
+  sem biblioteca ou cópia de opções em JavaScript. Uso de `appearance: base-select`
+  conforme a [documentação do Chromium](https://developer.chrome.com/blog/a-customizable-select).
+- O Electron do projeto suporta o seletor personalizável. Em navegador/WebView sem esse
+  suporte, `@supports` mantém o controle nativo com as cores de texto/fundo disponíveis;
+  o formato da lista pode continuar sendo definido pelo sistema. O laboratório de música
+  em `scripts/music-lab/` é uma ferramenta separada da interface instalada.
+- Conferência no Electron: todos os selects recebem `base-select`; listas de atividade
+  abertas nos três temas, seleção por teclado, presets sem texto, texto personalizado,
+  limpeza, menu rápido desktop/celular, edição do perfil e invisibilidade sincronizada.

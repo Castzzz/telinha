@@ -4197,3 +4197,65 @@ html.pause-in-background:is(.app-unfocused, .app-hidden) .has-frozen > canvas.av
 /* Mantém o texto alinhado mesmo quando a explicação quebra no celular. */
 [data-settings-section="atividade"] .checkbox-label { display: flex; align-items: flex-start; gap: 8px; }
 [data-settings-section="atividade"] .checkbox-label input { flex-shrink: 0; margin-top: 3px; }
+
+/* O seletor e a lista aberta usam os mesmos tokens dos outros controles. */
+select { color: var(--text-normal); background-color: var(--bg-tertiary); }
+select option, select optgroup { color: var(--text-normal); background-color: var(--bg-secondary); }
+@supports (appearance: base-select) {
+  select:not([multiple]):not([size]),
+  select:not([multiple]):not([size])::picker(select) { appearance: base-select; }
+  select:not([multiple]):not([size]) { align-items: center; gap: 12px; cursor: pointer; min-width: 0; }
+  select::picker-icon { color: var(--text-muted); transition: rotate var(--transition-fast); }
+  select:open::picker-icon { rotate: 180deg; }
+  select::picker(select) {
+    color: var(--text-normal);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    padding: 6px;
+    margin-block: 6px;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 24%);
+    max-height: min(320px, 60dvh);
+    overflow-y: auto;
+  }
+  select option { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 8px 12px; border-radius: var(--radius-sm); white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+  select option:hover, select option:focus { background: var(--bg-hover); }
+  select option:checked { color: var(--text-header); background: var(--accent-soft, var(--bg-hover)); font-weight: 600; }
+  select option:disabled { color: var(--text-muted); cursor: default; }
+  select option::checkmark { color: var(--accent-brand); }
+  select:disabled { cursor: default; opacity: .6; }
+}
+
+.manual-activity-form { display: flex; flex-direction: column; gap: 12px; margin: 16px 0 8px; }
+.manual-activity-form > .form-group { margin: 0; }
+.manual-activity-form > [data-activity-clear] { align-self: flex-start; }
+.activity-custom-field { display: flex; align-items: flex-end; gap: 10px; }
+.activity-custom-field .form-group { flex: 1; min-width: 0; margin: 0; }
+.activity-custom-field button { flex-shrink: 0; }
+.profile-quick-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: min(340px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 18px;
+  color: var(--text-normal);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgb(0 0 0 / 30%);
+}
+.profile-quick-heading { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 1px solid var(--border-subtle); }
+.profile-quick-heading > div:nth-child(2) { flex: 1; min-width: 0; }
+.profile-quick-heading strong { display: block; color: var(--text-header); overflow-wrap: anywhere; }
+.profile-quick-heading small { display: block; color: var(--text-muted); margin-top: 3px; }
+.profile-quick-heading .user-avatar { width: 40px; height: 40px; flex-shrink: 0; overflow: hidden; border-radius: 50%; }
+.profile-quick-invisible { display: flex; align-items: center; gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--border-subtle); font-size: 13px; }
+.profile-quick-menu > .btn-secondary { width: 100%; margin-top: 16px; }
+.profile-quick-menu .activity-custom-field { flex-direction: column; align-items: stretch; }
+.profile-quick-menu .form-group label { text-transform: none; letter-spacing: normal; }
+@media (max-width: 767px) {
+  .activity-custom-field { flex-direction: column; align-items: stretch; }
+  .profile-quick-menu select option { min-height: 44px; }
+}

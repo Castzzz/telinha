@@ -11,7 +11,10 @@ Branch `prototipo/presenca-e-atividades`, baseada na `main`, com as alterações
 - [x] Sons de entrada/saída audíveis ao ensurdecer, respeitando preferências e volume geral.
 - [x] Protótipo de modo invisível por aparelho: offline em Membros e Amigos, atividade oculta;
   participantes da call, mensagens e transmissões continuam visíveis.
-- [x] Atividades manuais: estudar, trabalhar, assistir, ouvir, jogar ou descrição livre.
+- [x] Atividades prontas sem descrição: estudar, trabalhar, assistir, ouvir e jogar;
+  texto livre somente em “Outra atividade…”.
+- [x] Troca rápida pelo próprio perfil no rodapé; no celular, pela página Você.
+- [x] Todos os seletores da sala com lista aberta no tema do app, incluindo áudio/canais/cargos.
 - [x] Evitar reconstruir a atividade quando a detecção retorna o mesmo jogo.
 - [x] Separar pendências atuais dos registros históricos e corrigir ideias já publicadas.
 - [ ] Validar o protótipo com o dono e a amiga antes de decidir uma publicação.

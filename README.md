@@ -10,8 +10,11 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**Protótipo local (ainda não publicado):** Configurações → Atividade permite ficar invisível
-neste aparelho e mostrar uma atividade manual, como “Estudando matemática”. Invisível aparece
+**Protótipo local (ainda não publicado):** clique no seu perfil no rodapé para trocar
+atividade e presença rapidamente (no celular: Você → Trocar atividade e presença).
+Escolha “Estudando”, “Trabalhando” e outras atividades prontas; só “Outra atividade…” pede
+um texto. As opções também ficam em Configurações → Atividade. Todos os seletores da sala,
+incluindo as listas abertas, acompanham o tema no app desktop. Invisível aparece
 offline em Membros/Amigos e oculta a atividade; call, mensagens e transmissões continuam visíveis.
 Outros aparelhos podem manter a conta online. A atividade manual tem prioridade sobre o jogo
 detectado e termina ao fechar/recarregar a janela. [Pendências atuais](docs/PENDENCIAS.md).

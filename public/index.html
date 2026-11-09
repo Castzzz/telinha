@@ -187,7 +187,7 @@
         <button id="btn-dock-leave" class="dock-btn dock-leave" title="Sair da call">
           <span class="dock-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="M23 1L1 23"/></svg></span>
         </button>
-        <div class="user-profile" id="user-profile" title="Editar seu perfil" role="button" tabindex="0">
+        <div class="user-profile" id="user-profile" title="Seu perfil e atividade" role="button" tabindex="0" aria-haspopup="dialog" aria-controls="profile-quick-menu" aria-expanded="false">
           <div class="user-avatar-wrap" id="dock-avatar-wrap">
             <div class="user-avatar" id="dock-user-avatar" style="background-color: var(--accent-brand);">
               <span id="dock-avatar-initials">TU</span>
@@ -403,6 +403,7 @@
       <div class="mobile-profile-hero">
         <button type="button" class="mobile-profile-edit" data-mobile-settings="perfil" aria-label="Editar seu perfil"><span class="mobile-self-avatar mobile-profile-avatar" aria-hidden="true">EU</span><span class="mobile-edit-badge" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg></span></button>
         <h1 id="mobile-profile-name">Seu perfil</h1><p id="mobile-profile-kind">Perfil neste aparelho</p>
+        <button type="button" id="btn-mobile-quick-profile" class="mobile-edit-profile-button" aria-haspopup="dialog" aria-controls="profile-quick-menu" aria-expanded="false">Trocar atividade e presença</button>
         <button type="button" class="mobile-edit-profile-button" data-mobile-settings="perfil">Editar perfil</button>
       </div>
       <h2 class="mobile-section-label">Do seu jeito</h2>
@@ -1123,11 +1124,13 @@
             <label class="checkbox-label"><input type="checkbox" id="check-invisible"><span>Ficar invisível neste aparelho</span></label>
             <p class="form-help">Você aparece offline em Membros e Amigos e sua atividade fica oculta. Na call, nas mensagens e nas transmissões você continua visível. Outros aparelhos conectados podem manter você online.</p>
             <p id="presence-status" class="form-help" role="status"></p>
-            <form id="form-manual-activity" class="custom-game-form">
-              <div class="form-group"><label for="select-activity-type">O que está fazendo?</label><select id="select-activity-type" class="form-select"><option value="studying">Estudando</option><option value="working">Trabalhando</option><option value="watching">Assistindo</option><option value="listening">Ouvindo</option><option value="playing">Jogando</option><option value="custom">Outra atividade</option></select></div>
-              <div class="form-group"><label for="input-activity-name">Descrição</label><input id="input-activity-name" class="form-input" maxlength="80" placeholder="Ex.: matemática" required></div>
-              <button type="submit" class="btn-secondary">Mostrar atividade</button>
-              <button type="button" id="btn-clear-activity" class="btn-secondary">Limpar atividade</button>
+            <form id="form-manual-activity" class="manual-activity-form" data-activity-form>
+              <div class="form-group"><label for="select-activity-type">O que está fazendo?</label><select id="select-activity-type" class="form-select" data-activity-type><option value="">Automática (jogo detectado)</option><option value="studying">Estudando</option><option value="working">Trabalhando</option><option value="watching">Assistindo</option><option value="listening">Ouvindo</option><option value="playing">Jogando</option><option value="custom">Outra atividade…</option></select></div>
+              <div class="activity-custom-field hidden" data-activity-custom>
+                <div class="form-group"><label for="input-activity-name">Qual atividade?</label><input id="input-activity-name" class="form-input" data-activity-name maxlength="80" placeholder="Escreva sua atividade" disabled required></div>
+                <button type="submit" class="btn-primary">Mostrar atividade</button>
+              </div>
+              <button type="button" id="btn-clear-activity" class="btn-secondary" data-activity-clear>Limpar atividade</button>
             </form>
             <p class="form-help">A atividade manual funciona também no navegador e celular e substitui o jogo detectado até você limpar. Ela termina ao fechar ou recarregar esta janela.</p>
             <p id="manual-activity-status" class="form-help" role="status"></p>
@@ -1535,7 +1538,24 @@
     <p id="connection-tooltip-detail">Medindo a conexão com o servidor…</p>
   </div>
 
-  <!-- SCRIPTS -->
+  <div id="profile-quick-menu" class="profile-quick-menu" popover role="dialog" aria-labelledby="quick-profile-name">
+    <div class="profile-quick-heading"><div id="quick-profile-avatar" class="user-avatar" aria-hidden="true"></div><div><strong id="quick-profile-name">Seu perfil</strong><small id="quick-profile-status"></small></div><button type="button" class="btn-icon-close" popovertarget="profile-quick-menu" popovertargetaction="hide" aria-label="Fechar perfil rápido">✕</button></div>
+    <form id="form-quick-activity" class="manual-activity-form" data-activity-form>
+              <div class="form-group"><label for="quick-activity-type">O que está fazendo?</label><select id="quick-activity-type" class="form-select" data-activity-type><option value="">Automática (jogo detectado)</option><option value="studying">Estudando</option><option value="working">Trabalhando</option><option value="watching">Assistindo</option><option value="listening">Ouvindo</option><option value="playing">Jogando</option><option value="custom">Outra atividade…</option></select></div>
+              <div class="activity-custom-field hidden" data-activity-custom>
+                <div class="form-group"><label for="quick-activity-name">Qual atividade?</label><input id="quick-activity-name" class="form-input" data-activity-name maxlength="80" placeholder="Escreva sua atividade" disabled required></div>
+                <button type="submit" class="btn-primary">Mostrar atividade</button>
+              </div>
+              <button type="button" id="quick-clear-activity" class="btn-secondary" data-activity-clear>Limpar atividade</button>
+            </form>
+
+    <p id="quick-activity-status" class="form-help" role="status"></p>
+    <label class="profile-quick-invisible"><input type="checkbox" id="quick-check-invisible" disabled> Ficar invisível neste aparelho</label>
+    <p id="quick-presence-status" class="form-help" role="status"></p>
+    <p class="form-help">Na call, nas mensagens e nas transmissões você continua visível. Outro aparelho pode manter você online.</p>
+    <button type="button" id="btn-quick-edit-profile" class="btn-secondary">Editar perfil</button>
+  </div>
+
   <!-- Cliente do Socket.IO junto da interface (no app ela não vem do servidor da sala) -->
   <script src="vendor/socket.io.min.js"></script>
   <script type="module" src="app.js"></script>
