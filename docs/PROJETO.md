@@ -1,4 +1,4 @@
-**4.5.0 em publicação:** comandos de chat, prévia arrastável e fotos dos amigos. Autorizada pelo dono, sem repetir testes.
+**[4.5.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens privadas e temporárias, marcações com foto, prévia arrastável e fotos dos amigos. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
 
 # Teletela: documentação do projeto
 
@@ -1933,3 +1933,17 @@ e marcada como versão mais recente.
 - Regressões: `node --test tests/chat-mentions.test.js tests/friends.test.js
   tests/launcher-preview.test.js` e Electron do sistema com
   `tests/chat-mentions-browser.cjs` / `tests/controls-friends-browser.cjs`.
+
+### Publicação da 4.5.0 (09/11/2026)
+
+- Código `7b3ceab`, integrado por avanço direto à `main`, com tag `v4.5.0` no mesmo commit.
+  Release pública marcada como latest, sem pré-release; nove arquivos publicados para
+  Windows, Linux, Flatpak experimental e Android 4.5.0/código 15.
+- Tamanhos e SHA-256 dos nove downloads conferem com os arquivos locais; SHA-512 dos
+  metadados `latest.yml` / `latest-linux.yml` corresponde aos instaladores.
+- Deploy Oracle concluído; Node, SFU e Caddy ativos, saúde pública OK e SHA-256 do
+  `server.js` instalado igual ao código local. Backup anterior preservado em
+  `~/Teletela-backups/teletela-dados-2026-11-09_21-30-36.tar.gz`.
+- Nenhum teste foi repetido, conforme pedido. Android compilado com `-x lintDebug`;
+  identificadores e assinatura existentes preservados. As verificações desta publicação
+  ficaram na integridade dos artefatos, versão instalada e saúde dos serviços.

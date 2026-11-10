@@ -10,7 +10,7 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**Novidades da 4.5.0:** mensagens temporárias e privadas, marcações com foto, prévia da
+**[Novidades da 4.5.0](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens temporárias e privadas, marcações com foto, prévia da
 transmissão arrastável e fotos dos amigos corrigidas. Também inclui a nova abertura com amigos online, lateral de
 canais renovada e configurações com menos texto. Clique no seu perfil no rodapé para trocar
 atividade e presença rapidamente (no celular: Você → Trocar atividade e presença).
