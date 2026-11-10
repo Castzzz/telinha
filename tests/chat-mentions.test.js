@@ -1,0 +1,51 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { once } from 'node:events';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { io } from 'socket.io-client';
+
+test('privadas distinguem nomes iguais e preservam isolamento após editar, reagir e responder', { timeout: 15000 }, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'teletela-mencoes-'));
+  process.env.TELINHA_DATA_DIR = dir; process.env.TELINHA_MUSIC = '0'; process.env.SFU_SECRET = '';
+  const backend = await import('../server.js');
+  const server = await backend.startServer(0, '127.0.0.1');
+  const clients = [];
+  t.after(async () => { clients.forEach(s => s.disconnect()); await new Promise(r => backend.io.close(r)); fs.rmSync(dir, { recursive: true, force: true }); });
+  const emit = (s, event, payload) => s.timeout(2000).emitWithAck(event, payload);
+  async function connect(name) {
+    const s = io(`http://127.0.0.1:${server.address().port}`, { autoConnect: false, transports: ['websocket'], reconnection: false }); clients.push(s);
+    const ready = once(s, 'connect'); s.connect(); await ready;
+    const joined = once(s, 'channel-state');
+    s.emit('join-channel', { channelId: 'geral', profile: { profileId: randomUUID(), name }, userName: name });
+    const [state] = await joined; s.me = state.me; return s;
+  }
+  const a = await connect('Autor'), b = await connect('Rafa'), c = await connect('Rafa');
+  const leaked = [];
+  b.on('chat-message', msg => leaked.push(msg));
+  b.on('chat-message-updated', msg => leaked.push(msg));
+  assert.equal((await emit(a, 'chat-message', { text: '/w @Rafa segredo' })).success, false);
+  const got = once(c, 'chat-message');
+  assert.equal((await emit(a, 'chat-message', { text: `/t 10 /w @Rafa#${c.me.memberId.slice(0, 8)} segredo` })).success, true);
+  const [msg] = await got;
+  assert.equal(msg.text, 'segredo'); assert.equal(msg.whisperTo[0].accessId, c.me.memberId);
+  assert.equal((await emit(a, 'message-edit', { messageId: msg.id, text: 'editada' })).success, true);
+  assert.equal((await emit(c, 'message-react', { messageId: msg.id, emoji: '👍' })).success, true);
+  assert.equal((await emit(b, 'message-react', { messageId: msg.id, emoji: '👍' })).success, false);
+  const reply = once(b, 'chat-message');
+  assert.equal((await emit(a, 'chat-message', { text: 'resposta pública', replyTo: msg.id })).success, true);
+  assert.equal((await reply)[0].replyTo, undefined);
+  assert.equal(leaked.some(m => m.text === 'segredo' || m.message?.text === 'editada'), false);
+  assert.equal((await emit(a, 'create-text-channel', { name: 'Papo' })).success, true);
+  assert.equal((await emit(a, 'text-message', { channelId: 'papo', text: '/w @Rafa privado' })).success, false);
+  const textGot = once(c, 'text-message');
+  assert.equal((await emit(a, 'text-message', { channelId: 'papo', text: `/w @Rafa#${c.me.memberId.slice(0, 8)} privado-no-texto` })).success, true);
+  const [textMsg] = await textGot;
+  assert.equal(textMsg.text, 'privado-no-texto');
+  const history = await emit(b, 'text-history', { channelId: 'papo' });
+  assert.equal(history.messages.some(m => m.id === textMsg.id), false);
+  const disk = path.join(dir, 'text', 'papo.jsonl');
+  assert.ok(!fs.existsSync(disk) || !fs.readFileSync(disk, 'utf8').includes('privado-no-texto'));
+});

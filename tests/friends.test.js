@@ -78,7 +78,7 @@ test('servidor autentica amigos, sincroniza aparelhos e só anuncia presença a 
   assert.equal((await emit(b, 'friend-accept', { accountId: aa.account.id })).success, true);
   await until(() => a.friends.friends[0]?.online && secondB.friends.friends[0]?.online);
   assert.equal(c.friends.friends.length, 0);
-  assert.deepEqual(Object.keys(a.friends.friends[0]).sort(), ['id', 'name', 'online', 'presence', 'username']);
+  assert.deepEqual(Object.keys(a.friends.friends[0]).sort(), ['avatarCrop', 'avatarV', 'id', 'name', 'online', 'presence', 'username']);
   await emit(b, 'update-presence', { status: 'away' }); await emit(secondB, 'update-presence', { status: 'away' });
   await until(() => a.friends.friends[0]?.presence === 'away');
   await emit(b, 'update-presence', { status: 'dnd' }); await until(() => a.friends.friends[0]?.presence === 'dnd');

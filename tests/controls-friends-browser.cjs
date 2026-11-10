@@ -41,6 +41,20 @@ app.whenReady().then(async () => {
   await js(a, "document.querySelector('#friend-username').value='@amigo_teste';document.querySelector('#friends-form').requestSubmit();void 0");
   await until(b, 'Boolean(document.querySelector("#friends-incoming button"))');
   await click(b, '#friends-incoming button'); await until(a, "document.querySelector('#friends-list').textContent.includes('Online')");
+  const friendAvatar = await js(b, `(()=>{
+    const canvas=document.createElement('canvas');canvas.width=80;canvas.height=80;
+    const ctx=canvas.getContext('2d');ctx.fillStyle='#44bb55';ctx.fillRect(0,0,80,80);
+    return canvas.toDataURL();
+  })()`);
+  const photoSocket = require('socket.io-client').io(url, { autoConnect: false, transports: ['websocket'], reconnection: false,
+    auth: { accountToken: prefs.get(b.webContents.id).accountSessions[url].token } });
+  try {
+    await new Promise(resolve => { photoSocket.once('connect', resolve); photoSocket.connect(); });
+    await photoSocket.timeout(2000).emitWithAck('update-profile', { avatar: friendAvatar, avatarCrop: { x:.2, y:.8, zoom:2 } });
+  } finally { photoSocket.disconnect(); }
+  await until(a, "Boolean(document.querySelector('#friends-list img')?.naturalWidth)");
+  assert.equal(await js(a, "document.querySelector('#friends-list img').style.width"), '200%');
+  assert.equal(await js(a, "getComputedStyle(document.querySelector('#friends-list .friend-avatar-frame')).overflow"), 'hidden');
   for (const theme of ['escuro', 'preto', 'claro']) {
     await js(a, `document.documentElement.dataset.theme='${theme}';void 0`); await pause(100);
     fs.writeFileSync(`/tmp/teletela-amigos-${theme}.png`, (await a.webContents.capturePage()).toPNG());

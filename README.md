@@ -10,7 +10,8 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**Protótipo local (ainda não publicado):** nova abertura com amigos online, lateral de
+**Novidades da 4.5.0:** mensagens temporárias e privadas, marcações com foto, prévia da
+transmissão arrastável e fotos dos amigos corrigidas. Também inclui a nova abertura com amigos online, lateral de
 canais renovada e configurações com menos texto. Clique no seu perfil no rodapé para trocar
 atividade e presença rapidamente (no celular: Você → Trocar atividade e presença).
 Escolha “Estudando”, “Trabalhando” e outras atividades prontas; só “Outra atividade…” pede
@@ -39,7 +40,11 @@ pelas setas do teclado ou restaurada com duplo clique; a largura fica salva nest
 Nos chats (da call e de texto), use **`/t <segundos> <mensagem>`** (de 1 a 600 segundos, até
 10 minutos) para mandar uma mensagem temporária que some sozinha, ou **`/w @pessoa <mensagem>`**
 (ou **`/whisper @pessoa <mensagem>`**, podendo marcar mais de uma pessoa) para mandar uma
-mensagem privada visível só para você e para quem foi marcado. Ao assistir uma transmissão
+mensagem privada visível só para você e para quem foi marcado. As sugestões de marcação
+mostram foto ou iniciais; escolha pela foto quando houver nomes iguais. Nas privadas, a
+seleção inclui um identificador curto para garantir o destinatário; um nome ambíguo digitado
+à mão é recusado. Privadas temporárias também não mostram “digitando…”. A aba Amigos
+respeita o recorte e o zoom da foto do perfil. Ao assistir uma transmissão
 enquanto conversa num canal de texto, a janelinha da transmissão pode ser arrastada para
 qualquer canto da tela (duplo clique na barra volta ao lugar padrão).
 [Pendências atuais](docs/PENDENCIAS.md).

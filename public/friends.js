@@ -1,3 +1,4 @@
+import { imageCropStyle } from './image-crop.js';
 import { PRESENCE_LABELS, normalizePresence } from './presence.js';
 export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab, serverUrl = '', assetKey = () => '' }) {
   const tab = document.createElement('button');
@@ -46,10 +47,12 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
       if (serverUrl && key && person.id) {
         const photo = document.createElement('img');
         photo.className = 'friend-avatar-img';
-        photo.src = `${serverUrl}/api/friend-avatar/${encodeURIComponent(person.id)}?access=${encodeURIComponent(key)}`;
+        photo.src = `${serverUrl}/api/friend-avatar/${encodeURIComponent(person.id)}?access=${encodeURIComponent(key)}&v=${encodeURIComponent(person.avatarV || 0)}`;
         photo.alt = '';
-        photo.addEventListener('error', () => photo.remove(), { once: true });
-        avatar.append(photo);
+        photo.style.cssText = imageCropStyle(person.avatarCrop);
+        const frame = document.createElement('span'); frame.className = 'friend-avatar-frame';
+        photo.addEventListener('error', () => frame.remove(), { once: true });
+        frame.append(photo); avatar.append(frame);
       }
       if (kind === 'friends') { const dot = document.createElement('span'); dot.className = 'user-presence-dot'; dot.dataset.presence = socket.connected && person.online ? normalizePresence(person.presence || 'online') : 'offline'; avatar.append(dot); }
       info.append(name, detail); row.append(avatar, info);

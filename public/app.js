@@ -2256,6 +2256,11 @@ function playMentionPing() {
   });
 }
 
+// /t pode vir antes do comando privado.
+function isPrivateChatDraft(text) {
+  return /^\/(?:w|whisper)(?:\s|$)/i.test(text.trimStart().replace(/^(?:\/t\s+\d+\s+)*/i, ''));
+}
+
 // Autocompletar: digitou "@" no campo, aparecem os nomes de quem está online
 function setupMentionAutocomplete() {
   const input = $('#chat-input');
@@ -2275,7 +2280,7 @@ function setupMentionAutocomplete() {
   const render = () => {
     box.innerHTML = items.map((u, i) => `<button type="button" class="mention-item${i === active ? ' active' : ''}" data-i="${i}">
       <span class="mention-avatar user-avatar" style="background-color: ${safeColor(u.color)};">${u.isAll ? '@' : avatarInnerHtml(u)}</span>
-      <span${u.isAll ? '' : nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAll ? '<small>avisa todo mundo</small>' : ''}</button>`).join('');
+      <span${u.isAll ? '' : nameStyle(u)}>${escapeHtml(u.name)}</span>${u.isAll ? '<small>avisa todo mundo</small>' : `<small>${escapeHtml(u.mentionDetail || '')}</small>`}</button>`).join('');
     box.classList.toggle('hidden', !items.length);
   };
   const pick = (u) => {
@@ -2283,7 +2288,9 @@ function setupMentionAutocomplete() {
     if (!q) return close();
     const before = input.value.slice(0, q.start);
     const after = input.value.slice(input.selectionStart);
-    const insert = `@${u.name} `;
+    const identity = u.memberId || u.accessId || u.profileId || u.id;
+    const handle = !u.isAll && isPrivateChatDraft(input.value) && identity ? `${u.name}#${identity.slice(0, 8)}` : u.name;
+    const insert = `@${handle} `;
     input.value = before + insert + after;
     const pos = before.length + insert.length;
     input.setSelectionRange(pos, pos);
@@ -2296,21 +2303,31 @@ function setupMentionAutocomplete() {
     const needle = q.text.toLocaleLowerCase('pt-BR');
     const seen = new Set();
     const people = [];
+    const privateDraft = isPrivateChatDraft(input.value);
+    const add = (u) => {
+      const identity = u.memberId || u.accessId || u.profileId || u.id;
+      if (u.id === appState.myId || (appState.memberId && (u.memberId || u.accessId) === appState.memberId) || seen.has(identity)) return;
+      if (!u.name?.toLocaleLowerCase('pt-BR').startsWith(needle)) return;
+      seen.add(identity);
+      people.push({ ...u, mentionDetail: '' });
+    };
+    // Os membros têm foto persistente, inclusive fora da call.
+    for (const m of serverMembersUI?.list() || []) {
+      if (privateDraft && !appState.textView && !appState.channels.get(appState.currentChannelId)?.users.has(m.id)) continue;
+      if (!appState.textView && !m.online) continue;
+      add(m);
+    }
     for (const ch of appState.channels.values()) {
-      for (const u of ch.users.values()) {
-        if (u.id === appState.myId || seen.has(u.name) || !u.name?.toLocaleLowerCase('pt-BR').startsWith(needle)) continue;
-        seen.add(u.name);
-        people.push(u);
+      if (privateDraft && !appState.textView && ch.id !== appState.currentChannelId) continue;
+      for (const u of ch.users.values()) add(u);
+    }
+    for (const u of people) {
+      if (people.filter(other => other.name.toLocaleLowerCase('pt-BR') === u.name.toLocaleLowerCase('pt-BR')).length > 1) {
+        u.mentionDetail = `#${(u.memberId || u.accessId || u.profileId || u.id).slice(0, 8)}`;
       }
     }
-    for (const m of serverMembersUI?.list() || []) {
-      if (m.id === appState.myId || (appState.memberId && m.memberId === appState.memberId) || seen.has(m.name) || !m.name?.toLocaleLowerCase('pt-BR').startsWith(needle)) continue;
-      if (!appState.textView && !m.online && !/^\/(?:w|whisper)\b/i.test(input.value.trimStart())) continue;
-      seen.add(m.name);
-      people.push(m);
-    }
     people.sort((a, b) => NAME_COLLATOR.compare(a.name, b.name));
-    items = [...people.slice(0, 7), ...('todos'.startsWith(needle) ? [{ name: 'todos', isAll: true, color: '#5865F2' }] : [])];
+    items = [...people.slice(0, 7), ...(!privateDraft && 'todos'.startsWith(needle) ? [{ name: 'todos', isAll: true, color: '#5865F2' }] : [])];
     active = 0;
     render();
   });
@@ -2657,7 +2674,7 @@ function tickTemporaryMessages() {
 function setupTyping() {
   $('#chat-input')?.addEventListener('input', (e) => {
     const val = e.target.value.trim();
-    if (!val || /^\/(?:w|whisper)(?:\s|$)/i.test(val)) return;
+    if (!val || isPrivateChatDraft(val)) return;
     const now = Date.now();
     if (now - lastTypingSentAt < 3000) return;
     if (!appState.textView && !appState.currentChannelId) return;
@@ -5362,14 +5379,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.4.0';
+const WHATS_NEW_VERSION = '4.5.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));

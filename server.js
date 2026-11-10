@@ -632,6 +632,10 @@ function resolveCommandCandidates(scope, channel) {
       });
     }
   }
+  for (const candidate of map.values()) {
+    const suffix = (candidate.accessId || candidate.profileId || candidate.id).slice(0, 8);
+    for (const handle of [...candidate.handles]) candidate.handles.add(`${handle}#${suffix}`);
+  }
   return [...map.values()];
 }
 
@@ -679,9 +683,15 @@ function parseChatCommand(rawText, { scope, channel, sender }) {
     while (cursor.startsWith('@')) {
       const withoutAt = cursor.slice(1);
       const lowerWithoutAt = withoutAt.toLocaleLowerCase('pt-BR');
-      const matched = handlePairs.find(({ lower }) =>
+      const matches = handlePairs.filter(({ lower }) =>
         lowerWithoutAt.startsWith(lower) && (withoutAt.length === lower.length || /\s/.test(withoutAt[lower.length]))
       );
+      const longest = matches[0]?.handle.length;
+      const exact = matches.filter(item => item.handle.length === longest);
+      if (new Set(exact.map(item => item.cand.accessId || item.cand.profileId || item.cand.id)).size > 1) {
+        return { ok: false, error: 'Há mais de uma pessoa com esse nome. Escolha pela foto na lista de marcações.' };
+      }
+      const matched = exact[0];
       if (!matched) {
         const badToken = /^@(\S+)/.exec(cursor)?.[1] || '';
         return { ok: false, error: badToken ? `Não encontrei @${badToken} neste canal.` : 'Marque a pessoa com @nome.' };
@@ -923,6 +933,7 @@ function canDeleteChannel(user, channel) {
 function publicUser(u) {
   return {
     id: u.id,
+    memberId: u.accessId,
     name: u.channelId ? chatName(u, 'call', u.channelId) : u.name,
     profileName: u.name,
     color: u.color,
@@ -1643,6 +1654,11 @@ function friendOnline(accountId) { return friendPresence(accountId) !== 'offline
 function friendState(accountId) {
   const state = accounts.friends(accountId, friendOnline);
   for (const friend of state.friends) friend.presence = friendPresence(friend.id);
+  for (const friend of [...state.friends, ...state.incoming, ...state.outgoing]) {
+    const avatar = resolveFriendAvatar(accounts.data.accounts.find(account => account.id === friend.id));
+    friend.avatarCrop = avatar?.crop || normalizeImageCrop();
+    friend.avatarV = avatar?.version || 0;
+  }
   return state;
 }
 function broadcastFriends() {

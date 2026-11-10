@@ -1,3 +1,5 @@
+**4.5.0 em publicação:** comandos de chat, prévia arrastável e fotos dos amigos. Autorizada pelo dono, sem repetir testes.
+
 # Teletela: documentação do projeto
 
 **[4.4.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.4.0):** presença, atividades, redesign, avatares do histórico, teste de microfone e Membros redimensionável. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
@@ -1917,3 +1919,17 @@ e marcada como versão mais recente.
   Node/SFU/Caddy ativos e `/api/health` público com `status: ok` após a instalação.
   SHA-256 de `server.js`, `package.json`, `public/app.js`, `public/index.html` e
   `member-avatar-store.js` iguais entre a VM e o código publicado. Segredos preservados.
+
+### Revisão das mensagens privadas e fotos (09/11/2026, local)
+
+- `publicUser` inclui `memberId`, já disponível na lista de membros, para deduplicar as
+  sugestões pela identidade. Homônimos aparecem separadamente com foto/iniciais.
+- Ao escolher destinatário de `/w` ou `/whisper` (também após `/t`), o campo usa
+  `@nome#identificador` com os oito primeiros caracteres do membro. O servidor resolve
+  somente candidatos autorizados no canal e recusa qualquer ambiguidade, inclusive
+  colisão do identificador curto. Nomes sem sufixo continuam aceitos quando únicos.
+- `friends-state` inclui `avatarV` e `avatarCrop` para amigos e pedidos. A aba Amigos
+  usa `imageCropStyle` numa janela de recorte, preservando GIF e o indicador de presença.
+- Regressões: `node --test tests/chat-mentions.test.js tests/friends.test.js
+  tests/launcher-preview.test.js` e Electron do sistema com
+  `tests/chat-mentions-browser.cjs` / `tests/controls-friends-browser.cjs`.

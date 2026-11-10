@@ -3,16 +3,18 @@
 Atualizado em 09/11/2026. Última versão publicada registrada: **4.4.0**.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
-## Em preparação para a próxima versão (branch `prototipo/comandos-chat-e-fotos-amigos`)
+## Versão 4.5.0 em publicação
 
-Guardado localmente sem release e sem deploy, aguardando o dono definir mais itens para entrar junto na próxima atualização:
+Publicação e deploy autorizados pelo dono; verificações anteriores aproveitadas, sem repetir testes.
 
 - [x] **Miniatura da transmissão arrastável e ajuste do chat de texto:** ao assistir uma transmissão dentro de um canal de texto (`.text-with-stream #stage-section`), a janelinha pode ser arrastada para qualquer canto da tela (duplo clique na barra **Transmissão** restaura a posição padrão). Removido o espaço vazio de `246px` no final de `#chat-messages` (`public/redesign.css`, `public/server-members.css`, `public/mobile.css`, `public/app.js`).
 - [x] **Comandos de mensagem `/t` e `/w` (`/whisper`) nos chats (call e texto):**
   - `/t <segundos> <mensagem>`: duração configurável de `1` a `600` segundos (máximo de 10 minutos), selo com contagem regressiva (`⏱️ Xs`), remoção automática ao expirar, bloqueio de fixação e sem gravação em disco.
   - `/w @pessoa ... <mensagem>` ou `/whisper @pessoa ... <mensagem>`: mensagem privada para uma ou mais pessoas marcadas (inclusive nomes compostos), visível só para o remetente e destinatários marcados (`🔒 Privada para ...`), sem indicador de "digitando…" e sem vazar no arquivo em disco, histórico, busca, contexto, mensagens fixadas, citações públicas de resposta ou texto de notificação do sistema.
 - [x] **Fotos dos amigos na tela inicial e na aba Amigos:** resolução de avatar pelo ID estável da conta/membro no servidor (`resolveFriendAvatar` em `server.js`, consultando socket ativo, `account.profile.avatar` e `MemberAvatarStore` em disco), preservando a foto ao entrar em call e suportando imagens WebP, GIF, PNG e JPEG com recorte (`avatarCrop`) em `electron/connect.html` (`/api/launcher/friend-avatar/:accountId`) e em `public/friends.js` (`/api/friend-avatar/:accountId`).
-- [ ] Aguardar novas ideias do dono para acumular nesta branch antes de aumentar a versão, atualizar o popup de novidades e publicar (`release` + `deploy:oracle`).
+- [x] **Revisão das marcações e fotos:** sugestões com foto/iniciais sem juntar homônimos; escolha privada com identificador curto e recusa de nomes ambíguos; `/t ... /w` sem aviso de digitação; recorte e zoom aplicados na aba Amigos.
+- Verificação desta revisão: 62/62 testes básicos, 80/80 de M1–M3, 14/14 de contas/amigos/abertura/privadas e dois cenários Electron (marcações e amigos/controles), com capturas nos três temas. A integração antiga `m4-channels-admin` ficou parada antes dos casos novos e não foi validada completa; os cenários novos cobrem o isolamento em call e canal de texto.
+- [ ] Concluir publicação desktop, Android/código 15, Flatpak e deploy com backup.
 
 ## Incluído na 4.4.0
 
