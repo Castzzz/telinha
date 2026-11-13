@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/pion/interceptor"
+	"github.com/pion/rtp"
 )
 
 type testPacketReader struct {
@@ -51,7 +52,10 @@ func TestForwardContinuaQuandoUmEspectadorFalha(t *testing.T) {
 		{"sem erro", func(int) error { return nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			packets := [][]byte{{1, 2, 3}, {4, 5}, {6, 7, 8, 9}, {10}}
+			packets := [][]byte{}
+			for i, payload := range [][]byte{{1, 2, 3}, {4, 5}, {6, 7, 8, 9}, {10}} {
+				packets = append(packets, marshalPacket(t, rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: uint16(i)}, Payload: payload}))
+			}
 			source := &testPacketReader{packets: packets}
 			destination := &testFanoutWriter{fail: tc.fail}
 			forwardPackets(source, destination, "video")
@@ -72,5 +76,55 @@ func TestForwardTerminaQuandoHostEncerra(t *testing.T) {
 	forwardPackets(&testPacketReader{}, destination, "audio")
 	if len(destination.received) != 0 {
 		t.Fatal("host encerrado não deve gerar envios")
+	}
+}
+
+func marshalPacket(t *testing.T, packet rtp.Packet) []byte {
+	t.Helper()
+	raw, err := packet.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func TestForwardRemoveExtensoesDaConexaoDoHost(t *testing.T) {
+	for _, kind := range []string{"video", "audio"} {
+		t.Run(kind, func(t *testing.T) {
+			var packets, expected [][]byte
+			// Pacote atrasado e volta dos contadores precisam continuar recuperáveis por NACK.
+			for i, sequence := range []uint16{65534, 65535, 0, 65535, 1} {
+				packet := rtp.Packet{Header: rtp.Header{Version: 2, PayloadType: 96, SSRC: 1234,
+					SequenceNumber: sequence, Timestamp: uint32(sequence) * 3000, Marker: i%2 == 0,
+					CSRC: []uint32{42}}, Payload: []byte{0x10, byte(i), 3, 4}}
+				expected = append(expected, marshalPacket(t, packet))
+				// MID, TWCC e tempo de envio pertencem ao trecho host -> SFU.
+				for id, data := range map[uint8][]byte{1: []byte("1"), 3: {0, byte(i)}, 4: {1, 2, 3}} {
+					if err := packet.SetExtension(id, data); err != nil {
+						t.Fatal(err)
+					}
+				}
+				packets = append(packets, marshalPacket(t, packet))
+			}
+			destination := &testFanoutWriter{fail: func(int) error { return nil }}
+			forwardPackets(&testPacketReader{packets: packets}, destination, kind)
+			if len(destination.received) != len(expected) {
+				t.Fatalf("recebeu %d pacotes", len(destination.received))
+			}
+			for i := range expected {
+				if !bytes.Equal(destination.received[i], expected[i]) {
+					t.Fatalf("pacote %d deve preservar mídia, sequência e timestamp, sem extensões do host", i)
+				}
+			}
+		})
+	}
+}
+
+func TestForwardIgnoraPacoteInvalidoSemEncerrarFaixa(t *testing.T) {
+	valid := marshalPacket(t, rtp.Packet{Header: rtp.Header{Version: 2, SequenceNumber: 7}, Payload: []byte{1, 2}})
+	destination := &testFanoutWriter{fail: func(int) error { return nil }}
+	forwardPackets(&testPacketReader{packets: [][]byte{{0x90}, valid}}, destination, "video")
+	if len(destination.received) != 1 || !bytes.Equal(destination.received[0], valid) {
+		t.Fatal("pacote inválido deve ser ignorado e o seguinte entregue")
 	}
 }

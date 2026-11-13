@@ -10,6 +10,8 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
+**[Novidades da 4.5.1](https://github.com/Castzzz/telinha/releases/tag/v4.5.1):** correções de segurança no chat, nos anexos de salas com senha e na moderação de voz; ajustes no repasse de vídeo e no buffer de recepção das transmissões.
+
 **[Novidades da 4.5.0](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens temporárias e privadas, marcações com foto, prévia da
 transmissão arrastável e fotos dos amigos corrigidas. Também inclui a nova abertura com amigos online, lateral de
 canais renovada e configurações com menos texto. Clique no seu perfil no rodapé para trocar
@@ -49,8 +51,24 @@ enquanto conversa num canal de texto, a janelinha da transmissão pode ser arras
 qualquer canto da tela (duplo clique na barra volta ao lugar padrão).
 [Pendências atuais](docs/PENDENCIAS.md).
 
+**Correções locais de segurança (10/11/2026, ainda sem publicação):** mensagens privadas,
+edição/exclusão de mensagens, canais e sons passam a usar a identidade autenticada.
+Copiar o ID público de um perfil não dá acesso ao conteúdo dele. Anexos de salas com
+senha exigem uma conexão válida; anexos de call com senha exigem estar naquela call.
+A moderação revoga a voz já aberta no SFU e preserva tela/câmera. A dependência vulnerável
+de produção também foi atualizada. Veja o [relatório e as limitações](docs/AUDITORIA-SEGURANCA-2026-11-10.md).
+Conteúdo antigo sem identidade comprovada continua disponível, mas editar/apagar não é
+autorizado só pelo ID público: canais antigos exigem gerenciamento de canais e sons antigos
+exigem moderação. Mensagens antigas sem autoria comprovada só podem ser apagadas pela moderação.
+Testes: `npm run test:security` e `npm run test:security:ui` (Electron do sistema).
+
 
 **4.4.0:** presença e atividades, início/canais/configurações renovados, avatares no histórico, teste de microfone e Membros redimensionável.
+
+**Ajuste de transmissão aplicado ao servidor (11/11/2026):** o SFU usa um buffer de
+recepção maior para absorver rajadas de vídeo e reduzir descartes no servidor. O limite
+efetivo passou de 208 KiB para 8 MiB na contabilização do Linux. Ainda precisa ser medido
+em transmissões reais de 1080p60/1440p60; não garante resolver todo travamento.
 
 **4.3.3:** microfone bloqueado em Ausentes com restauração do estado anterior ao sair, e Flatpak experimental para Linux.
 
@@ -423,6 +441,10 @@ Instalou pelo **Setup** (Windows) ou pelo **AppImage** (Linux)? Então não prec
 Quedas de resolução e imagem congelada com som continuando podem ter causas diferentes.
 A análise da transmissão e a correção do SFU incluída na versão 3.4 estão em
 [docs/DIAGNOSTICO-TRANSMISSOES.md](docs/DIAGNOSTICO-TRANSMISSOES.md).
+O documento também registra a investigação de saltos na imagem ao assistir e uma correção
+local do repasse de metadados de rede, ainda sem deploy e sem confirmar a causa do relato.
+Se acontecer, abra **Configurações → Transmissão → Diagnóstico** enquanto o problema aparece
+e compare com outro espectador da mesma tela.
 
 ---
 

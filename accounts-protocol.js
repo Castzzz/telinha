@@ -13,7 +13,7 @@ export function installAccountHttp({ app, store, limit = fallbackLimit, onRevoke
   };
   app.use('/api/account', headers);
   app.get('/api/account', (req, res) => res.json({ supported: store.available }));
-  const json = express.json({ limit: '8kb', strict: true });
+  const json = express.json({ limit: '8kb', strict: true, inflate: false });
   const route = action => async (req, res) => {
     const payload = req.body;
     if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return res.status(400).json({ success: false, error: 'Pedido de conta inválido.' });

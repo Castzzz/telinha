@@ -219,8 +219,8 @@ const DEFAULT_CHANNELS = [
 const channels = new Map();
 const deletedDefaultChannels = new Set();
 
-function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdAt = Date.now(), password = null, access = null, writeAccess = null, description = '' }) {
-  return { id, name, isDefault, temporary, createdBy, createdAt, password, access, writeAccess, description, callStartedAt: null, users: new Map(), messages: [] };
+function newChannel({ id, name, isDefault = false, temporary = false, createdBy = null, createdByMemberId = null, createdAt = Date.now(), password = null, access = null, writeAccess = null, description = '' }) {
+  return { id, name, isDefault, temporary, createdBy, createdByMemberId, createdAt, password, access, writeAccess, description, callStartedAt: null, users: new Map(), messages: [] };
 }
 
 for (const def of DEFAULT_CHANNELS) {
@@ -267,7 +267,7 @@ function loadSavedChannels() {
         try { access = permissions.access(c.access, true); }
         catch { access = { private: true, roles: [], members: [] }; }
       }
-      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdAt: Number(c.createdAt) || Date.now(), password, access, writeAccess: storedAccess(c.writeAccess), description: safeString(c.description, '', 200) }));
+      channels.set(c.id, newChannel({ id: c.id, name, createdBy, createdByMemberId: c.createdByMemberId || null, createdAt: Number(c.createdAt) || Date.now(), password, access, writeAccess: storedAccess(c.writeAccess), description: safeString(c.description, '', 200) }));
     }
     for (const c of Array.isArray(saved?.textChannels) ? saved.textChannels : []) {
       if (typeof c?.id !== 'string' || !CHANNEL_ID_RE.test(c.id) || textChannels.has(c.id)) continue;
@@ -276,6 +276,7 @@ function loadSavedChannels() {
         id: c.id,
         name,
         createdBy: typeof c.createdBy === 'string' ? c.createdBy : null,
+        createdByMemberId: typeof c.createdByMemberId === 'string' ? c.createdByMemberId : null,
         createdAt: Number(c.createdAt) || Date.now(), access: storedAccess(c.access), writeAccess: storedAccess(c.writeAccess), description: safeString(c.description, '', 200)
       }));
     }
@@ -289,11 +290,11 @@ function saveChannels(strict = false) {
   if (!CHANNELS_FILE) return;
   const list = [...channels.values()]
     .filter((c) => !c.isDefault && !c.temporary)
-    .map(({ id, name, createdBy, createdAt, password, access, writeAccess, description }) => ({ id, name, createdBy, createdAt, password, access, writeAccess, description }));
+    .map(({ id, name, createdBy, createdByMemberId, createdAt, password, access, writeAccess, description }) => ({ id, name, createdBy, createdByMemberId, createdAt, password, access, writeAccess, description }));
   try {
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const tmp = `${CHANNELS_FILE}.tmp`;
-    const textList = [...textChannels.values()].map(({ id, name, createdBy, createdAt, access, writeAccess, description }) => ({ id, name, createdBy, createdAt, access, writeAccess, description }));
+    const textList = [...textChannels.values()].map(({ id, name, createdBy, createdByMemberId, createdAt, access, writeAccess, description }) => ({ id, name, createdBy, createdByMemberId, createdAt, access, writeAccess, description }));
     const general = channels.get('geral');
     const defaultSettings = general?.isDefault ? { geral: { name: general.name, description: general.description, writeAccess: general.writeAccess, password: general.password } } : {};
     fs.writeFileSync(tmp, JSON.stringify({ channels: list, textChannels: textList, defaultSettings, deletedDefaultChannels: [...deletedDefaultChannels] }, null, 2), { mode: 0o600 });
@@ -331,17 +332,19 @@ function canReadAsset(req) {
   if (!reference) return false;
   const ch = (reference.type === 'text' ? textChannels : channels).get(reference.id);
   if (!ch) return false;
-  if (!ch.access?.private) return true;
+  if (!ch.access?.private && !roomPassword && !ch.password) return true;
+  if (typeof req.query.access !== 'string' || !/^[a-f0-9]{64}$/.test(req.query.access)) return false;
   const viewer = [...io.sockets.sockets.values()].find(client => client.data.user?.assetKey === req.query.access
+    && !client.data.accountEnding
     && (!client.data.accountSession || accounts.resolveSessionMeta(client.handshake.auth?.accountToken))
     && (client.data.accountSession || !accounts.accountForAccessId(client.data.user.accessId)))?.data.user;
-  return Boolean(viewer && permissions.visible(viewer, ch));
+  return Boolean(viewer && permissions.visible(viewer, ch) && (!ch.password || viewer.channelId === ch.id));
 }
 const textImages = []; // [{ file, size, mtime }] do mais antigo pro mais novo
 let textImagesBytes = 0;
 
-function newTextChannel({ id, name, createdBy = null, createdAt = Date.now(), access = null, writeAccess = null, description = '' }) {
-  return { id, name, createdBy, createdAt, access, writeAccess, description, recent: [], count: 0, lastMessageAt: 0 };
+function newTextChannel({ id, name, createdBy = null, createdByMemberId = null, createdAt = Date.now(), access = null, writeAccess = null, description = '' }) {
+  return { id, name, createdBy, createdByMemberId, createdAt, access, writeAccess, description, recent: [], count: 0, lastMessageAt: 0 };
 }
 
 function textFile(id) {
@@ -491,7 +494,7 @@ function deleteTextChannelData(ch) {
 function getTextChannelsSummary(viewer = null) {
   const positions = visiblePlacements('text', viewer);
   return channelExtras.ordered('text', [...textChannels.values()]).filter(ch => permissions.visible(viewer, ch))
-    .map(ch => ({ id: ch.id, name: ch.name, description: ch.description, createdBy: ch.createdBy, createdAt: ch.createdAt,
+    .map(ch => ({ id: ch.id, name: ch.name, description: ch.description, createdBy: ch.createdBy, createdAt: ch.createdAt, canDelete: canDeleteChannel(viewer, ch),
       ...positions['text:' + ch.id], lastMessageAt: ch.lastMessageAt, isPrivate: Boolean(ch.access?.private), canWrite: permissions.canWrite(viewer, ch),
       canManageAccess: permissions.has(viewer, 'manageChannels') }));
 }
@@ -519,15 +522,9 @@ function canSeeChatMessage(viewer, msg, { now = Date.now(), allowExpired = false
   if (!msg || (!allowExpired && isMessageExpired(msg, now))) return false;
   if (!Array.isArray(msg.whisperTo) || !msg.whisperTo.length) return true;
   if (!viewer) return false;
-  if ((viewer.accessId && msg.authorMemberId === viewer.accessId)
-    || (viewer.profileId && msg.profileId === viewer.profileId)
-    || (viewer.id && msg.userId === viewer.id)) {
-    return true;
-  }
-  return msg.whisperTo.some(r =>
-    (r.accessId && viewer.accessId === r.accessId)
-    || (r.profileId && viewer.profileId === r.profileId)
-  );
+  // O perfil é público e pode ser copiado; só a identidade autenticada autoriza.
+  return Boolean(viewer.accessId && (msg.authorMemberId === viewer.accessId
+    || msg.whisperTo.some(r => r.accessId === viewer.accessId)));
 }
 
 function emitScopedChatMessage(scope, channel, event, payload, msg = null, { allowExpired = false } = {}) {
@@ -702,7 +699,7 @@ function parseChatCommand(rawText, { scope, channel, sender }) {
       cursor = withoutAt.slice(matched.handle.length).trimStart();
     }
     const finalRecipients = [...recipients.values()].filter(r =>
-      !((r.accessId && r.accessId === sender.accessId) || (r.profileId && r.profileId === sender.profileId))
+      r.accessId && r.accessId !== sender.accessId
     );
     if (!finalRecipients.length) {
       return { ok: false, error: 'Escolha outra pessoa para enviar a mensagem privada.' };
@@ -772,12 +769,12 @@ function saveSoundboard() {
   fs.renameSync(tmp, SOUNDBOARD_INDEX);
 }
 
-function addSoundboardSound({ profileId, ownerName, name, emoji, mime, data }) {
+function addSoundboardSound({ profileId, ownerMemberId, ownerName, name, emoji, mime, data }) {
   fs.mkdirSync(SOUNDBOARD_DIR, { recursive: true });
   const id = randomUUID();
   const file = `${id}.${SOUND_EXT[mime] || 'bin'}`;
   fs.writeFileSync(path.join(SOUNDBOARD_DIR, file), data);
-  const sound = { id, profileId, ownerName, name, emoji, mime, file, createdAt: Date.now() };
+  const sound = { id, profileId, ownerMemberId, ownerName, name, emoji, mime, file, createdAt: Date.now() };
   soundboard.push(sound);
   saveSoundboard();
   return sound;
@@ -790,7 +787,7 @@ function removeSoundboardSound(sound) {
 }
 
 function soundboardList() {
-  return soundboard.map(({ id, profileId, ownerName, name, emoji }) => ({ id, profileId, ownerName, name, emoji }));
+  return soundboard.map(({ id, profileId, ownerMemberId, ownerName, name, emoji }) => ({ id, profileId, ownerMemberId, ownerName, name, emoji }));
 }
 
 loadSoundboard();
@@ -906,14 +903,25 @@ function matchesKey(key, expected) {
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
-// Mutado/ensurdecido pelo admin: guardado pelo perfil, pra não escapar reconectando
-const serverMutedProfiles = new Set();
-const serverDeafenedProfiles = new Set();
+// A moderação usa a identidade autenticada, não o ID público editável do perfil.
+const serverMutedMembers = new Set();
+const serverDeafenedMembers = new Set();
 
 function applyServerModeration(user) {
+  const wasMuted = user.serverMuted || user.serverDeafened;
+  const wasDeafened = user.serverDeafened;
   user.afkMuted = Boolean(user.channelId && user.channelId === channelExtras.data.afk.channelId);
-  user.serverMuted = user.afkMuted || Boolean(user.profileId && serverMutedProfiles.has(user.profileId));
-  user.serverDeafened = Boolean(user.profileId && serverDeafenedProfiles.has(user.profileId));
+  user.serverMuted = user.afkMuted || serverMutedMembers.has(user.accessId);
+  user.serverDeafened = serverDeafenedMembers.has(user.accessId);
+  // Voz tem identidades próprias para revogar sem interromper tela, câmera ou música.
+  if (SFU_SECRET && !wasMuted && (user.serverMuted || user.serverDeafened)) {
+    revokeSfuMedia(user.voiceHostId);
+    user.voiceHostId = randomBytes(16).toString('hex');
+  }
+  if (SFU_SECRET && !wasDeafened && user.serverDeafened) {
+    revokeSfuMedia(user.voiceViewerId);
+    user.voiceViewerId = randomBytes(16).toString('hex');
+  }
   // Mutado pelo admin não abre o microfone; ensurdecido também não ouve nem fala
   if (user.serverMuted || user.serverDeafened) { user.isMicOn = false; user.isSpeaking = false; }
   if (user.serverDeafened) user.isDeafened = true;
@@ -924,9 +932,9 @@ function canDeleteChannel(user, channel) {
   if (!channel) return false;
   if (!permissions.visible(user, channel)) return false;
   if (permissions.has(user, 'manageChannels')) return true;
-  // O profileId dos visitantes é público; não autoriza apagar um canal privado.
+  // Canais privados exigem gerenciamento; os antigos sem prova de autoria também.
   if (channel.access?.private) return false;
-  return Boolean(channel.createdBy && user.profileId && channel.createdBy === user.profileId);
+  return Boolean(channel.createdByMemberId && channel.createdByMemberId === user?.accessId);
 }
 
 // O que os outros podem ver de um usuário (a foto vai à parte, por /api/avatar/:id)
@@ -1109,7 +1117,8 @@ function messageAuthor(message) {
   const account = accounts.data.accounts.find(item => item.accessId === memberId), stored = memberAvatars.info(memberId);
   const version = active?.avatar ? active.avatarV : account?.profile?.avatar ? (account.profileUpdatedAt || account.createdAt) : (stored?.version || 0);
   const crop = active?.avatarCrop || account?.profile.avatarCrop || stored?.crop;
-  return { ...message, authorMemberId: memberId, userAvatarV: version, userAvatarCrop: normalizeImageCrop(crop) };
+  // A associação de foto antiga serve só para exibição, nunca comprova autoria.
+  return { ...message, authorMemberId: memberId, legacyAuthor: !message.authorMemberId, userAvatarV: version, userAvatarCrop: normalizeImageCrop(crop) };
 }
 
 function getChannelsSummary(viewer = null, presence = null) {
@@ -1126,6 +1135,7 @@ function getChannelsSummary(viewer = null, presence = null) {
       isAfk: channelExtras.data.afk.channelId === channel.id,
       isDefault: channel.isDefault,
       createdBy: channel.createdBy,
+      canDelete: canDeleteChannel(viewer, channel),
       hasPassword: Boolean(channel.password),
       isPrivate: Boolean(channel.access?.private),
       canManageAccess: permissions.has(viewer, 'manageChannels'),
@@ -1238,9 +1248,11 @@ function getPermissionContextSets() {
   const referencedIds = new Set();
   for (const id of accounts.referencedAccessIds()) referencedIds.add(id);
   for (const ch of [...channels.values(), ...textChannels.values()]) {
+    if (ch.createdByMemberId) referencedIds.add(ch.createdByMemberId);
     for (const id of ch.access?.members || []) referencedIds.add(id);
     for (const id of ch.writeAccess?.members || []) referencedIds.add(id);
   }
+  for (const sound of soundboard) if (sound.ownerMemberId) referencedIds.add(sound.ownerMemberId);
   return { activeIds, referencedIds };
 }
 
@@ -1744,6 +1756,8 @@ io.on('connection', (socket) => {
   const user = {
     accessId: accessIdentity.id,
     mediaId: randomBytes(16).toString('hex'),
+    voiceHostId: randomBytes(16).toString('hex'),
+    voiceViewerId: randomBytes(16).toString('hex'),
     id: socket.id,
     name: `Amigo-${socket.id.slice(0, 4)}`,
     color: USER_COLORS[colorIndex],
@@ -2080,9 +2094,17 @@ io.on('connection', (socket) => {
     if (!targetUser.profileId) return cb({ success: false, error: 'Essa pessoa está com uma versão antiga do app.' });
     const on = payload.on === true;
     if (!on && kind === 'mute' && targetUser.channelId === channelExtras.data.afk.channelId) return cb({ success: false, error: 'No canal de ausentes, todos ficam mutados, inclusive administradores.' });
-    const set = kind === 'mute' ? serverMutedProfiles : serverDeafenedProfiles;
-    if (on) set.add(targetUser.profileId);
-    else set.delete(targetUser.profileId);
+    const set = kind === 'mute' ? serverMutedMembers : serverDeafenedMembers;
+    if (on) set.add(targetUser.accessId);
+    else set.delete(targetUser.accessId);
+    // A moderação acompanha a identidade em todos os aparelhos conectados.
+    for (const client of io.sockets.sockets.values()) {
+      if (client === target || client.data.user?.accessId !== targetUser.accessId) continue;
+      const other = client.data.user, wasDeafened = other.serverDeafened;
+      applyServerModeration(other);
+      if (kind === 'deafen' && !on && wasDeafened) other.isDeafened = false;
+      client.emit('server-moderation', { serverMuted: other.serverMuted, serverDeafened: other.serverDeafened, afkMuted: other.afkMuted, by: user.name });
+    }
     const wasDeafened = targetUser.serverDeafened;
     applyServerModeration(targetUser);
     // Tirou o ensurdecer do admin: volta a ouvir (o mic continua como a pessoa deixar)
@@ -2201,7 +2223,7 @@ io.on('connection', (socket) => {
     if (!channels.has(finalId)) {
       const salt = password ? randomBytes(16).toString('hex') : null;
       const protectedPassword = password ? { salt, hash: hashRoomPassword(password, salt) } : null;
-      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId, password: protectedPassword, access }));
+      channels.set(finalId, newChannel({ id: finalId, name: cleanName, createdBy: user.profileId, createdByMemberId: user.accessId, password: protectedPassword, access }));
       try { saveChannels(true); }
       catch (err) { channels.delete(finalId); return cb({ success: false, error: err.message }); }
       broadcastChannels();
@@ -2304,6 +2326,8 @@ io.on('connection', (socket) => {
     if (channel.users.size === 0 || !channel.callStartedAt) channel.callStartedAt = now;
     user.voiceJoinedAt = now;
     user.mediaId = randomBytes(16).toString('hex');
+    user.voiceHostId = randomBytes(16).toString('hex');
+    user.voiceViewerId = randomBytes(16).toString('hex');
     user.channelId = cleanChannelId;
     touchPresence(user);
     applyServerModeration(user);
@@ -2435,6 +2459,9 @@ io.on('connection', (socket) => {
     }
     const ownerId = typeof payload.ownerId === 'string' ? payload.ownerId : '';
     const role = payload.role === 'host' ? 'host' : 'viewer';
+    if (payload.kind === 'voice') {
+      if (user.serverDeafened || (role === 'host' && user.serverMuted)) return callback({ ok: false });
+    }
     const owner = io.sockets.sockets.get(ownerId)?.data?.user;
     if (!owner || owner.channelId !== user.channelId) return callback({ ok: false });
     if (role === 'host' && ownerId !== socket.id) return callback({ ok: false });
@@ -2446,8 +2473,9 @@ io.on('connection', (socket) => {
     const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : extra ? `__s${extra[1]}` : '';
     const sala = `${user.channelId}__${ownerId}${suffix}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
-    const signature = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}|${user.mediaId}`).digest('hex');
-    const token = `${user.mediaId}.${signature}`;
+    const mediaId = payload.kind === 'voice' ? (role === 'host' ? user.voiceHostId : user.voiceViewerId) : user.mediaId;
+    const signature = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}|${mediaId}`).digest('hex');
+    const token = `${mediaId}.${signature}`;
     callback({ ok: true, path: SFU_PATH, sala, role, exp, token });
   }));
 
@@ -2750,7 +2778,7 @@ io.on('connection', (socket) => {
     if (!ctx) return;
     const { payload, target, msg } = ctx;
     if (!permissions.canWrite(user, target.ch || target.channel)) return cb({ success: false, error: 'Você não pode escrever neste canal.' });
-    if (!msg.profileId || msg.profileId !== user.profileId) return cb({ success: false, error: 'Só dá pra editar as suas mensagens.' });
+    if (!msg.authorMemberId || msg.authorMemberId !== user.accessId) return cb({ success: false, error: 'Só dá pra editar as suas mensagens.' });
     const max = target.scope === 'text' ? MAX_TEXT_LENGTH : 600;
     const text = typeof payload.text === 'string' ? payload.text.trim().slice(0, max) : '';
     if (!text && !msg.image && !msg.attachment) return cb({ success: false, error: 'Mensagem vazia: use apagar.' });
@@ -2772,7 +2800,7 @@ io.on('connection', (socket) => {
     const ctx = chatOpPrelude(rawPayload, cb);
     if (!ctx) return;
     const { target, msg } = ctx;
-    const mine = msg.profileId && msg.profileId === user.profileId;
+    const mine = msg.authorMemberId && msg.authorMemberId === user.accessId;
     if (!mine && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só dá pra apagar as suas mensagens.' });
     const ephemeral = Boolean(msg.whisperTo?.length || msg.expiresAt);
     clearTemporaryMessageTimer(msg.id);
@@ -2809,11 +2837,11 @@ io.on('connection', (socket) => {
     if (!emoji || emoji.length > 32 || !EMOJI_RE.test(emoji)) return cb({ success: false, error: 'Emoji inválido.' });
     const reactions = Object.fromEntries(Object.entries(msg.reactions || {}).map(([e, list]) => [e, [...list]]));
     const list = reactions[emoji] || [];
-    const i = list.findIndex((r) => r.p === user.profileId);
+    const i = list.findIndex((r) => r.m === user.accessId);
     if (i !== -1) list.splice(i, 1);
     else {
       if (!reactions[emoji] && Object.keys(reactions).length >= MAX_REACTION_EMOJIS) return cb({ success: false, error: 'Emoji demais nessa mensagem.' });
-      list.push({ p: user.profileId, n: user.name });
+      list.push({ p: user.profileId, m: user.accessId, n: user.name });
     }
     if (list.length) reactions[emoji] = list;
     else delete reactions[emoji];
@@ -2900,12 +2928,12 @@ io.on('connection', (socket) => {
     const data = match ? Buffer.from(match[2], 'base64') : null;
     if (!data || !data.length) return cb({ success: false, error: 'Esse arquivo não é um áudio.' });
     if (data.length > MAX_SOUNDBOARD_BYTES) return cb({ success: false, error: 'Áudio grande demais (máximo 1 MB).' });
-    if (soundboard.filter((s) => s.profileId === user.profileId).length >= MAX_SOUNDS_PER_PROFILE) {
+    if (soundboard.filter((s) => s.ownerMemberId === user.accessId).length >= MAX_SOUNDS_PER_PROFILE) {
       return cb({ success: false, error: `Você já tem ${MAX_SOUNDS_PER_PROFILE} sons: apague um pra pôr outro.` });
     }
     if (soundboard.length >= MAX_SOUNDS_TOTAL) return cb({ success: false, error: 'O soundboard está cheio.' });
     try {
-      const sound = addSoundboardSound({ profileId: user.profileId, ownerName: user.name, name, emoji, mime: match[1].toLowerCase(), data });
+      const sound = addSoundboardSound({ profileId: user.profileId, ownerMemberId: user.accessId, ownerName: user.name, name, emoji, mime: match[1].toLowerCase(), data });
       io.emit('soundboard-list', soundboardList());
       cb({ success: true, id: sound.id });
     } catch (err) {
@@ -2919,7 +2947,7 @@ io.on('connection', (socket) => {
     const id = safeObject(rawPayload).id;
     const sound = soundboard.find((s) => s.id === id);
     if (!sound) return cb({ success: false, error: 'Esse som não existe mais.' });
-    if (sound.profileId !== user.profileId && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só quem colocou ou quem modera o soundboard pode apagar.' });
+    if (sound.ownerMemberId !== user.accessId && !permissions.has(user, 'manageMessages')) return cb({ success: false, error: 'Só quem colocou ou quem modera o soundboard pode apagar.' });
     removeSoundboardSound(sound);
     io.emit('soundboard-list', soundboardList());
     cb({ success: true });
@@ -2960,7 +2988,7 @@ io.on('connection', (socket) => {
         if (!permissions.has(user, 'manageChannels')) throw new Error('Seu cargo não permite configurar canais invisíveis.');
         access = permissions.access(data.access);
       }
-      textChannels.set(id, newTextChannel({ id, name: cleanName, createdBy: user.profileId, access }));
+      textChannels.set(id, newTextChannel({ id, name: cleanName, createdBy: user.profileId, createdByMemberId: user.accessId, access }));
       saveChannels(true);
     } catch (err) { textChannels.delete(id); return cb({ success: false, error: err.message }); }
     broadcastTextChannels();
@@ -3282,7 +3310,7 @@ function callSoundSeed() {
 function leaveCurrentChannel(socket) {
   const user = socket.data?.user;
   if (!user || !user.channelId) return;
-  if (SFU_SECRET) revokeSfuMedia(user.mediaId);
+  if (SFU_SECRET) for (const id of [user.mediaId, user.voiceHostId, user.voiceViewerId]) revokeSfuMedia(id);
 
   dailyCalls.leave(socket.id);
   const channelId = user.channelId;
@@ -3328,6 +3356,7 @@ function leaveCurrentChannel(socket) {
 }
 
 function revokeSfuMedia(id, attempt = 0) {
+  if (!id) return;
   // O SFU encerra também uma conexão que ignore o aviso de saída enviado ao app.
   fetch(`${process.env.SFU_INTERNAL_URL || 'http://127.0.0.1:8081'}/revoke`, {
     method: 'POST', headers: { Authorization: `Bearer ${SFU_SECRET}`, 'Content-Type': 'application/json' },

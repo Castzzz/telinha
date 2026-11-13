@@ -63,6 +63,165 @@ quadros decodificados, `freezeCount`, perdas de pacotes e jitter. Esses números
 comparados ao longo do tempo, junto com CPU/memória/rede da VM, para distinguir as causas.
 
 
+## Saltos na imagem ao assistir (10/11/2026, correção local)
+
+Relato: um espectador vê glitches e a imagem parece ir e voltar no tempo ao assistir às
+transmissões dos outros. Ainda falta comparar o mesmo instante entre espectadores e medir
+as estatísticas durante o incidente; a causa do relato não está confirmada.
+
+Consulta somente de leitura na VM às 21:58 UTC (18:58 de Brasília): Node/SFU ativos,
+carga de aproximadamente 0,6 e cerca de 10,9 GB de memória disponível. Os últimas duas horas
+de registros consultados não mostraram erros de envio; isso não mede perda de rede nem exclui
+picos anteriores. Nenhum serviço foi reiniciado.
+
+Foi encontrado um defeito independente no repasse: `forwardPackets` copiava as extensões RTP
+do host para os espectadores. MID identifica a seção de mídia da conexão negociada, e TWCC
+identifica pacotes de um transporte. Os IDs/extensões da conexão host → SFU não podem ser
+reutilizados cegamente na conexão SFU → espectador. O `TrackLocalStaticRTP` do Pion troca
+SSRC/payload type, mas não faz essa tradução das extensões recebidas.
+
+A correção remove as extensões de entrada antes de entregar o pacote ao Pion e habilita
+`ConfigureTWCCHeaderExtensionSender`, gerando uma sequência de transporte por conexão de
+saída. Áudio/vídeo, sequência RTP, timestamps, marcador e CSRC são preservados; pacotes
+atrasados continuam sendo repassados para permitir recuperação por NACK. Não há descarte de
+quadros antigos nem alteração artificial da velocidade de reprodução. Pacotes RTP malformados
+são ignorados sem encerrar a faixa.
+
+Referências: [MID no RFC 8843 §15](https://www.rfc-editor.org/rfc/rfc8843.html#section-15),
+[repasse no Pion 4.2.24](https://github.com/pion/webrtc/blob/v4.2.24/track_local_static.go) e
+[configuração de TWCC no Pion 4.2.24](https://github.com/pion/webrtc/blob/v4.2.24/interceptor.go).
+
+Regressões reproduzem o vazamento das extensões antes da correção e verificam sua remoção,
+bytes da mídia, pacotes fora de ordem, volta do contador de sequência, pacote inválido e
+continuidade quando um espectador falha. `go test -race ./sfu` e o runner de 62 testes passaram.
+O teste de janela pode usar SFU real com `TEST_SFU=1 npm run test:stream:ui`, após compilar
+`go build -o .cache/music-lab/music-sfu ./sfu` e preparar a ponte local de música já usada
+pelo teste. A checagem com SFU corrigido e Electron passou: reprodução, tela cheia, três temas,
+fechar/reabrir e parar de assistir. Usa vídeo sintético; não reproduz a rede do amigo.
+
+A mudança de produção é só em `sfu/`; para chegar à sala oficial exige deploy explicitamente
+pedido pelo dono. Sem release nem deploy nesta investigação.
+
+## Travamentos em 1080p60 e 1440p60 (11/11/2026, análise)
+
+O dono confirmou que o travamento aparece para quem assiste. Ainda não foi confirmado se
+atinge todos simultaneamente nem se a prévia local também trava. Nenhum ajuste de mídia,
+release, deploy ou reinício foi feito nesta análise; alterações locais anteriores foram
+preservadas.
+
+### Evidências na VM
+
+Consulta somente de leitura em 11/11 às 18:53–18:56 UTC (15:53–15:56 de Brasília):
+
+- Carga de 0,13/0,29/0,49; aproximadamente 10,9 GB de memória disponível, swap sem uso.
+  SFU ativo desde 10/11 às 00:30 UTC, sem reinícios automáticos, usando cerca de 26 MB,
+  limite de memória de 2 GB e sem quota de CPU. Isso descreve aquele instante, não a carga
+  durante o travamento.
+- `sudo ss -uanmp 'sport = :50000'`: socket UDP do processo `telinha-sfu` com
+  `rb212992` e `d493`: buffer de recepção de 212.992 bytes (208 KiB) e 493 descartes
+  acumulados naquele socket. A fila estava vazia. O contador permaneceu igual nas duas
+  consultas; há evidência de descartes anteriores, sem correlação temporal com o relato.
+- Contadores globais: `UdpRcvbufErrors=12637`, `UdpInErrors=12638` e
+  `UdpSndbufErrors=19`, também estáveis nas consultas. São do sistema inteiro, não apenas
+  do SFU. A interface de rede mostrava zero descartes/erros; isso não exclui descarte no
+  socket. `net.core.rmem_default=212992`, `rmem_max=4194304`.
+- Logs recentes confirmam vídeo VP8. Os presets no cliente servido pela VM continuam em
+  5,5 Mbps para 1080p60 e 8,5 Mbps para 1440p60; esses valores são tetos de vídeo.
+
+### Limitações encontradas no código
+
+1. **Buffer UDP pequeno para rajadas.** `setupWebRTC` abre um socket compartilhado com
+   `net.ListenUDP` sem chamar `SetReadBuffer`. Todas as salas/faixas UDP passam por ele.
+   Quadros grandes e várias transmissões podem gerar rajadas. Os 208 KiB não são todos
+   aproveitáveis como mídia: o kernel também contabiliza estruturas dos pacotes. Aumentar
+   o buffer é uma mitigação prioritária a testar, não uma confirmação da causa.
+2. **Sem adaptação ao caminho SFU → espectador.** Cada publicação usa uma única faixa
+   de vídeo; não há simulcast, seleção de camadas ou ajuste de bitrate a partir da banda
+   dos espectadores. `readViewerRTCP` trata PLI/FIR; os interceptors padrão recuperam
+   perdas por NACK e geram relatórios, mas não instalam um controlador de banda/pacer
+   para a saída. Gerar extensões TWCC também não instala esse controlador. Assim, a
+   adaptação WebRTC do emissor considera seu trecho até o SFU; um espectador com caminho
+   pior continua recebendo a mesma faixa. Repassar TWCC bruto ao host seria incorreto:
+   cada conexão tem sua própria sequência de transporte.
+3. **Somente VP8 no SFU.** Não há opção H.264/VP9/AV1. Isso limita a escolha de encoder,
+   mas não prova encoding por CPU: depende do dispositivo e do Chromium. Medir
+   `encoderImplementation`, `powerEfficientEncoder`, tempo de encoding e
+   `qualityLimitationReason` antes de atribuir o problema ao codec ou prometer aceleração.
+   Em pixels por segundo, 1080p60 exige 4,5 vezes o trabalho de 720p30; 1440p60, 8 vezes.
+   Esses números não são uma previsão linear de CPU.
+4. **Recuperação de perdas usa janelas fixas.** Pion interceptor v0.1.49 usa 512 pacotes
+   no gerador NACK, intervalo de 100 ms e cache de 1.024 pacotes no respondedor. Quanto
+   maior a taxa, menor o tempo coberto por esses números. Avaliar RTT e retransmissões
+   antes de alterar; não há evidência de esgotamento dessas janelas neste incidente.
+
+### Ordem recomendada para corrigir e medir
+
+- Primeiro testar um buffer UDP de recepção maior (por exemplo, solicitar 4 MiB e
+  verificar o valor efetivo em `ss`), preservando a correção local anterior das extensões
+  RTP. Comparar o delta de descartes numa transmissão real em alta resolução. Isso exige
+  mudança no SFU e deploy autorizado; nada foi aplicado à VM nesta análise.
+- Medir simultaneamente emissor e espectador pelo painel **Configurações → Transmissão
+  → Diagnóstico**. Registrar resolução/FPS reais, bitrate, perda, RTT, congelamentos e
+  motivo de limitação durante o problema, comparando 1080p30, 1080p60 e 1440p60.
+  Emissor com FPS baixo/limitação de CPU aponta para captura/encoding. Emissor estável
+  e espectador com perda/congelamentos aponta para repasse/rede/recepção; ainda é preciso
+  separar rede de decode no receptor. Prévia lisa sozinha não elimina encoding lento.
+- Depois tratar adaptação à banda de recepção. Um pacer sozinho não resolve quando o
+  bitrate sustentado excede a capacidade do espectador; exige política de qualidade,
+  feedback agregado seguro ou camadas alternativas. Avaliar codecs adicionais conforme
+  as máquinas afetadas, mantendo compatibilidade.
+
+Verificação do estado local: `npm test` (62/62),
+`node --test tests/transmission-diagnostics.test.js` (2/2) e
+`~/.local/go/bin/go test -race ./sfu` passaram. Essas suítes não reproduzem uma sessão
+1080p60/1440p60 na rede dos amigos; não foi realizado teste visual novo nesta análise.
+
+Fontes: [interceptors padrão do Pion 4.2.24](https://github.com/pion/webrtc/blob/v4.2.24/interceptor.go),
+[gerador NACK 0.1.49](https://github.com/pion/interceptor/blob/v0.1.49/pkg/nack/generator_interceptor.go),
+[respondedor NACK 0.1.49](https://github.com/pion/interceptor/blob/v0.1.49/pkg/nack/responder_interceptor.go)
+e [estatísticas WebRTC da W3C](https://www.w3.org/TR/webrtc-stats/).
+
+## Aumento do buffer preparado (11/11/2026, local)
+
+A pedido do dono, `setupWebRTC` agora solicita 4 MiB de buffer UDP de recepção antes de
+iniciar o mux compartilhado. A VM tem `rmem_max=4194304`, suficiente para a solicitação,
+sem alteração global do kernel. O ajuste afeta apenas o socket de mídia do SFU e mantém
+os limites existentes do serviço. Se falhar, há aviso e o SFU continua com o padrão do
+sistema. O log de sucesso descreve o tamanho solicitado: o kernel pode limitá-lo.
+
+Teste com o SFU compilado e portas locais temporárias: `/health` saudável e `ss -uanmp`
+confirmou `rb8388608`, ou 8 MiB na contabilização do Linux, que dobra o valor de
+`SO_RCVBUF`. O valor anterior observado na VM era `rb212992` (208 KiB); o novo limite
+contabilizado é aproximadamente 39 vezes maior, compartilhado por todas as salas.
+Isso não adiciona espera deliberada nem exige encher o buffer para entregar pacotes.
+Também não resolve excesso sustentado de tráfego ou limitação de decode/encoding.
+
+Referências: [Go, UDPConn.SetReadBuffer](https://pkg.go.dev/net#UDPConn.SetReadBuffer)
+e [Linux, SO_RCVBUF e rmem_max](https://man7.org/linux/man-pages/man7/socket.7.html).
+Aplicação na sala oficial depende de deploy explicitamente solicitado. Nesta etapa,
+nenhuma alteração foi aplicada à VM.
+
+Validação do ajuste: `npm test` (62/62), `go test -race -count=1 ./sfu` e
+`TEST_SFU=1 /usr/lib/electron42/electron tests/stream-window-browser.cjs` passaram.
+Conferida a captura de tela cheia do player com vídeo sintético; reprodução, temas e
+fechar/reabrir funcionaram com SFU real. Ainda não reproduz a rede nem a carga de uma
+transmissão real em 1080p60/1440p60.
+
+## Aplicado à VM (11/11/2026, 15:58 de Brasília)
+
+Deploy explicitamente autorizado, direcionado ao SFU com substituição atômica do binário
+`linux/arm64` e reinício apenas de `telinha-sfu`. Inclui o aumento de buffer e a correção
+anterior de repasse RTP/TWCC. As outras alterações locais não foram publicadas.
+Backup de dados íntegro em `~/Teletela-backups/teletela-dados-2026-11-11_15-58-18.tar.gz`;
+binário anterior guardado em `/opt/telinha/bin/telinha-sfu.rollback.B562tm`.
+
+`ss` na VM confirmou `rb8388608`, com `d0` nas consultas iniciais após o reinício.
+O contador zerou porque o socket foi recriado; comparar seu crescimento durante vídeo
+em alta resolução. Saúde pública Node/SFU OK, serviços ativos e cinco salas reconectadas
+com áudio recebido nos logs. Não havia transmissão de vídeo nos registros consultados
+após o deploy; o efeito em 1080p60/1440p60 ainda precisa ser avaliado durante o uso.
+
+
 ## Resolução recebida de 960 × 540 com qualidade 1080p (12/11/2026)
 
 O print do espectador mostra 960 × 540, cerca de 58 FPS e 2.240 kb/s, com 0% de perda

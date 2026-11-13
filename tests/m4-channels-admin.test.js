@@ -27,9 +27,12 @@ function emit(socket, event, payload) {
   return new Promise((resolve) => socket.emit(event, payload, resolve));
 }
 
-async function connect() {
-  const client = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false });
-  await once(client, 'connect');
+async function connect(auth = {}) {
+  const client = ioClient(URL_BASE, { transports: ['websocket'], reconnection: false, auth, autoConnect: false });
+  client.on('permission-identity', ({ token }) => { client.permissionToken = token; });
+  const connected = once(client, 'connect');
+  client.connect();
+  await connected;
   return client;
 }
 
@@ -92,7 +95,7 @@ async function runTests() {
     console.log('  ✓ Canal salvo sobrevive a reinício');
 
     // 3. Outra pessoa não apaga; quem criou apaga e quem estava dentro sai da call
-    const alice2 = await connect();
+    const alice2 = await connect({ permissionToken: alice.permissionToken });
     const bob = await connect();
     clients.push(alice2, bob);
     await join(alice2, 'geral', 'alice-profile-0001');
@@ -456,9 +459,9 @@ async function runTests() {
     let daveNow = (await channelsList()).find((c) => c.id === 'geral').users.find((u) => u.id === dave.id);
     assert.equal(daveNow.isMicOn, false, 'mutado pelo admin não abre o mic');
     assert.equal(daveNow.serverMuted, true);
-    // Reconecta com o mesmo perfil: continua mutado
+    // Reconecta com a mesma identidade comprovada: continua mutado
     dave.disconnect();
-    const dave2 = await connect();
+    const dave2 = await connect({ permissionToken: dave.permissionToken });
     clients.push(dave2);
     const daveState = await new Promise((resolve) => {
       dave2.once('channel-state', resolve);

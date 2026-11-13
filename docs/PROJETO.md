@@ -1,3 +1,5 @@
+**4.5.1 em publicação (13/11/2026):** correções de segurança e ajustes no SFU. Testes anteriores aproveitados a pedido do dono; conferência desta publicação limitada aos pacotes e à saúde dos serviços.
+
 **[4.5.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens privadas e temporárias, marcações com foto, prévia arrastável e fotos dos amigos. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
 
 # Teletela: documentação do projeto
@@ -1150,6 +1152,29 @@ incluindo os três temas e o layout de celular.
 
 ## 13. Armadilhas conhecidas
 
+**Auditoria local de segurança (10/11/2026):** veja
+[achados, evidências e prioridades](AUDITORIA-SEGURANCA-2026-11-10.md).
+Foram confirmadas falhas envolvendo identidade pública de visitantes, sussurros,
+anexos de salas com senha e tokens de mídia após moderação. Há também dependência
+vulnerável identificada. As cinco falhas receberam correções locais e regressões;
+release/deploy continuam pendentes. Riscos adicionais da auditoria continuam registrados.
+
+- **Identidade pública não autoriza autoria (correção local de 10/11/2026):** mensagens
+  usam `authorMemberId`; canais novos persistem `createdByMemberId` em `channels.json`;
+  sons novos persistem `ownerMemberId` no índice do soundboard; reações novas incluem
+  `m` (ID do membro). Campos antigos de perfil continuam só para aparência/compatibilidade.
+  Não deduzir propriedade de conteúdo legado pelo `profileId`, mesmo quando só houver
+  uma correspondência: um visitante pode copiar esse identificador. Conteúdo sem prova
+  exige moderação para exclusão; reações antigas permanecem sem reivindicação automática.
+  Criadores e donos dos sons entram nas referências preservadas pela limpeza de membros.
+- **Moderação e SFU (correção local de 10/11/2026):** publicação e recepção de voz têm
+  identidades temporárias separadas de tela/câmera/música. Mute revoga a publicação;
+  deafen revoga também a recepção. Sair da call revoga as três identidades. O endpoint
+  existente `/revoke` do SFU continua igual, com até três tentativas; falhas são registradas
+  e uma indisponibilidade entre Node/SFU pode atrasar o fechamento de mídia já aberta.
+  Testes novos: `npm run test:security` e `npm run test:security:ui`. Como há mudança em
+  `public/app.js`, publicar exige release da interface e deploy do servidor, só a pedido.
+
 - **Reversão dos microfones na 3.6.2:** a 3.6.1 foi revertida após relatos de flicker
   e falha na redução de ruído. O grafo de áudio e os controles voltaram aos da 3.6.0;
   o nivelador, o worklet novo e a atualização periódica do nível na interface foram retirados.
@@ -1980,3 +2005,67 @@ e marcada como versão mais recente.
 - Nenhum teste foi repetido, conforme pedido. Android compilado com `-x lintDebug`;
   identificadores e assinatura existentes preservados. As verificações desta publicação
   ficaram na integridade dos artefatos, versão instalada e saúde dos serviços.
+
+
+### Investigação de glitches ao assistir (10/11/2026, local)
+
+- `sfu/main.go` remove as extensões RTP do host antes do repasse e gera TWCC por conexão
+  de saída com `ConfigureTWCCHeaderExtensionSender`. `TrackLocalStaticRTP` troca SSRC/PT,
+  mas não traduz MID/TWCC de uma conexão para outra. Nunca reutilizar os metadados do host
+  cegamente nos espectadores. Sequência RTP, timestamps e mídia continuam preservados.
+- Regressões em `sfu/main_test.go`: extensões, pacotes fora de ordem, volta da sequência,
+  descarte de pacote malformado e continuidade dos demais espectadores. `go test -race ./sfu`
+  e runner 62/62 passaram. `TEST_SFU=1 npm run test:stream:ui` permite a checagem visual com
+  SFU local compilado em `.cache/music-lab/music-sfu`; checagem concluída com reprodução,
+  tela cheia, três temas e fechamento/reabertura funcionando.
+- Consulta somente de leitura à VM não indicou falta de memória/carga alta naquele instante.
+  Causa do relato do espectador ainda não confirmada. Evidências e limites em
+  [DIAGNOSTICO-TRANSMISSOES.md](DIAGNOSTICO-TRANSMISSOES.md). Exige somente deploy do SFU;
+  nenhum deploy/release realizado nesta etapa.
+
+### Análise de travamentos em 1080p60/1440p60 (11/11/2026)
+
+Inspeção somente de leitura encontrou 493 descartes acumulados no socket UDP do SFU,
+com buffer de recepção de apenas 208 KiB, compartilhado pelas salas. Os contadores não
+cresceram durante a consulta; não foi comprovada relação temporal com o relato. A VM
+estava com carga baixa e cerca de 10,9 GB de RAM disponível. O SFU repassa uma única
+faixa VP8, sem adaptação à banda de cada espectador; TWCC e NACK não substituem um
+controlador de banda. Evidências, limites e ordem recomendada de correção/medição em
+[DIAGNOSTICO-TRANSMISSOES.md](DIAGNOSTICO-TRANSMISSOES.md#travamentos-em-1080p60-e-1440p60-11112026-análise).
+Nenhum ajuste de mídia, release ou deploy nesta análise.
+
+### Buffer de recepção do SFU (11/11/2026, ajuste local)
+
+`setupWebRTC` solicita 4 MiB via `UDPConn.SetReadBuffer` antes de entregar o socket ao
+ICE mux. O buffer é único para todas as salas, não por espectador. Falha no ajuste gera
+aviso e preserva a inicialização com o padrão do sistema; sucesso registra o tamanho
+solicitado, sem presumir que o kernel concedeu esse valor. O limite da VM consultada,
+`net.core.rmem_max=4194304`, já permite a solicitação; não é necessário mudar o sysctl
+global. No Linux, `ss` informa o valor dobrado para contabilização interna: o teste local
+confirmou `rb8388608` (8 MiB), comparado aos `rb212992` observados na VM antes do ajuste.
+
+Ao aplicar, conferir `sudo ss -uanmp 'sport = :50000'` e comparar o crescimento de `d`
+durante transmissões reais. O buffer absorve rajadas, sem impor espera para enchê-lo;
+congestionamento sustentado ainda pode aumentar a fila/latência e exige investigar banda
+e adaptação. Exige deploy do SFU; não precisa de release do aplicativo. Nenhum deploy
+realizado nesta etapa.
+
+### Deploy do SFU com buffer maior (11/11/2026, 15:58 de Brasília)
+
+Autorizado pelo dono. Atualização direcionada ao binário do SFU para preservar as outras
+alterações locais pendentes; não foi usado o instalador completo. Inclui o buffer maior e
+a correção anterior de extensões RTP/TWCC já testada. Apenas `telinha-sfu` foi reiniciado;
+Node, Caddy, interface servida, dependências e configuração da VM foram preservados.
+
+- Backup prévio íntegro: `~/Teletela-backups/teletela-dados-2026-11-11_15-58-18.tar.gz`
+  (39 MB, `gzip -t` passou). A primeira tentativa foi descartada por mudança de arquivo
+  durante a leitura; a segunda concluiu normalmente.
+- Compilação `linux/arm64`, substituição atômica do binário, com cópia anterior em
+  `/opt/telinha/bin/telinha-sfu.rollback.B562tm`. SHA-256 local/enviado/instalado:
+  `834d67c8c22f3bb6b2a2251f29f86fb247aee96b6628bb2fd5f093263a354ad6`.
+- `ss` na VM confirmou `rb8388608` (8 MiB), comparado aos 208 KiB anteriores, e zero
+  descartes desde o reinício nas consultas iniciais. Esse contador recomeça no socket
+  novo: não comprova resolução do problema sob carga.
+- Node/SFU/Caddy ativos; `/api/health` e `/sfu/health` públicos saudáveis. Os clientes
+  reconectaram e as cinco salas de voz voltaram. Sem release do aplicativo; os testes
+  concluídos na preparação foram aproveitados.

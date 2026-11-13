@@ -691,6 +691,7 @@ const handleChannelsSummary = (channelsList) => {
       categoryId: ch.categoryId || 'voice', position: ch.position, isAfk: ch.isAfk,
       isDefault: ch.isDefault,
       createdBy: ch.createdBy || null,
+      canDelete: ch.canDelete,
       hasPassword: Boolean(ch.hasPassword),
       isPrivate: Boolean(ch.isPrivate),
       canManageAccess: Boolean(ch.canManageAccess),
@@ -1357,6 +1358,7 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, afkMuted, by } = 
     socket.emit('user-state-changed', { isMicOn: me.isMicOn, isDeafened: me.isDeafened });
   }
   updateMicButton();
+  syncSfuVoice();
   renderChannelsTree();
   updateVoiceLounge();
   if (me.serverDeafened) showToast(`🎧 ${by || 'A moderação'} te ensurdeceu.`, 'error');
@@ -1367,6 +1369,7 @@ socket.on('server-moderation', ({ serverMuted, serverDeafened, afkMuted, by } = 
 
 function canDeleteChannel(ch) {
   if (!ch) return false;
+  if (typeof ch.canDelete === 'boolean') return ch.canDelete;
   if (ch.isPrivate) return hasPermission(appState, 'manageChannels');
   return hasPermission(appState, 'manageChannels') || Boolean(ch.createdBy && ch.createdBy === myProfile.id);
 }
@@ -1942,7 +1945,7 @@ function appendChatMessage(msg, autoScroll = true) {
 }
 
 function isMyMessage(msg) {
-  return Boolean(msg?.profileId) && msg.profileId === myProfile.id;
+  return Boolean(msg?.authorMemberId && !msg.legacyAuthor && appState.memberId && msg.authorMemberId === appState.memberId);
 }
 
 // Chat aberto agora: um canal de texto ou o chat da call
@@ -2030,7 +2033,7 @@ function reactionsHtml(msg) {
   const entries = Object.entries(msg.reactions || {}).filter(([, list]) => Array.isArray(list) && list.length);
   if (!entries.length) return '';
   return `<div class="chat-reactions">${entries.map(([emoji, list]) => {
-    const mineReacted = list.some((r) => r.p === myProfile.id);
+    const mineReacted = list.some((r) => r.m === appState.memberId);
     const names = list.map((r) => r.n).join(', ');
     return `<button type="button" class="chat-reaction${mineReacted ? ' mine' : ''}" data-emoji="${escapeHtml(emoji)}" title="${escapeHtml(names)}">${escapeHtml(emoji)}<span>${list.length}</span></button>`;
   }).join('')}<button type="button" class="chat-reaction chat-reaction-add" data-act="react" title="Reagir" aria-label="Reagir">${ACTION_ICONS.react}</button></div>`;
@@ -2400,8 +2403,8 @@ function renderSoundboard() {
     for (const ch of appState.channels.values()) for (const u of ch.users.values()) if (u.profileId === s.profileId) return u.name;
     return s.ownerName;
   };
-  const mine = appState.soundboard.filter((s) => s.profileId === myProfile.id);
-  const others = appState.soundboard.filter((s) => s.profileId !== myProfile.id)
+  const mine = appState.soundboard.filter((s) => s.ownerMemberId && s.ownerMemberId === appState.memberId);
+  const others = appState.soundboard.filter((s) => !s.ownerMemberId || s.ownerMemberId !== appState.memberId)
     .sort((a, b) => NAME_COLLATOR.compare(ownerName(a), ownerName(b)) || NAME_COLLATOR.compare(a.name, b.name));
   const tile = (s, canDelete) => `<div class="soundboard-tile-wrap"><button type="button" class="soundboard-tile" data-sound-id="${escapeHtml(s.id)}" title="${escapeHtml(s.name)}${s.profileId ? ` · de ${escapeHtml(ownerName(s))}` : ''}">
       <span class="soundboard-emoji">${escapeHtml(s.emoji || '🔊')}</span><span class="soundboard-name">${escapeHtml(s.name)}</span>
@@ -5376,14 +5379,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.5.0';
+const WHATS_NEW_VERSION = '4.5.1';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -6638,11 +6641,12 @@ function syncSfuVoice() {
   const micLive = appState.localMicStream?.getAudioTracks().some((t) => t.readyState === 'live');
   const pub = appState.sfuVoicePublisher;
   const pubStale = pub && (pub.closed || pub.ownerId !== appState.myId || pub.channelId !== channelId || pub.stream !== appState.localMicStream);
-  if (pub && (pubStale || !micLive || !channelId)) {
+  const publishAllowed = !appState.myUser.serverMuted && !appState.myUser.serverDeafened;
+  if (pub && (pubStale || !micLive || !channelId || !publishAllowed)) {
     pub.close();
     appState.sfuVoicePublisher = null;
   }
-  if (micLive && channelId && !appState.sfuVoicePublisher) {
+  if (micLive && channelId && publishAllowed && !appState.sfuVoicePublisher) {
     const session = new SfuSession({ ownerId: appState.myId, role: 'host', kind: 'voice', stream: appState.localMicStream });
     appState.sfuVoicePublisher = session;
     session.start();
@@ -6651,7 +6655,7 @@ function syncSfuVoice() {
   // Voz dos outros: uma conexão por pessoa do canal. Ela fica aberta mesmo com a pessoa
   // mutada; quando ela liga o mic, o servidor já manda o som.
   const ch = channelId ? appState.channels.get(channelId) : null;
-  const others = new Set(ch ? [...ch.users.keys()].filter((id) => id !== appState.myId) : []);
+  const others = new Set(ch && !appState.myUser.serverDeafened ? [...ch.users.keys()].filter((id) => id !== appState.myId) : []);
   for (const [userId, session] of appState.sfuVoiceListeners) {
     if (session.closed || !others.has(userId) || session.channelId !== channelId) {
       session.close();

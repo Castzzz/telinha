@@ -30,11 +30,15 @@ import (
 	"github.com/pion/ice/v4"
 	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"golang.org/x/net/websocket"
 )
 
 const sfuID = "sfu"
+
+// O socket atende todas as salas; quadros grandes chegam em rajadas.
+const mediaUDPReadBuffer = 4 * 1024 * 1024
 
 var (
 	roomRe     = regexp.MustCompile(`^[\w-]{1,160}$`)
@@ -444,15 +448,29 @@ type rtpReader interface {
 
 func forwardPackets(remote rtpReader, local io.Writer, kind string) {
 	buf := make([]byte, 1500)
+	outgoing := make([]byte, len(buf))
+	var packet rtp.Packet
 	var lastErrorLog time.Time
 	for {
 		n, _, err := remote.Read(buf)
 		if err != nil {
 			return
 		}
+		if err := packet.Unmarshal(buf[:n]); err != nil {
+			continue
+		}
+		// MID e TWCC são negociados por conexão; copiar os do host confunde o receptor.
+		// O Pion gera o TWCC do destino; sequência, timestamp e mídia ficam intactos.
+		packet.Extension = false
+		packet.ExtensionProfile = 0
+		packet.Extensions = nil
+		n, err = packet.MarshalTo(outgoing)
+		if err != nil {
+			continue
+		}
 		// Pion tenta todos os espectadores e agrega os erros. Um deles falhar não
 		// pode encerrar a faixa dos demais; a leitura termina quando o host sai.
-		if _, err := local.Write(buf[:n]); err != nil && !errors.Is(err, io.ErrClosedPipe) && time.Since(lastErrorLog) >= 5*time.Second {
+		if _, err := local.Write(outgoing[:n]); err != nil && !errors.Is(err, io.ErrClosedPipe) && time.Since(lastErrorLog) >= 5*time.Second {
 			log.Printf("envio %s: %v (continuando para os demais espectadores)", kind, err)
 			lastErrorLog = time.Now()
 		}
@@ -576,12 +594,19 @@ func setupWebRTC() {
 
 	ir := &interceptor.Registry{}
 	must(webrtc.RegisterDefaultInterceptors(m, ir))
+	// Cada espectador tem sua própria sequência de transporte, inclusive nas retransmissões.
+	must(webrtc.ConfigureTWCCHeaderExtensionSender(m, ir))
 
 	port, err := strconv.Atoi(mediaPort)
 	must(err)
 	se := webrtc.SettingEngine{}
 	udp, err := net.ListenUDP("udp", &net.UDPAddr{Port: port})
 	must(err)
+	if err := udp.SetReadBuffer(mediaUDPReadBuffer); err != nil {
+		log.Printf("aviso: não foi possível aumentar o buffer UDP de recepção: %v (mantendo o padrão do sistema)", err)
+	} else {
+		log.Printf("buffer UDP de recepção solicitado: %d bytes (valor efetivo depende do limite do sistema)", mediaUDPReadBuffer)
+	}
 	// "universal" = também descobre o IP público via STUN quando o servidor está atrás de NAT
 	se.SetICEUDPMux(ice.NewUniversalUDPMuxDefault(ice.UniversalUDPMuxParams{UDPConn: udp}))
 	tcp, err := net.ListenTCP("tcp", &net.TCPAddr{Port: port})
