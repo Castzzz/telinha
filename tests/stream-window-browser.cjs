@@ -36,8 +36,10 @@ app.whenReady().then(async () => {
   ipcMain.handle('get-game-activity', () => ({ activity: null }));
   ipcMain.handle('autostart-get', () => ({ supported: false, enabled: false }));
   ipcMain.handle('system-idle-seconds', () => null);
+  ipcMain.handle('list-audio-apps', () => []);
+  ipcMain.handle('get-desktop-sources', () => []);
   const { startMusicCall } = await import('../scripts/music-call.mjs');
-  call = await startMusicCall({ port: 0 });
+  call = await startMusicCall({ port: 0, sfu: process.env.TEST_SFU === '1' });
   async function open(name) {
     const win = new BrowserWindow({ width: 1100, height: 780, show: true, webPreferences: {
       preload: path.join(__dirname, '../electron/preload.cjs'), contextIsolation: true,
@@ -58,10 +60,12 @@ app.whenReady().then(async () => {
   const viewer = await open('Espectador');
   await click(sender, '#btn-share-camera');
   await until(sender, 'appState.myUser.isCameraOn');
+  await until(sender, `Boolean(appState.sfuCameraPublisher?.pc?.localDescription || appState.screenPeersOut.size || !appState.sfuEnabled)`);
   const key = await js(sender, 'appState.myId + "__cam"');
   await until(viewer, `Boolean(document.querySelector('[data-stream-key="${key}"]'))`);
   await click(viewer, `[data-stream-key="${key}"]`);
   await until(viewer, `Boolean(appState.activeStreams.get('${key}')?.stream)`);
+  assert(await js(sender, `(()=>{const pc=appState.sfuCameraPublisher?.pc || [...appState.screenPeersOut.values()][0];return pc?.localDescription.sdp.includes('x-google-start-bitrate=600')})()`), 'Chromium precisa aceitar a indicação de partida da câmera, sem usar a oferta alternativa');
   await js(viewer, `window.originalStream=appState.activeStreams.get('${key}').stream;void 0`);
   await js(viewer, `
     window.popupAudioContext = new AudioContext();
@@ -76,6 +80,17 @@ app.whenReady().then(async () => {
     document.getElementById('video-el-${key}').muted = true;
     void 0;
   `);
+  await until(viewer, `document.getElementById('input-stream-volume').value === '100'`);
+  assert(await js(viewer, `getComputedStyle(document.getElementById('tile-volume-control-${key}')).display === 'none'`), 'Palco individual não deve duplicar o volume sobre o vídeo');
+  await js(viewer, `const slider=document.getElementById('input-stream-volume');slider.value='175';slider.dispatchEvent(new Event('input',{bubbles:true}));void 0`);
+  await until(viewer, `originalMixer.volumePercent === 175 && document.getElementById('tile-volume-${key}').value === '175'`);
+  assert(await js(viewer, `document.getElementById('stream-volume-control').classList.contains('is-boosted')`), 'Reforço acima de 100% deve ficar destacado');
+  await click(viewer, '#stream-volume-icon');
+  await until(viewer, `originalMixer.volumePercent === 0 && document.getElementById('stream-volume-icon').getAttribute('aria-pressed') === 'true'`);
+  await click(viewer, '#stream-volume-icon');
+  await until(viewer, 'originalMixer.volumePercent === 175');
+  await click(viewer, '#stream-volume-text');
+  await until(viewer, `originalMixer.volumePercent === 100 && document.getElementById('tile-volume-${key}').value === '100'`);
   const created = new Promise(resolve => viewer.webContents.once('did-create-window', resolve));
   await click(viewer, '#btn-stage-pip');
   const player = await created;
@@ -97,7 +112,13 @@ app.whenReady().then(async () => {
   await js(player, 'document.querySelector("#fullscreen").focus();void 0');
   const buttonPoint = await js(player, '(()=>{const r=document.querySelector("#fullscreen").getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)}})()');
   player.webContents.sendInputEvent({ type: 'mouseMove', ...buttonPoint });
-  await until(player, 'document.querySelector("#stream-player").classList.contains("controls-idle")');
+  await js(player, `window.idleTestEvents=[];['pointermove','pointerdown','focusin','focusout'].forEach(type=>document.getElementById('stream-player').addEventListener(type,event=>{idleTestEvents.push({type,time:Math.round(performance.now()),x:event.clientX,y:event.clientY});if(idleTestEvents.length>30)idleTestEvents.shift()}));void 0`);
+  try {
+    await until(player, 'document.querySelector("#stream-player").classList.contains("controls-idle")');
+  } catch (error) {
+    console.error('Eventos durante a espera dos controles:', await js(player, 'idleTestEvents'));
+    throw error;
+  }
   await until(player, 'getComputedStyle(document.querySelector("#player-controls")).opacity === "0"');
   assert(await js(player, 'document.activeElement.id === "fullscreen"'), 'O foco não deve impedir a ocultação da barra');
   await js(player, 'window.dispatchEvent(new KeyboardEvent("keydown",{key:"Tab"}));void 0');
@@ -111,6 +132,8 @@ app.whenReady().then(async () => {
     await js(player, 'document.querySelector("#stream-player").dispatchEvent(new Event("pointermove"));void 0');
     await pause(150);
     fs.writeFileSync(`/tmp/teletela-stream-${theme}.png`, (await player.webContents.capturePage()).toPNG());
+    await js(viewer, "document.body.dataset.mobileView='sala';void 0");
+    fs.writeFileSync(`/tmp/teletela-volume-${theme}.png`, (await viewer.webContents.capturePage()).toPNG());
   }
   player.webContents.setZoomFactor(2);
   await until(player, 'innerWidth <= 540');
@@ -153,7 +176,50 @@ app.whenReady().then(async () => {
   await pause(300);
   assert(thirdPlayer.isDestroyed(), 'Parar de assistir precisa fechar o player');
   assert(await js(sender, 'appState.myUser.isCameraOn'), 'Parar de assistir não pode encerrar o envio');
-  console.log('Janela de transmissão: WebRTC real, vídeo só no popup, retorno automático, áudio preservado, troca de transmissão, tamanho, tela cheia, temas e parar de assistir passaram.');
+  await click(sender, '#btn-share-camera');
+  await click(viewer, '#btn-share-camera');
+  await js(sender, `
+    appState.myUser.streamQuality='1080p60';
+    window.startCanvas=document.createElement('canvas');
+    startCanvas.width=1920;startCanvas.height=1080;
+    const paint=startCanvas.getContext('2d');
+    let frame=0;
+    window.startPaintTimer=setInterval(()=>{
+      paint.fillStyle='#313338';paint.fillRect(0,0,1920,1080);
+      paint.fillStyle='#5865f2';paint.fillRect((frame++*12)%1600,240,320,320);
+      paint.fillStyle='#ffffff';paint.font='48px sans-serif';paint.fillText('Transmissão sintética 1080p60',80,100);
+    },16);
+    const stream=startCanvas.captureStream(60);
+    window.startAudio=new AudioContext();
+    const tone=startAudio.createOscillator();const output=startAudio.createMediaStreamDestination();
+    tone.connect(output);tone.start();stream.addTrack(output.stream.getAudioTracks()[0]);
+    navigator.mediaDevices.getDisplayMedia=async()=>stream;
+    void 0;
+  `);
+  await click(sender, '#btn-share-screen');
+  await until(sender, `!document.getElementById('modal-audio-picker').classList.contains('hidden')`);
+  await js(sender, `Array.from(document.querySelectorAll('#audio-picker-list button')).find(button=>button.textContent.includes('Som do PC inteiro')).click();void 0`);
+  await until(sender, 'Boolean(appState.localScreenStream)');
+  const screenKey = await js(sender, 'appState.myId');
+  await until(viewer, `Boolean(document.querySelector('[data-stream-key="${screenKey}"]'))`);
+  const watchStarted = Date.now();
+  await click(viewer, `[data-stream-key="${screenKey}"]`);
+  await until(viewer, `document.getElementById('video-el-${screenKey}')?.videoWidth > 0`);
+  const firstFrameMs = Date.now() - watchStarted;
+  assert(await js(sender, `(()=>{const pc=appState.sfuPublisher?.pc || appState.screenPeersOut.get('${await js(viewer, 'appState.myId')}');return pc?.localDescription.sdp.includes('x-google-start-bitrate=2000')})()`), 'Chromium precisa aceitar a indicação inicial de 2 Mbps da tela');
+  await pause(2500);
+  const received = await js(viewer, `(()=>{const video=document.getElementById('video-el-${screenKey}');return {width:video.videoWidth,height:video.videoHeight}})()`);
+  assert(await js(sender, `appState.localScreenStream.getVideoTracks()[0].getSettings().width === 1920`), 'A fonte de teste precisa ser 1080p');
+  await click(sender, '#btn-stage-diagnostics');
+  await until(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('Resolução da captura')`);
+  assert(await js(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('1920 × 1080')`), 'Diagnóstico precisa identificar a captura real');
+  fs.writeFileSync('/tmp/teletela-diagnostico-envio.png', (await sender.webContents.capturePage()).toPNG());
+  await click(viewer, '#btn-stage-diagnostics');
+  await until(viewer, `document.getElementById('transmission-diagnostics-results').textContent.includes('Resolução recebida')`);
+  fs.writeFileSync('/tmp/teletela-diagnostico-recepcao.png', (await viewer.webContents.capturePage()).toPNG());
+  await js(sender, 'clearInterval(startPaintTimer);void 0');
+  console.log(`Tela sintética 1080p60 (${process.env.TEST_SFU === '1' ? 'SFU' : 'P2P'}): primeiro quadro em ${firstFrameMs} ms; recebendo ${received.width} × ${received.height} após 2,5 s. Não simula a rede dos amigos.`);
+  console.log('Janela de transmissão: WebRTC real, indicação de bitrate aceita, volume/mute/restauração, vídeo só no popup, retorno automático, áudio preservado, troca de transmissão, tamanho, tela cheia, temas e parar de assistir passaram.');
 }).catch(error => { console.error(error); process.exitCode = 1; }).finally(async () => {
   clearTimeout(timeout);
   BrowserWindow.getAllWindows().forEach(win => win.destroy());

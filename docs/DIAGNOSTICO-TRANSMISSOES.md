@@ -116,3 +116,25 @@ depois, com estatísticas dos dois lados; ainda não há evidência de melhora n
 
 Referências: [LiveKit, indicação de bitrate inicial e subida lenta no WebRTC](https://github.com/livekit/client-sdk-js/blob/main/src/room/PCTransport.ts)
 e [W3C, motivo de limitação de qualidade](https://www.w3.org/TR/webrtc-stats/#dom-rtcoutboundrtpstreamstats-qualitylimitationreason).
+
+
+### Validação autorizada posteriormente (12/11/2026)
+
+- `npm test`: 62/62. Suítes selecionadas de áudio/câmera/WebRTC/diagnóstico: 36/36.
+- `node --test tests/stream-start-bitrate.test.js tests/transmission-diagnostics.test.js`:
+  8/8 (dois casos do diagnóstico já estão nos 36 acima). Inclui preservação de Opus/RTX,
+  indicação em redes lentas, oferta alternativa e identificação da banda por transporte.
+- SFU local recompilado antes do teste final. `TEST_SFU=1 npm run test:stream:ui`:
+  indicação inicial aceita pelo Chromium, popup/retorno, volume/mute/restauração,
+  fullscreen, temas e diagnóstico funcionando. Fonte sintética 1920 × 1080 a 60 FPS:
+  primeiro quadro em 700 ms; receptor em 1920 × 1080 após 2,5 s.
+- `npm run test:stream:ui` (P2P): primeiro quadro em 454 ms; receptor em 640 × 360 após
+  2,5 s, apesar da captura 1080p e da indicação aceita. O teste funcional passou; esse
+  resultado mostra que aceitar a indicação não garante subir imediatamente para 1080p.
+- Uma execução P2P anterior teve timeout na checagem da ocultação dos controles; passou
+  na repetição. A causa não foi confirmada. O teste agora registra eventos de ponteiro/
+  foco durante essa espera se falhar novamente.
+
+Capturas conferidas nos três temas e nos painéis de envio/recepção. As medições acima são
+locais e não comparam antes/depois; não confirmam resolver a espera de mais de um minuto
+na rede do amigo. Nenhum release ou deploy nesta validação.

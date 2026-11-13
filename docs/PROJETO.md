@@ -198,8 +198,8 @@ vídeos do mosaico. No palco individual o controle sobre o vídeo fica oculto, e
 duplicação. O alto-falante alterna mute/restauração do último volume positivo por
 transmissão, guardado só durante a sessão; o percentual restaura 100%. O volume salvo por
 perfil continua no fluxo existente. A barra usa escala de 0–300 e os três temas.
-Redesign local de 12/11/2026: conferência de sintaxe apenas; testes e abertura do app
-adiados a pedido do dono.
+Redesign local de 12/11/2026: validado posteriormente no Electron com SFU/P2P,
+incluindo mute, restauração do volume anterior, retorno a 100% e os três temas.
 
 O diagnóstico diferencia resolução recebida, enviada e da captura (`media-source`, quando
 disponível). Em recepção, a limitação de envio só pode ser conferida no cliente emissor.
@@ -216,8 +216,16 @@ ficam fora do ajuste. Se o navegador rejeitar a dica e a sinalização continuar
 a negociação tenta a oferta original. Nenhum piso de bitrate é imposto; o navegador
 continua adaptando e o teto existente permanece. A indicação é aplicada na criação
 da conexão, sem temporizador de reinício do estimador. Mudança só no cliente: precisa
-de release para o desktop. Sintaxe conferida; testes, abertura do app e efeito na rede
-real ainda pendentes a pedido do dono. Não promete 1080p instantâneo.
+de release para o desktop. Testes autorizados depois pelo dono: o Chromium aceitou as
+indicações de 600 kbps na câmera e 2 Mbps na tela, sem recorrer à oferta alternativa.
+Com fonte sintética 1080p60 e SFU local recompilado, primeiro quadro em 700 ms e
+1920 × 1080 recebidos após 2,5 s; em P2P, 454 ms e 640 × 360 após 2,5 s. São medições
+locais de uma execução, sem comparação antes/depois e sem simular a rede dos amigos;
+não comprovam a correção do atraso relatado. Uma execução P2P teve timeout na ocultação
+dos controles do popup; passou na repetição, sem causa confirmada. Testes gerais (62),
+áudio/câmera/WebRTC (36) e bitrate/diagnóstico (8, incluindo duas regressões já contadas
+nos 36) passaram. Ver `tests/stream-start-bitrate.test.js`,
+`tests/transmission-diagnostics.test.js` e `tests/stream-window-browser.cjs`.
 
 ## 3. Organização das pastas
 

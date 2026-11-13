@@ -257,7 +257,8 @@ troca de câmera frontal/traseira no Android. O APK acompanha essa atualização
   O envio também mostra a meta de vídeo, a banda estimada da conexão e o transporte
   UDP/TCP. A banda estimada pelo navegador não é um teste da velocidade contratada.
   Há um ajuste local para começar o vídeo com uma taxa moderada, reduzindo a subida
-  inicial a partir de taxas muito baixas; ainda aguarda validação em transmissão real.
+  inicial a partir de taxas muito baixas. Passou nos testes locais com Electron e SFU/P2P;
+  a melhora na rede dos amigos ainda precisa ser confirmada.
 
 - **Categorias e ordem:** quem gerencia canais usa o botão **Organizar categorias e
   ausentes**, no cabeçalho da lista. Dá para renomear “Canais de Voz”/“Canais de Texto” e
