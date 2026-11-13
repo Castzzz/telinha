@@ -1,5 +1,5 @@
 // O vídeo compartilha o MediaStream recebido. O áudio continua no mixer da sala.
-export function createStreamWindow() {
+export function createStreamWindow(onChange = () => {}) {
   let player = null;
   let currentId = null;
   let currentInfo = null;
@@ -33,6 +33,7 @@ export function createStreamWindow() {
     player = null;
     currentId = null;
     currentInfo = null;
+    onChange();
   }
 
   function toggle(userId, info) {
@@ -40,6 +41,7 @@ export function createStreamWindow() {
     if (isOpen()) {
       currentId = userId;
       update(userId, info);
+      onChange();
       player.focus();
       return true;
     }
@@ -58,12 +60,14 @@ export function createStreamWindow() {
         player = null;
         currentId = null;
         currentInfo = null;
+        onChange();
       }, { once: true });
     }, { once: true });
     themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    onChange();
     return true;
   }
 
   window.addEventListener('pagehide', () => close());
-  return { toggle, update, close };
+  return { toggle, update, close, contains: userId => isOpen() && currentId === userId };
 }

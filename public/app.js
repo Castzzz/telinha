@@ -4071,7 +4071,7 @@ function toggleStageFullscreen(customTarget = null) {
 }
 
 // No desktop abre uma janela normal; nos outros clientes mantém o PiP nativo.
-const streamWindow = createStreamWindow();
+const streamWindow = createStreamWindow(() => updateStageLayout());
 async function toggleStagePip() {
   if (document.pictureInPictureElement) {
     document.exitPictureInPicture().catch(() => {});
@@ -6003,6 +6003,29 @@ function setupTileZoomPan(tile, video, zoomResetBtn) {
   };
 }
 
+function syncRoomStreamVideo(userId, info) {
+  const video = document.getElementById(`video-el-${userId}`);
+  if (!video) return;
+  const inPopup = streamWindow.contains(userId);
+  document.getElementById(`video-tile-${userId}`)?.classList.toggle('stream-in-popup', inPopup);
+  let source = info.stream;
+  if (inPopup) {
+    // O Chrome precisa reproduzir o áudio WebRTC para alimentar o mixer da sala.
+    // Retirar só o vídeo evita renderizar a transmissão nos dois lugares.
+    source = info.roomAudioStream ||= new MediaStream(info.stream.getAudioTracks());
+    if (!source.getAudioTracks().length) source = null;
+  }
+  if (video.srcObject === source) return;
+  video.srcObject = source;
+  if (!source) { video.pause(); return; }
+  video.play().catch(() => {
+    if (video.srcObject !== source || info.isLocal) return;
+    video.muted = true;
+    video.play().catch(() => {});
+    document.getElementById(`unmute-btn-${userId}`)?.classList.remove('hidden');
+  });
+}
+
 function registerScreenStream(userId, userName, stream, isLocal) {
   appState.activeStreams.set(userId, { stream, userName, isLocal });
   streamWindow.update(userId, appState.activeStreams.get(userId));
@@ -6068,6 +6091,10 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 
     tile.appendChild(badge);
     tile.appendChild(video);
+    const popupNotice = document.createElement('div');
+    popupNotice.className = 'tile-popup-notice';
+    popupNotice.textContent = 'Transmissão aberta no popup. Ao fechar, ela volta pra cá.';
+    tile.appendChild(popupNotice);
     tile.appendChild(unmuteBtn);
     tile.appendChild(zoomResetBtn);
     tile.appendChild(fsBtn);
@@ -6092,19 +6119,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
   }
 
   const videoEl = document.getElementById(`video-el-${userId}`);
-  const unmuteBtn = document.getElementById(`unmute-btn-${userId}`);
-  if (videoEl) {
-    if (videoEl.srcObject !== stream) {
-      videoEl.srcObject = stream;
-    }
-    videoEl.play().catch(() => {
-      if (!isLocal) {
-        videoEl.muted = true;
-        videoEl.play().catch(() => {});
-        if (unmuteBtn) unmuteBtn.classList.remove('hidden');
-      }
-    });
-  }
+  syncRoomStreamVideo(userId, appState.activeStreams.get(userId));
 
   // Attach screen audio to mixer manager if remote stream
   if (!isLocal && appState.mixerManager && stream.getAudioTracks().length > 0) {
@@ -6392,6 +6407,8 @@ function updateStageLayout() {
     const videoEl = document.getElementById(`video-el-${uid}`);
     if (!tile || !videoEl) continue;
 
+    syncRoomStreamVideo(uid, info);
+
     tile.title = count > 1 ? (mosaic ? 'Clique pra ver só essa · duplo clique: tela cheia' : 'Clique pra voltar pro mosaico · duplo clique: tela cheia') : 'Duplo clique: tela cheia';
     if (mosaic || uid === shownAlone) {
       tile.classList.remove('hidden-tile');
@@ -6403,7 +6420,7 @@ function updateStageLayout() {
 
     if (!info.isLocal) {
       const vol = getStreamVolume(uid) / 100;
-      const audible = mosaic || uid === shownAlone;
+      const audible = streamWindow.contains(uid) || mosaic || uid === shownAlone;
       appState.mixerManager?.setStreamAudible(uid, audible);
       if (streamsDeafened()) {
         videoEl.muted = true;

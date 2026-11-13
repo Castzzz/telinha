@@ -183,7 +183,12 @@ MediaStream já recebido, sem nova conexão WebRTC, e reproduz o vídeo sempre m
 o áudio continua no mixer da sala, sem duplicar som nem ignorar volume/ensurdecer.
 Reabrir a mesma transmissão fecha a janela; escolher outra reutiliza o player. A remoção
 da transmissão, navegação ou fechamento da sala fecha o player. Fechar só o player
-não para tracks nem interrompe a call. Navegador e Android mantêm o PiP anterior.
+não para tracks nem interrompe a call: o vídeo volta imediatamente ao palco. Enquanto o
+player está aberto, o vídeo do palco recebe apenas as tracks de áudio (ou fica sem
+`srcObject` se não houver áudio), preservando o mixer sem renderizar o vídeo duas vezes.
+O palco mostra um aviso de transmissão no popup. Trocar a transmissão do player restaura
+a anterior no palco; o áudio do popup continua audível mesmo ao focar outra aba.
+Navegador e Android mantêm o PiP anterior.
 Os controles do player somem após 3 segundos sem interação, inclusive com foco ou
 ponteiro parado nos botões. Eventos de mouse, foco e teclado revelam a barra novamente.
 Validação com dois clientes WebRTC reais: `npm run test:stream:ui`.

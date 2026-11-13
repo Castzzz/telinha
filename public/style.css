@@ -1056,6 +1056,28 @@ ul {
   background: #000;
 }
 
+.tile-popup-notice {
+  display: none;
+  position: absolute;
+  top: 30%;
+  transform: translateY(-50%);
+  padding: 16px 24px;
+  color: var(--text-normal);
+  text-align: center;
+}
+
+.video-tile.stream-in-popup video {
+  visibility: hidden;
+}
+
+.video-tile.stream-in-popup {
+  background: var(--bg-secondary);
+}
+
+.video-tile.stream-in-popup .tile-popup-notice {
+  display: block;
+}
+
 .tile-top-hud {
   position: absolute;
   top: 10px;
