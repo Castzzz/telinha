@@ -7,7 +7,7 @@
 [Desktop e Android 4.3.0 publicados](https://github.com/Castzzz/telinha/releases/tag/v4.3.0),
 com APK código 11 e assinatura preservada. Servidor atualizado e saudável. Inclui amigos,
 membros do servidor, tempo por canal, exclusão do Geral, controles em tela cheia e captura
-Android. Magic continua separado. Oito arquivos e manifests públicos conferidos.
+Android. Oito arquivos e manifests públicos conferidos.
 
 Backups íntegros antes e depois do deploy:
 `~/Teletela-backups/teletela-dados-2026-10-31_14-25-47.tar.gz` e
@@ -62,7 +62,7 @@ no bloco acima.
 
 ## Bot de música: bloqueio do YouTube (29/10/2026)
 
-Retomado na `main`, a pedido do dono. Magic guardado na branch separada, commit `aeebdbb`.
+Retomado na `main`, a pedido do dono.
 
 - [x] Confirmar configuração do bot, versão do extrator e saída WARP na Oracle.
 - [x] Reproduzir a exigência de confirmar que não é robô, sem tocar nas calls reais.
@@ -89,7 +89,7 @@ Correção ativa na Oracle, sem precisar atualizar o app ou manter o PC ligado. 
 
 ## Publicação da 4.1.0 concluída (28/10/2026)
 
-Autorizada pelo dono para testar com a galera, **sem o Magic**. Reaproveitada a validação
+Autorizada pelo dono para testar com a galera. Reaproveitada a validação
 já feita, sem repetir toda a bateria. Código integrado e enviado à `main` em `7f68864`.
 
 - Release pública: https://github.com/Castzzz/telinha/releases/tag/v4.1.0
@@ -99,8 +99,6 @@ já feita, sem repetir toda a bateria. Código integrado e enviado à `main` em 
   serviços ativos e saúde HTTP conferida, com arquivos iguais aos locais.
 - Backup anterior ao deploy: `~/Teletela-backups/teletela-dados-2026-10-28_19-42-14.tar.gz`.
 - Oito arquivos publicados; tamanhos/hashes dos uploads e manifests conferidos.
-- Magic permanece somente em `experimento/magic-no-teletela` (`03cc5d2`), fora dos pacotes
-  e do servidor publicados.
 
 As menções a “sem release/deploy” abaixo descrevem as etapas anteriores desta sessão.
 Agora falta o uso em grupo, incluindo a troca das lentes em celulares físicos.
@@ -115,8 +113,6 @@ Retomada na branch `melhoria/cinema-dados-contas-e-privacidade`, a pedido do don
   liberação do hardware, recuperação da anterior e cancelamento ao desligar/sair.
 - [x] **Retirar a coroinha ao lado do nome do dono.** Só o selo visual foi removido;
   identificação nos detalhes do perfil e permissões de proprietário permanecem.
-- [x] **Deixar o Magic para depois.** Trabalho guardado em `experimento/magic-no-teletela`,
-  commit `03cc5d2`. Sem merge nesta branch ou na `main` e sem publicação conjunta.
 
 Testes de lentes simuladas com vídeo recebido por outra pessoa via WebRTC real, em P2P e
 SFU local, testes unitários de falha/cancelamento e regressão mobile passaram. Build/lint

@@ -4,7 +4,6 @@ Investigação na `main`, após o dono relatar que todas as músicas que tentou 
 “O YouTube bloqueou temporariamente a leitura desta faixa no servidor”. Não houve deploy,
 release nem reinício do servidor da sala ou do SFU. Houve uma troca autorizada de perfil
 WARP, revertida após falhar na validação; apenas `telinha-warp` foi reiniciado.
-O trabalho do Magic foi guardado em `experimento/magic-no-teletela`, commit `aeebdbb`.
 
 ## O que foi confirmado
 

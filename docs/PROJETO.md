@@ -32,8 +32,7 @@ histórico descrevem a situação daquela época. Contas/amigos já estão publi
 
 **Versão 4.1.0 (28/10/2026):** miniplayer, modo cinema, privacidade inclusive para o dono,
 dados de RPG, início/ícones renovados, chat central e contas opcionais. O APK acompanha
-a atualização e permite alternar câmera frontal/traseira. Magic fica na branch separada
-`experimento/magic-no-teletela`; múltiplos servidores ficam para depois.
+a atualização e permite alternar câmera frontal/traseira. Múltiplos servidores ficam para depois.
 
 **Versão 4.2.0 publicada (30/10/2026):** inicialização
 com o PC, busca, diagnóstico, categorias/ordenação, apelido só em voz pelo próprio perfil,
@@ -1373,16 +1372,11 @@ perfil. O texto **Dono do servidor** continua nos detalhes do perfil; identidade
 propriedade e permissões não mudaram. Não transformar a retirada do selo numa alteração
 de `isOwner`, `isAdmin` ou dos handlers do servidor.
 
-Magic permanece guardado em `experimento/magic-no-teletela` (commit `03cc5d2`), para depois.
-Esta branch continua sendo `melhoria/cinema-dados-contas-e-privacidade`, sem integrar Magic.
-
-
 ### Publicação da 4.1.0 (28/10/2026)
 
 Release pública [v4.1.0](https://github.com/Castzzz/telinha/releases/tag/v4.1.0), código
 `7f68864` integrado à main. Inclui Windows (Setup/Portátil), Linux (AppImage/tar.gz), APK
-Android (4.1.0, código 8) e os manifests de atualização. Magic segue na branch experimental,
-sem módulos nos pacotes nem no servidor publicados.
+Android (4.1.0, código 8) e os manifests de atualização.
 
 Servidor atualizado com backup anterior em
 `~/Teletela-backups/teletela-dados-2026-10-28_19-42-14.tar.gz`. Node `v24.22.1` e Caddy
@@ -1702,7 +1696,7 @@ sem pré-release; tag no commit `76648db1c4e62f09ce7aed9d1a2e703ffc0abf43`.
   e Caddy ativos; saúde pública confirmou quatro canais e três usuários reconectados.
   Nove arquivos importantes conferidos por hash entre o código local e a VM.
   Segredos, dono, três contas, um cargo e dezesseis membros preservados.
-- Magic continua separado. Registros de desenvolvimento local anteriores são históricos.
+- Registros de desenvolvimento local anteriores são históricos.
 
 
 ### Publicação da 4.3.1 concluída (31/10/2026)

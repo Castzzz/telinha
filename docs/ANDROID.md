@@ -210,8 +210,8 @@ publicação ou alteração da sala oficial nesta retomada.
 
 ## Alternar câmera (28/10/2026)
 
-Implementado para teste na branch `melhoria/cinema-dados-contas-e-privacidade`, separado do
-experimento do Magic. O APK local foi atualizado; nenhum release/deploy foi executado.
+Implementado para teste na branch `melhoria/cinema-dados-contas-e-privacidade`.
+O APK local foi atualizado; nenhum release/deploy foi executado.
 
 `public/camera-source.js` abre a frontal por preferência inicial e alterna entre
 `facingMode: user/environment`. Na troca exige a orientação pedida, usando `deviceId`
