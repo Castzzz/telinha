@@ -251,7 +251,7 @@ troca de câmera frontal/traseira no Android. O APK acompanha essa atualização
   canal e filtre por texto, pessoa ou data inicial. **Mais resultados** carrega os anteriores;
   **Ver contexto** mostra as mensagens ao redor. Canais de texto consultam todo o histórico
   salvo; o chat da call só guarda as últimas 50 mensagens. Canais privados respeitam o acesso.
-- **Diagnóstico das transmissões:** botão de gráfico no palco ou Configurações → Transmissão.
+- **Diagnóstico das transmissões:** botão de gráfico no palco ou Configurações → Transmissão. Quem envia vê a resolução da captura, a enviada e a limitação; quem assiste vê a resolução recebida. Escolher 1080p não garante envio contínuo nessa resolução: o navegador pode adaptar o vídeo.
   Mostra resolução, FPS, taxa de vídeo, perda e latência reais enquanto transmite ou assiste.
   Via SFU, mede o trecho entre você e o servidor. Dados ausentes aparecem como indisponíveis.
 
@@ -353,7 +353,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Janela flutuante** | Botão ⧉ no canto de baixo ou tecla `P`: a transmissão fica numa janelinha por cima do jogo/outros programas |
 | **Sair da call** | Botão 📞 *Sair da call* no topo: desliga voz e transmissões sem fechar o app. Clique num canal pra voltar |
 | **Assistir uma transmissão** | Ninguém entra sozinho: clique no 🔴 *AO VIVO* do lado da pessoa. Pra parar, ⏹ na barra de baixo ou ✕ na aba do topo |
-| **Volume de cada transmissão** | Passe o mouse na tela da transmissão e use o 🔊 (0–300%), ou a barra de baixo pra que está aberta. Fica salvo por pessoa |
+| **Volume de cada transmissão** | Use o controle na barra de baixo (0–300%); no mosaico, cada vídeo tem o seu. Clique no alto-falante para silenciar e clique de novo para voltar ao volume anterior. Clique no percentual para restaurar 100%. A barra mostra o nível e destaca o reforço acima de 100%. Fica salvo por pessoa |
 | **Volume geral** | ⚙️ → *Volume geral do Teletela*: vozes e transmissões juntas, até 200% |
 | **Testar seu microfone** | ⚙️ → *Microfone* → **Testar microfone**: grava 4 segundos e reproduz só para você, com medidor de nível. Funciona fora da call e preserva seu mute; parar ou fechar as configurações libera a captura do teste |
 | **Volume do seu microfone** | ⚙️ → *Microfone*: ajuste manual de 0–300%, aplicado na hora. Na 3.9.0, o processamento voltou ao da 3.7, com RNNoise opcional e sem reforço automático de volume |

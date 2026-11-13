@@ -288,10 +288,10 @@
       <footer id="stage-controls-bar" class="stage-controls-bar hidden">
         <div class="stage-controls-left hidden">
           <span id="watching-stream-label" class="watching-stream-label"></span>
-          <div class="stream-volume-control hidden" id="stream-volume-control" title="Volume da transmissão (0-300%)">
-            <span id="stream-volume-icon">🔊</span>
-            <input type="range" id="input-stream-volume" min="0" max="3" step="0.05" value="1" />
-            <span id="stream-volume-text">100%</span>
+          <div class="stream-volume-control transmission-volume hidden" id="stream-volume-control" role="group" aria-label="Volume da transmissão">
+            <button type="button" class="volume-mute" id="stream-volume-icon" data-volume-mute aria-label="Silenciar transmissão" aria-pressed="false"></button>
+            <input type="range" id="input-stream-volume" min="0" max="300" step="5" value="100" aria-label="Volume da transmissão" />
+            <button type="button" class="volume-percent" id="stream-volume-text" data-volume-reset title="Voltar para 100%" aria-label="Restaurar volume da transmissão para 100%">100%</button>
           </div>
         </div>
 

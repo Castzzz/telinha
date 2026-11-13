@@ -193,6 +193,19 @@ Os controles do player somem após 3 segundos sem interação, inclusive com foc
 ponteiro parado nos botões. Eventos de mouse, foco e teclado revelam a barra novamente.
 Validação com dois clientes WebRTC reais: `npm run test:stream:ui`.
 
+Os controles de volume usam `public/stream-volume-control.js` na barra do palco e nos
+vídeos do mosaico. No palco individual o controle sobre o vídeo fica oculto, evitando
+duplicação. O alto-falante alterna mute/restauração do último volume positivo por
+transmissão, guardado só durante a sessão; o percentual restaura 100%. O volume salvo por
+perfil continua no fluxo existente. A barra usa escala de 0–300 e os três temas.
+Redesign local de 12/11/2026: conferência de sintaxe apenas; testes e abertura do app
+adiados a pedido do dono.
+
+O diagnóstico diferencia resolução recebida, enviada e da captura (`media-source`, quando
+disponível). Em recepção, a limitação de envio só pode ser conferida no cliente emissor.
+Se o envio estiver menor que a captura, o painel mostra um aviso sem presumir CPU/banda.
+Essa melhoria é informativa: não altera presets nem a adaptação da transmissão.
+
 ## 3. Organização das pastas
 
 ```

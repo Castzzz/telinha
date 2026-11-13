@@ -1185,7 +1185,7 @@ ul {
 .stage-controls-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 10px;
   grid-column: 1;
   min-width: 0;
 }
@@ -1201,16 +1201,98 @@ ul {
 }
 
 .stream-volume-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
+  flex-shrink: 0;
 }
 
-.stream-volume-control input[type="range"] {
-  width: 90px;
-  accent-color: var(--accent-brand);
+.transmission-volume {
+  --volume-color: var(--accent-brand);
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 5px;
+  border: 1px solid var(--border-medium);
+  border-radius: var(--radius-pill);
+  background: var(--bg-floating);
+  color: var(--text-normal);
+}
+
+.transmission-volume.is-muted { --volume-color: var(--text-muted); }
+.transmission-volume.is-boosted { --volume-color: var(--accent-yellow); }
+
+.transmission-volume .volume-mute,
+.transmission-volume .volume-percent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  color: var(--text-normal);
+  background: transparent;
+  border: 0;
+}
+
+.transmission-volume .volume-mute { width: 28px; }
+.transmission-volume .volume-mute .icon-svg { width: 17px; height: 17px; }
+.transmission-volume .volume-percent {
+  min-width: 43px;
+  padding-inline: 5px;
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.transmission-volume.is-muted .volume-mute,
+.transmission-volume.is-muted .volume-percent { color: var(--text-muted); }
+.transmission-volume.is-boosted .volume-percent { color: var(--accent-yellow); }
+.transmission-volume button:hover { background: var(--bg-hover); }
+.transmission-volume :focus-visible { outline: 2px solid var(--accent-brand); outline-offset: 3px; }
+
+.transmission-volume input[type="range"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: clamp(64px, 7vw, 104px);
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   cursor: pointer;
+  --volume-progress: 33.333%;
+}
+
+.transmission-volume input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--volume-color) var(--volume-progress), var(--border-medium) var(--volume-progress));
+}
+
+.transmission-volume input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(to right, var(--volume-color) var(--volume-progress), var(--border-medium) var(--volume-progress));
+}
+
+.transmission-volume input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 2px solid var(--bg-floating);
+  border-radius: 50%;
+  background: var(--volume-color);
+  box-shadow: 0 0 0 1px var(--volume-color);
+}
+
+.transmission-volume input[type="range"]::-moz-range-thumb {
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--bg-floating);
+  border-radius: 50%;
+  background: var(--volume-color);
+  box-shadow: 0 0 0 1px var(--volume-color);
 }
 
 .reactions-bar {
@@ -2479,14 +2561,6 @@ html.light-mode #dock-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.a
   right: 10px;
   bottom: 10px;
   z-index: 3;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  border-radius: var(--radius-pill);
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-size: 12px;
   opacity: 0;
   transition: opacity var(--transition-fast);
 }
@@ -2518,17 +2592,14 @@ html.light-mode #dock-avatar-wrap.is-speaking .user-avatar.has-frozen > canvas.a
   opacity: 1;
 }
 
-.tile-volume input {
-  width: 90px;
-  accent-color: var(--accent-brand);
-}
-
-.tile-volume-text,
 .master-volume-text {
   min-width: 38px;
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+/* No palco individual o volume já fica na barra; no mosaico cada vídeo tem o seu. */
+.single-stage .tile-volume { display: none; }
 
 .master-volume-row {
   display: flex;

@@ -61,3 +61,23 @@ Anote se afetou todos os espectadores ao mesmo tempo e o horário. No emissor, a
 ou `other`), resolução, FPS, bytes enviados e mudanças de resolução. No receptor, confira
 quadros decodificados, `freezeCount`, perdas de pacotes e jitter. Esses números precisam ser
 comparados ao longo do tempo, junto com CPU/memória/rede da VM, para distinguir as causas.
+
+
+## Resolução recebida de 960 × 540 com qualidade 1080p (12/11/2026)
+
+O print do espectador mostra 960 × 540, cerca de 58 FPS e 2.240 kb/s, com 0% de perda
+no intervalo e RTT de 13 ms. Isso confirma a resolução recebida naquele momento, mas
+não mede a captura ou o motivo da adaptação no PC de quem transmite. A perda e o RTT
+via SFU descrevem o trecho servidor → espectador; não descartam limitações no emissor.
+
+O código mantém `degradationPreference = 'maintain-framerate'`, e os presets de 60 FPS
+usam `contentHint = 'motion'`: há preferência por fluidez, permitindo redução de resolução.
+960 × 540 é metade de 1920 × 1080 em cada dimensão, compatível com essa adaptação;
+sem estatísticas do emissor, ela continua sendo hipótese, não causa confirmada. A captura
+também pode já estar abaixo do preset, pois usa constraints ideais. Não há redimensionamento
+ou recodificação no SFU.
+
+Melhoria local do painel: o emissor passa a ver resolução da captura (`media-source`)
+separada da enviada. O receptor vê “Resolução recebida” e orientação para conferir a
+limitação no PC de quem transmite. Não foi alterada a política de qualidade. Conferência
+de sintaxe apenas; testes e abertura do Teletela adiados a pedido do dono.

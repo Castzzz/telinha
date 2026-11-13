@@ -27,8 +27,10 @@ export function videoMetrics(report, previous = new Map(), direction = 'inbound'
       if (Number.isFinite(remote?.fractionLost)) loss = 100 * remote.fractionLost;
     }
     const remote = report.get(stat.remoteId);
+    const source = direction === 'outbound' ? report.get(stat.mediaSourceId) : null;
     const rtt = finite(remote?.roundTripTime) ?? finite(pair?.currentRoundTripTime);
     rows.push({ id: stat.id, width: finite(stat.frameWidth), height: finite(stat.frameHeight),
+      captureWidth: finite(source?.width), captureHeight: finite(source?.height),
       fps: finite(stat.framesPerSecond) ?? (frameDelta === null ? null : frameDelta / seconds),
       kbps: byteDelta === null ? null : byteDelta * 8 / seconds / 1000,
       loss, rtt: rtt === null ? null : rtt * 1000, codec: codec.replace('video/', '') || null,
@@ -52,18 +54,31 @@ export function setupTransmissionDiagnostics({ getConnections, mountStageOverlay
     const heading = document.createElement('strong'); heading.textContent = connection.label;
     const description = document.createElement('p'); description.textContent = `${connection.direction === 'inbound' ? 'Recebendo' : 'Enviando'} · ${connection.route} · ${({ new: 'Iniciando', connecting: 'Conectando', connected: 'Conectado', disconnected: 'Reconectando', failed: 'Falha', closed: 'Encerrado' })[connection.pc.connectionState] || 'Aguardando'}`;
     const fields = document.createElement('dl');
+    const receiving = connection.direction === 'inbound';
+    const resolution = (width, height) => width && height ? `${width} × ${height}` : 'Indisponível';
     const reason = { none: 'Sem limitação informada', cpu: 'Processamento do PC', bandwidth: 'Banda disponível', other: 'Outro motivo' };
     for (const [key, value] of [
-      ['Resolução real', metrics.width && metrics.height ? `${metrics.width} × ${metrics.height}` : 'Indisponível'],
+      ...(!receiving ? [['Resolução da captura', resolution(metrics.captureWidth, metrics.captureHeight)]] : []),
+      [receiving ? 'Resolução recebida' : 'Resolução enviada', resolution(metrics.width, metrics.height)],
       ['Quadros por segundo', format(metrics.fps, ' FPS', 1)], ['Taxa de vídeo', format(metrics.kbps, ' kb/s', 0)],
       [connection.direction === 'inbound' ? 'Perda no intervalo' : 'Perda informada pelo destino', format(metrics.loss, '%', 1)],
       ['Latência de ida e volta', format(metrics.rtt, ' ms')], ['Codec', metrics.codec || 'Indisponível'],
-      ['Limitação de envio', reason[metrics.limitation] || 'Indisponível neste trecho'],
-      ['Congelamentos no intervalo', format(metrics.freezes, '')]
+      ['Limitação de envio', receiving ? 'Veja no PC de quem transmite' : reason[metrics.limitation] || 'Indisponível'],
+      ...(receiving ? [['Congelamentos no intervalo', format(metrics.freezes, '')]] : [])
     ]) {
       const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = key; dd.textContent = value; fields.append(dt, dd);
     }
     node.append(heading, description, fields);
+    if (receiving) {
+      const tip = document.createElement('p');
+      tip.textContent = 'Esta é a resolução que chega até você. Se estiver abaixo da escolhida, quem transmite pode comparar captura, envio e limitação neste mesmo painel no próprio PC.';
+      node.append(tip);
+    } else if (metrics.captureWidth && metrics.captureHeight && metrics.width && metrics.height &&
+      (metrics.width < metrics.captureWidth || metrics.height < metrics.captureHeight)) {
+      const tip = document.createElement('p');
+      tip.textContent = 'O vídeo está sendo enviado em resolução menor que a captura. Confira a limitação de envio informada e compare por alguns segundos; a adaptação pode mudar durante a transmissão.';
+      node.append(tip);
+    }
     if (metrics.limitation === 'cpu' || metrics.limitation === 'bandwidth') {
       const tip = document.createElement('p'); tip.textContent = metrics.limitation === 'cpu'
         ? 'O navegador informou limite de processamento. Tente reduzir resolução/FPS ou fechar programas pesados.'

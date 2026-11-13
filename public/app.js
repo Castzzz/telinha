@@ -3,6 +3,7 @@ import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js
 import { setupServerBranding } from './server-branding.js';
 import { setupSettingsLayout } from './settings-layout.js';
 import { createStreamWindow } from './stream-window.js';
+import { setupStreamVolumeControl, syncStreamVolumeControl, forgetStreamVolumeControl } from './stream-volume-control.js';
 import { profileIdentity, profileProof } from './profile-identity.js';
 /**
  * public/app.js - Telinha Client Controller
@@ -3896,12 +3897,7 @@ function setupModals() {
     }
   });
 
-  // Stream volume slider (0-300% GainNode boost)
-  const volInput = $('#input-stream-volume');
-  const volText = $('#stream-volume-text');
-  volInput?.addEventListener('input', () => {
-    const pct = Math.round(Number(volInput.value) * 100);
-    if (volText) volText.textContent = `${pct}%`;
+  setupStreamVolumeControl($('#stream-volume-control'), pct => {
     if (appState.focusedStreamUserId) setStreamVolume(appState.focusedStreamUserId, pct);
   });
 
@@ -5826,15 +5822,9 @@ function setStreamVolume(userId, percent, { save = true } = {}) {
 // Deixa o slider da tela e o da barra de baixo (se ela estiver aberta) com o mesmo valor
 function syncStreamVolumeUi(userId) {
   const pct = getStreamVolume(userId);
-  const tileInput = document.getElementById(`tile-volume-${userId}`);
-  if (tileInput) tileInput.value = String(pct);
-  const tileText = document.getElementById(`tile-volume-text-${userId}`);
-  if (tileText) tileText.textContent = `${pct}%`;
+  syncStreamVolumeControl(document.getElementById(`tile-volume-control-${userId}`), pct, userId);
   if (userId === appState.focusedStreamUserId) {
-    const volInput = $('#input-stream-volume');
-    if (volInput) volInput.value = String(pct / 100);
-    const volText = $('#stream-volume-text');
-    if (volText) volText.textContent = `${pct}%`;
+    syncStreamVolumeControl($('#stream-volume-control'), pct, userId);
   }
 }
 
@@ -6102,15 +6092,16 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 
     if (!isLocal) {
       const volWrap = document.createElement('div');
-      volWrap.className = 'tile-volume';
+      volWrap.className = 'tile-volume transmission-volume';
+      volWrap.id = `tile-volume-control-${userId}`;
       volWrap.title = `Volume da transmissão de ${userName} (0–300%)`;
       volWrap.innerHTML = `
-        <span aria-hidden="true">🔊</span>
+        <button type="button" class="volume-mute" data-volume-mute aria-label="Silenciar transmissão" aria-pressed="false"></button>
         <input type="range" id="tile-volume-${userId}" min="0" max="300" step="5" value="100" aria-label="Volume da transmissão de ${escapeHtml(userName)}" />
-        <span class="tile-volume-text" id="tile-volume-text-${userId}">100%</span>
+        <button type="button" class="volume-percent" id="tile-volume-text-${userId}" data-volume-reset title="Voltar para 100%" aria-label="Restaurar volume da transmissão para 100%">100%</button>
       `;
       ['click', 'dblclick', 'pointerdown'].forEach((evt) => volWrap.addEventListener(evt, (e) => e.stopPropagation()));
-      volWrap.querySelector('input').addEventListener('input', (e) => setStreamVolume(userId, e.target.value));
+      setupStreamVolumeControl(volWrap, pct => setStreamVolume(userId, pct));
       tile.appendChild(volWrap);
     }
 
@@ -6143,6 +6134,7 @@ function registerScreenStream(userId, userName, stream, isLocal) {
 
 function removeScreenStream(userId) {
   streamWindow.close(userId);
+  forgetStreamVolumeControl(userId);
   appState.activeStreams.delete(userId);
   const tile = document.getElementById(`video-tile-${userId}`);
   if (document.pictureInPictureElement && tile?.contains(document.pictureInPictureElement)) {
