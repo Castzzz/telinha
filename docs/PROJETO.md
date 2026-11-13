@@ -1,4 +1,4 @@
-**4.5.1 em publicação (13/11/2026):** correções de segurança e ajustes no SFU. Testes anteriores aproveitados a pedido do dono; conferência desta publicação limitada aos pacotes e à saúde dos serviços.
+**[4.5.1 publicada em 13/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.1):** correções de segurança e ajustes no SFU. Testes anteriores aproveitados a pedido do dono; pacotes, popup de novidades e saúde dos serviços conferidos.
 
 **[4.5.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens privadas e temporárias, marcações com foto, prévia arrastável e fotos dos amigos. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
 
@@ -1156,8 +1156,8 @@ incluindo os três temas e o layout de celular.
 [achados, evidências e prioridades](AUDITORIA-SEGURANCA-2026-11-10.md).
 Foram confirmadas falhas envolvendo identidade pública de visitantes, sussurros,
 anexos de salas com senha e tokens de mídia após moderação. Há também dependência
-vulnerável identificada. As cinco falhas receberam correções locais e regressões;
-release/deploy continuam pendentes. Riscos adicionais da auditoria continuam registrados.
+vulnerável identificada. As cinco falhas receberam correções e regressões;
+release e deploy concluídos na 4.5.1 em 13/11/2026. Riscos adicionais da auditoria continuam registrados.
 
 - **Identidade pública não autoriza autoria (correção local de 10/11/2026):** mensagens
   usam `authorMemberId`; canais novos persistem `createdByMemberId` em `channels.json`;
@@ -2069,3 +2069,26 @@ Node, Caddy, interface servida, dependências e configuração da VM foram prese
 - Node/SFU/Caddy ativos; `/api/health` e `/sfu/health` públicos saudáveis. Os clientes
   reconectaram e as cinco salas de voz voltaram. Sem release do aplicativo; os testes
   concluídos na preparação foram aproveitados.
+
+
+### Publicação da 4.5.1 (13/11/2026)
+
+- Release pública [v4.5.1](https://github.com/Castzzz/telinha/releases/tag/v4.5.1),
+  marcada como mais recente, sem rascunho/pré-release. Tag no commit `4c98a99`.
+- Nove arquivos publicados: Setup/Portátil Windows, AppImage, tar.gz, Flatpak experimental,
+  APK Android 4.5.1/código 16, blockmap e os dois metadados de atualização automática.
+  Tamanhos e SHA-256 de todos os downloads conferem com os arquivos locais; SHA-512 dos
+  metadados confere com os instaladores. Bundle Flatpak aplicado em repositório temporário
+  para conferir a versão interna; tar.gz e interface Android também conferidos.
+- Sons locais conferidos nos pacotes desktop/Android e preservados fora do Git.
+  Popup da 4.5.1 conferido visualmente no Electron. Testes de ontem aproveitados a pedido
+  do dono, sem repetir suítes; Android compilado com `-x lintDebug`.
+- Deploy completo Oracle concluído, mantendo Node v26.13.0 e Caddy 2.11.9.
+  `telinha-server`, `telinha-sfu` e Caddy ativos; `/api/health` e `/sfu/health` públicos OK,
+  com clientes reconectados. SHA-256 de `server.js`, `public/app.js` e `public/index.html`
+  na VM iguais aos arquivos locais; versão instalada 4.5.1. Buffer UDP do SFU continua
+  `rb8388608`, sem descartes na consulta inicial (não comprova comportamento sob carga).
+- Backup anterior ao deploy íntegro em
+  `~/Teletela-backups/teletela-dados-2026-11-13_10-55-11.tar.gz` (`gzip -t` passou).
+  O reinício do Node aguardou o limite de encerramento de 90 segundos do systemd;
+  houve indisponibilidade HTTP temporária nesse intervalo. Segredos preservados na VM.
