@@ -254,6 +254,10 @@ troca de câmera frontal/traseira no Android. O APK acompanha essa atualização
 - **Diagnóstico das transmissões:** botão de gráfico no palco ou Configurações → Transmissão. Quem envia vê a resolução da captura, a enviada e a limitação; quem assiste vê a resolução recebida. Escolher 1080p não garante envio contínuo nessa resolução: o navegador pode adaptar o vídeo.
   Mostra resolução, FPS, taxa de vídeo, perda e latência reais enquanto transmite ou assiste.
   Via SFU, mede o trecho entre você e o servidor. Dados ausentes aparecem como indisponíveis.
+  O envio também mostra a meta de vídeo, a banda estimada da conexão e o transporte
+  UDP/TCP. A banda estimada pelo navegador não é um teste da velocidade contratada.
+  Há um ajuste local para começar o vídeo com uma taxa moderada, reduzindo a subida
+  inicial a partir de taxas muito baixas; ainda aguarda validação em transmissão real.
 
 - **Categorias e ordem:** quem gerencia canais usa o botão **Organizar categorias e
   ausentes**, no cabeçalho da lista. Dá para renomear “Canais de Voz”/“Canais de Texto” e

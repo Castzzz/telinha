@@ -28,9 +28,15 @@ export function videoMetrics(report, previous = new Map(), direction = 'inbound'
     }
     const remote = report.get(stat.remoteId);
     const source = direction === 'outbound' ? report.get(stat.mediaSourceId) : null;
-    const rtt = finite(remote?.roundTripTime) ?? finite(pair?.currentRoundTripTime);
+    const transport = report.get(stat.transportId);
+    const selectedPair = report.get(transport?.selectedCandidatePairId) || pair;
+    const candidate = report.get(selectedPair?.localCandidateId);
+    const rtt = finite(remote?.roundTripTime) ?? finite(selectedPair?.currentRoundTripTime);
     rows.push({ id: stat.id, width: finite(stat.frameWidth), height: finite(stat.frameHeight),
       captureWidth: finite(source?.width), captureHeight: finite(source?.height),
+      targetKbps: Number.isFinite(stat.targetBitrate) ? stat.targetBitrate / 1000 : null,
+      availableOutgoingKbps: Number.isFinite(selectedPair?.availableOutgoingBitrate) ? selectedPair.availableOutgoingBitrate / 1000 : null,
+      protocol: candidate?.protocol?.toUpperCase() || null,
       fps: finite(stat.framesPerSecond) ?? (frameDelta === null ? null : frameDelta / seconds),
       kbps: byteDelta === null ? null : byteDelta * 8 / seconds / 1000,
       loss, rtt: rtt === null ? null : rtt * 1000, codec: codec.replace('video/', '') || null,
@@ -56,11 +62,14 @@ export function setupTransmissionDiagnostics({ getConnections, mountStageOverlay
     const fields = document.createElement('dl');
     const receiving = connection.direction === 'inbound';
     const resolution = (width, height) => width && height ? `${width} × ${height}` : 'Indisponível';
-    const reason = { none: 'Sem limitação informada', cpu: 'Processamento do PC', bandwidth: 'Banda disponível', other: 'Outro motivo' };
+    const reason = { none: 'Sem limitação informada', cpu: 'Processamento do PC', bandwidth: 'Estimativa de banda', other: 'Outro motivo' };
     for (const [key, value] of [
       ...(!receiving ? [['Resolução da captura', resolution(metrics.captureWidth, metrics.captureHeight)]] : []),
       [receiving ? 'Resolução recebida' : 'Resolução enviada', resolution(metrics.width, metrics.height)],
       ['Quadros por segundo', format(metrics.fps, ' FPS', 1)], ['Taxa de vídeo', format(metrics.kbps, ' kb/s', 0)],
+      ...(!receiving ? [['Meta atual de vídeo', format(metrics.targetKbps, ' kb/s')],
+        ['Banda estimada da conexão', format(metrics.availableOutgoingKbps, ' kb/s')]] : []),
+      ['Transporte', metrics.protocol || 'Indisponível'],
       [connection.direction === 'inbound' ? 'Perda no intervalo' : 'Perda informada pelo destino', format(metrics.loss, '%', 1)],
       ['Latência de ida e volta', format(metrics.rtt, ' ms')], ['Codec', metrics.codec || 'Indisponível'],
       ['Limitação de envio', receiving ? 'Veja no PC de quem transmite' : reason[metrics.limitation] || 'Indisponível'],
@@ -82,7 +91,7 @@ export function setupTransmissionDiagnostics({ getConnections, mountStageOverlay
     if (metrics.limitation === 'cpu' || metrics.limitation === 'bandwidth') {
       const tip = document.createElement('p'); tip.textContent = metrics.limitation === 'cpu'
         ? 'O navegador informou limite de processamento. Tente reduzir resolução/FPS ou fechar programas pesados.'
-        : 'O navegador informou limite de banda. Tente uma qualidade menor e confira o uso da internet.';
+        : 'O navegador está limitando o envio pela estimativa de banda, que pode começar baixa e subir aos poucos. Esse valor não é um teste da velocidade da sua internet. Se continuar baixo, confira a conexão e compare com 1080p a 30 FPS.';
       node.append(tip);
     }
     return node;

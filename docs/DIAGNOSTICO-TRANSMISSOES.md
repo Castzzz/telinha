@@ -81,3 +81,38 @@ Melhoria local do painel: o emissor passa a ver resolução da captura (`media-s
 separada da enviada. O receptor vê “Resolução recebida” e orientação para conferir a
 limitação no PC de quem transmite. Não foi alterada a política de qualidade. Conferência
 de sintaxe apenas; testes e abertura do Teletela adiados a pedido do dono.
+
+
+## Qualidade ruim desde o início por mais de um minuto (12/11/2026)
+
+Novos prints mostram 274 × 148 nos dois lados. Quem transmite informa 60 FPS,
+188 kb/s, RTT de 8 ms, 0% de perda informada e `qualityLimitationReason=bandwidth`.
+O espectador informa 2 FPS, 31 kb/s, RTT de 15 ms e três congelamentos no intervalo.
+As capturas não demonstram simultaneidade, então não se deve comparar as taxas como
+se fossem pacotes do mesmo intervalo. O dono confirmou que já começa ruim e leva
+mais de um minuto para normalizar.
+
+Isso confirma que o emissor está limitando pela estimativa de banda naquele momento,
+mas não prova falta de capacidade da internet. No código, só se definia `maxBitrate`;
+isso é teto, não taxa inicial. Uma estimativa inicial baixa com subida lenta é compatível
+com o relato. Os congelamentos no receptor ainda exigem medição própria; corrigir a
+partida não garante resolver a diferença de FPS.
+
+Mitigação local: `public/stream-start-bitrate.js` indica `x-google-start-bitrate` na oferta
+inicial de vídeo em SFU/P2P. Usa metade do teto, até 2 Mbps para tela e 600 kbps para
+câmera, com redução para redes identificadas como 3G e sem dica para 2G. A negociação
+volta à oferta original se a dica for rejeitada antes de mudar o estado. Não impõe mínimo,
+não aumenta o teto e não reinicia a estimativa periodicamente. É uma dica específica do
+Chromium, que outros navegadores podem ignorar. O resultado depende de rede/encoder.
+Não foi alterado o SFU nem aplicado deploy ou release.
+
+O diagnóstico passa a mostrar meta atual de vídeo (`targetBitrate`), estimativa de banda
+na conexão (`availableOutgoingBitrate`, compartilhada com o áudio), quando fornecidas,
+e protocolo UDP/TCP. O texto diferencia a estimativa de banda de um teste de velocidade.
+
+Validação nesta etapa: conferência de sintaxe e diff apenas. Testes e abertura do Teletela
+continuam suspensos a pedido do dono. Comparar o início de uma nova transmissão antes/
+depois, com estatísticas dos dois lados; ainda não há evidência de melhora na rede real.
+
+Referências: [LiveKit, indicação de bitrate inicial e subida lenta no WebRTC](https://github.com/livekit/client-sdk-js/blob/main/src/room/PCTransport.ts)
+e [W3C, motivo de limitação de qualidade](https://www.w3.org/TR/webrtc-stats/#dom-rtcoutboundrtpstreamstats-qualitylimitationreason).

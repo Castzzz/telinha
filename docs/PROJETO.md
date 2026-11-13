@@ -205,6 +205,19 @@ O diagnóstico diferencia resolução recebida, enviada e da captura (`media-sou
 disponível). Em recepção, a limitação de envio só pode ser conferida no cliente emissor.
 Se o envio estiver menor que a captura, o painel mostra um aviso sem presumir CPU/banda.
 Essa melhoria é informativa: não altera presets nem a adaptação da transmissão.
+O painel também mostra meta do encoder, banda estimada da conexão (somente no envio)
+e transporte UDP/TCP; os valores vêm de `getStats`, sem presumir capacidade da internet.
+
+A oferta inicial de vídeo usa `public/stream-start-bitrate.js` em SFU e P2P para indicar
+`x-google-start-bitrate`: metade do teto escolhido, limitada a 2 Mbps para tela e
+600 kbps para câmera. Redes identificadas como 3G limitam a dica a 500 kbps; em
+2G/slow-2g ela não é aplicada. Áudio, RTX, seções rejeitadas/inativas e de recepção
+ficam fora do ajuste. Se o navegador rejeitar a dica e a sinalização continuar estável,
+a negociação tenta a oferta original. Nenhum piso de bitrate é imposto; o navegador
+continua adaptando e o teto existente permanece. A indicação é aplicada na criação
+da conexão, sem temporizador de reinício do estimador. Mudança só no cliente: precisa
+de release para o desktop. Sintaxe conferida; testes, abertura do app e efeito na rede
+real ainda pendentes a pedido do dono. Não promete 1080p instantâneo.
 
 ## 3. Organização das pastas
 

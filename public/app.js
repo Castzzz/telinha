@@ -3,6 +3,7 @@ import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js
 import { setupServerBranding } from './server-branding.js';
 import { setupSettingsLayout } from './settings-layout.js';
 import { createStreamWindow } from './stream-window.js';
+import { setInitialVideoDescription } from './stream-start-bitrate.js';
 import { setupStreamVolumeControl, syncStreamVolumeControl, forgetStreamVolumeControl } from './stream-volume-control.js';
 import { profileIdentity, profileProof } from './profile-identity.js';
 /**
@@ -6579,9 +6580,12 @@ class SfuSession {
       await applySenderBitrates(pc, 0, VOICE_BITRATE);
     } else {
       offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
-      await pc.setLocalDescription(offer);
       const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
-      await applySenderBitrates(pc, this.kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, 256000);
+      const maxBitrate = this.kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate;
+      await setInitialVideoDescription(pc, offer, maxBitrate, {
+        camera: this.kind === 'camera', effectiveType: navigator.connection?.effectiveType
+      });
+      await applySenderBitrates(pc, maxBitrate, 256000);
     }
     this.send({ sdp: pc.localDescription });
   }
@@ -6746,7 +6750,9 @@ async function createScreenOfferForUser(targetId, kind = 'screen') {
   try {
     const offer = await pc.createOffer();
     offer.sdp = enhanceOpusStereoSdp(offer.sdp, 256000);
-    await pc.setLocalDescription(offer);
+    await setInitialVideoDescription(pc, offer, kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, {
+      camera: kind === 'camera', effectiveType: navigator.connection?.effectiveType
+    });
     await applySenderBitrates(pc, kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, 256000);
 
     socket.emit('webrtc-offer', {
