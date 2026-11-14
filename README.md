@@ -10,7 +10,7 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
-**Volume na 4.6.0:** o reforço das transmissões agora
+**[Novidades da 4.6.0](https://github.com/Castzzz/telinha/releases/tag/v4.6.0) — volume:** o reforço das transmissões agora
 respeita os 300% do controle, inclusive ao restaurar o volume salvo. Antes, o som
 ficava limitado a 200%, mesmo com o controle acima disso.
 

@@ -1,3 +1,5 @@
+**[4.6.0 publicada em 14/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.6.0):** Assistir juntos experimental, download da extensão, volume de transmissão até 300% e compatibilidade do bot de música. Release e deploy concluídos; reprodução real entre navegadores e Netflix ainda precisam de validação.
+
 **[4.5.1 publicada em 13/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.1):** correções de segurança e ajustes no SFU. Testes anteriores aproveitados a pedido do dono; pacotes, popup de novidades e saúde dos serviços conferidos.
 
 **[4.5.0 publicada em 09/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens privadas e temporárias, marcações com foto, prévia arrastável e fotos dos amigos. Cliente e servidor atualizados; testes anteriores aproveitados a pedido do dono.
@@ -2176,7 +2178,7 @@ Node, Caddy, interface servida, dependências e configuração da VM foram prese
   houve indisponibilidade HTTP temporária nesse intervalo. Segredos preservados na VM.
 
 
-### Preparação da 4.6.0 (14/11/2026)
+### Publicação da 4.6.0 (14/11/2026)
 
 Publicação de release e deploy autorizada pelo dono para disponibilizar Assistir juntos
 e corrigir o download da extensão na sala oficial. Inclui as alterações locais de
@@ -2189,3 +2191,17 @@ Popup de novidades atualizado; Android 4.6.0/código 17.
   e painel Assistir juntos conferidos visualmente.
 - Verificação local da sessão, código de uso único, autenticação, sincronização via HTTP,
   ZIP com oito arquivos e revogação ao sair passou. Não valida reprodução real na Netflix.
+
+- Release pública marcada como mais recente, sem rascunho/pré-release, tag no commit
+  `10ccc66`. Dez arquivos: Setup/Portátil Windows, AppImage, tar.gz, Flatpak experimental,
+  APK Android 4.6.0/código 17, ZIP da extensão, blockmap e dois metadados do updater.
+  Tamanhos e SHA-256 publicados conferem; metadados públicos e SHA-512 dos instaladores
+  conferem. Versão interna do tar.gz/Flatpak e interface do APK conferidas.
+- Sons locais presentes nos pacotes e preservados fora do Git. Android compilado com lint.
+- Deploy Oracle completo preservou Node v26.13.0 e Caddy 2.11.9. Serviços ativos;
+  `/api/health` e `/sfu/health` saudáveis, com clientes reconectados. Versão instalada
+  4.6.0 e hashes de servidor/interface iguais ao código local.
+- `GET /api/watch-together/extension.zip` público retorna HTTP 200, ZIP e attachment;
+  SHA-256 idêntico ao pacote local. Corrige o `Cannot GET` da versão anterior no servidor.
+- Backup prévio íntegro: `~/Teletela-backups/teletela-dados-2026-11-14_12-55-42.tar.gz`
+  (`gzip -t` passou). Segredos preservados na VM.

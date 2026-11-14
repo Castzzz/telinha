@@ -1,6 +1,6 @@
 # Pendências atuais
 
-Atualizado em 14/11/2026. Publicação da **4.6.0** autorizada e em preparação.
+Atualizado em 14/11/2026. Última versão publicada: **4.6.0**.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
 ## Assistir juntos — experimental, 4.6.0
@@ -12,7 +12,7 @@ Esta lista contém trabalho pendente; registros antigos ficam no [histórico](hi
   Painel, pareamento, autenticação, sincronização HTTP e ZIP conferidos localmente
   na preparação da release. Netflix permanece experimental; planos com anúncios
   ainda não são suportados.
-- [ ] Release do app e deploy do servidor autorizados em 14/11/2026, em preparação.
+- [x] Release 4.6.0 e deploy Oracle concluídos em 14/11/2026. Download público do ZIP conferido.
 
 ## Incluído na 4.5.0
 
