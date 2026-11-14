@@ -1,4 +1,129 @@
-# Bloqueio do YouTube no bot de música — 29/10/2026
+# Bloqueio do YouTube no bot de música
+
+## Correção gratuita aplicada — 13/11/2026, após a pesquisa
+
+O dono autorizou seguir nas alternativas, desde que todas fossem gratuitas.
+A primeira alternativa funcionou, sem instalar provedores, contratar serviços ou
+pedir outro login: excluir `web_embedded` da seleção automática de clientes.
+
+- Um processo isolado, como `telinha`, usando o ambiente oficial e
+  `youtube:player_client=default,-web_embedded`, obteve/decodificou cinco segundos de
+  `djV11Xbc914`: média −21,0 dB, pico 0,0 dB. O extrator usou `tv samsung`/`TVHTML5`.
+- A mudança foi preparada em `music/source.mjs`, nos argumentos
+  comuns, para valer tanto na extração quanto no download/pré-carregamento.
+- Uma cópia candidata fora da pasta instalada na VM repetiu o fluxo real
+  `prepareStream` → `startMusicDownload` → FFmpeg, com o ambiente do processo oficial.
+  `djV11Xbc914` e `dQw4w9WgXcQ` entregaram cinco segundos de áudio, formato 251 e
+  cliente `TVHTML5`, sem 403. Na segunda: média −18,9 dB, pico −1,5 dB.
+- Durante a validação da candidata, o código instalado, as credenciais e os serviços
+  da sala foram preservados. Não houve nova reprodução em call/SFU nem execução das
+  suítes, conforme o pedido anterior do dono. A sintaxe da fonte local foi conferida.
+- Backup dos dados/ambiente baixado para
+  `~/Teletela-backups/teletela-dados-2026-11-13_22-04-11.tar.gz`, sem apagar cópias antigas.
+
+O dono autorizou aplicar: em **14/11/2026 às 01:14 UTC (13/11 às 22:14 em Brasília)**,
+foi atualizado somente `/opt/telinha/app/music/source.mjs` e reiniciado somente
+`telinha-server`. O SHA-256 instalado coincide com o local e a candidata validada:
+`ba95281a05787d47c39ca2cd48e8b2d0c8a92d6ceec4afca9e1a2c42ed2ff223`.
+Node passou do PID `255362` para `260621`; SFU `255289` e WARP `255099` preservados,
+assim como `/etc/telinha/telinha.env`. Sem release desktop ou publicação do protótipo
+de Assistir juntos/mudanças de volume.
+
+Antes de aplicar, novo backup completo baixado para
+`~/Teletela-backups/teletela-dados-2026-11-13_22-13-43.tar.gz`. A fonte anterior ficou
+em `/opt/telinha/backup-fonte-musica-20261114-011423/source.mjs`, em diretório root `0700`.
+Para reversão pontual, restaurar apenas essa fonte e reiniciar somente Node, com
+autorização do dono; não restaurar os dados da sala para desfazer esta mudança de código.
+
+Depois da aplicação, o módulo instalado e o ambiente do novo processo oficial repetiram
+`prepareStream` → `startMusicDownload` → FFmpeg para `djV11Xbc914`: cinco segundos,
+média −21,0 dB, pico 0,0 dB, sem 403. A saúde pública respondeu `ok`, três canais e
+quatro clientes reconectados. Diretório da candidata e script local de diagnóstico
+removidos. **Correção aplicada e obtenção/decodificação confirmadas; escuta na call
+ainda depende da conferência do grupo.** Não há garantia contra bloqueios futuros.
+
+Referência do caminho escolhido: [issue #17989, comentários de 06/11](https://github.com/yt-dlp/yt-dlp/issues/17989).
+
+## Recorrência em 13/11/2026 — HTTP 403 na leitura das músicas
+
+O dono relatou falha em qualquer música, com `unable to download video data: HTTP Error
+403: Forbidden`. Conferência de diagnóstico, sem inserir música na call, reiniciar
+serviços, fazer deploy/release ou rodar a suíte de testes:
+
+- Node, SFU e WARP ativos. yt-dlp instalado `2026.10.26`, também a versão estável mais
+  recente informada pela API oficial do projeto nessa consulta.
+- A sessão dedicada continua no ambiente do processo oficial; os 29 cookies lidos não
+  estavam vencidos pela data gravada. Isso não prova que o YouTube ainda aceite a sessão.
+  Nenhum valor foi mostrado, copiado ao repositório ou alterado.
+- Um processo isolado, como `telinha`, com o ambiente e os módulos instalados na VM,
+  obteve metadados e os primeiros bytes de `jNQXAC9IVRw`. A música `djV11Xbc914`
+  resolveu metadados/formato 251, mas a leitura retornou 403.
+- Extrair e baixar a música num único processo yt-dlp, sem reaproveitar metadados,
+  também retornou 403. Renovar apenas o cache não é uma correção demonstrada.
+- A tentativa HLS com `web_safari` não ofereceu formato utilizável. Sem cookies, a
+  mesma música exigiu confirmação de que não é robô. Não repetir essas alternativas
+  em cascata nem atribuir a falha à interface/volume do app.
+
+O dono concluiu o login em Firefox com perfil temporário exclusivo e encaminhamento
+SSH local para o WARP oficial. Foram exportados somente os 25 cookies de YouTube
+desse perfil, sem mostrar valores, e transferidos para uma pasta root `0700` em `/run`.
+O túnel foi encerrado antes da conferência, e o perfil/cookies temporários removidos
+deste PC. Não foi acessado o perfil pessoal nem automatizada senha/verificação.
+
+**A sessão renovada também não resolveu.** Na Oracle, o módulo instalado resolveu
+metadados de `djV11Xbc914`, mas o download retornou 403 e o FFmpeg não recebeu áudio
+para decodificar. A mesma sessão também falhou com 403 na leitura sem o WARP e no
+formato AAC/M4A alternativo. O cliente público `android_vr`, sem cookies, exigiu
+confirmação de que não é robô. Não houve reprodução na call nem execução das suítes.
+O nightly mais recente consultado (`2026.11.04.232659`) não listava alterações do
+extrator YouTube/desafios no intervalo desde a estável; não foi instalado.
+
+A candidata temporária na VM foi descartada após falhar. A sessão persistente e o
+ambiente oficial foram preservados, sem reiniciar Node/SFU/WARP. **Naquele ponto, a
+recuperação continuava pendente, sem correção validada para o novo bloqueio.** Repetir login,
+reiniciar o bot ou renovar WARP não são soluções demonstradas. Qualquer substituição
+da sessão persistente ou reinício do Node exige autorização explícita depois de
+preparar e conferir uma candidata que realmente entregue áudio.
+
+Referências: [versão estável atual](https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest),
+[cookies do YouTube](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies)
+e [restrições de formatos/PO Tokens](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide).
+
+## Pesquisa posterior solicitada pelo dono — 13/11/2026
+
+Somente pesquisa, sem novos diagnósticos na VM, instalação ou alteração da sala.
+A issue [#17989](https://github.com/yt-dlp/yt-dlp/issues/17989), aberta em 03/11/2026,
+descreve 403 com cookies, inclusive após atualizar o extrator/runtime e refazer login.
+Nos comentários de 06/11, um colaborador relaciona parte dos casos ao experimento
+do YouTube que exige PO Token de GVS para `web_embedded`. Isso é uma hipótese útil,
+**ainda não confirmada no nosso caso**; não confundir com o bloqueio anônimo por IP.
+
+Ordem proposta para uma próxima investigação isolada:
+
+1. Conferir o cliente efetivo nos metadados/logs e tentar
+   `--extractor-args youtube:player_client=default,-web_embedded`.
+   Há relatos de sucesso e falha na mesma issue; fontes de TV podem ter restrições.
+2. Se insuficiente, usar provedor de PO Token realmente carregado e conferir geração
+   de **GVS**, para a leitura do áudio, com a sessão dedicada. A tentativa de outubro
+   registrada acima gerou token de **player**, sem login, e não liberou a fonte; isso
+   não demonstra que o fluxo autenticado com token GVS funcione ou falhe.
+   O guia oficial recomenda `mweb` com provedor automático. A issue também relata
+   `youtube:fetch_pot=always` com provedor, evitando depender da detecção automática
+   dessa exigência experimental.
+3. Como alternativa ao BgUtils, o guia indica
+   [yt-dlp-getpot-wpc](https://github.com/coletdjnz/yt-dlp-getpot-wpc), experimental,
+   que usa Chrome/Chromium para gerar tokens GVS/player, com ou sem sessão autenticada.
+   Não equivale ao teste antigo de Firefox/extração de cookies nem exige usar o PC
+   do dono se preparado na VM. Compatibilidade e consumo na ARM64 ainda não conferidos.
+
+O código atual passa `--no-plugin-dirs`; instalar um provedor por si só não garante
+que seja usado. Uma candidata precisa habilitar o diretório específico e comprovar
+no diagnóstico que o provedor e o token pretendidos foram carregados. Tokens não
+garantem resolver confirmação de robô/bloqueio por IP, como o próprio
+[BgUtils ressalta](https://github.com/Brainicism/bgutil-ytdlp-pot-provider).
+[Guia oficial de PO Tokens](https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide).
+
+## Investigação anterior — 29/10/2026
 
 Investigação na `main`, após o dono relatar que todas as músicas que tentou falhavam com
 “O YouTube bloqueou temporariamente a leitura desta faixa no servidor”. Não houve deploy,

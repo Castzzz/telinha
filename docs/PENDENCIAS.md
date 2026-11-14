@@ -1,7 +1,18 @@
 # Pendências atuais
 
-Atualizado em 09/11/2026. Última versão publicada registrada: **4.5.0**.
+Atualizado em 14/11/2026. Publicação da **4.6.0** autorizada e em preparação.
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
+
+## Assistir juntos — experimental, 4.6.0
+
+- [x] Implementar sessão por call, guia transferível, extensão Chrome/Edge/Brave para
+  YouTube/Netflix, código individual e revogação ao sair da call; pacote ZIP e documentação.
+- [ ] Validar dois navegadores reais, play/pausa/avanços, troca de vídeo/episódio,
+  reconexão, anúncios YouTube, autoplay, Netflix e limites de acesso entre calls.
+  Painel, pareamento, autenticação, sincronização HTTP e ZIP conferidos localmente
+  na preparação da release. Netflix permanece experimental; planos com anúncios
+  ainda não são suportados.
+- [ ] Release do app e deploy do servidor autorizados em 14/11/2026, em preparação.
 
 ## Incluído na 4.5.0
 

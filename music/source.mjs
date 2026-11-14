@@ -105,6 +105,8 @@ function ytdlpCommand(args) {
   }
   const common = ['--ignore-config', '--no-plugin-dirs', '--no-colors', '--no-progress',
     '--socket-timeout', '12', '--retries', '1', '--extractor-retries', '1',
+    // Esse cliente passou a exigir validação extra e devolve 403 mesmo com login válido.
+    '--extractor-args', 'youtube:player_client=default,-web_embedded',
     '--js-runtimes', runtime, ...(proxy ? ['--proxy', proxy] : []),
     ...(cookieDirectory ? ['--cookies', path.join(cookieDirectory, 'youtube.cookies')] : [])];
   // Sem shell: links e buscas nunca viram comandos do sistema.

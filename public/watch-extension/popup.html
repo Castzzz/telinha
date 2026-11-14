@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Assistir juntos</title><link rel="stylesheet" href="popup.css"></head>
+<body><h1>Assistir juntos</h1><p>YouTube e Netflix com a sua call no Teletela.</p>
+<form id="connect"><label for="code">Código gerado no Teletela</label><textarea id="code" rows="3" required spellcheck="false" autocomplete="off" placeholder="teletela-wt1.…"></textarea><button type="submit">Conectar ao Teletela</button></form>
+<section id="session" hidden><p id="description"></p><button id="bind" type="button">Usar esta aba</button><button id="open" type="button">Abrir vídeo da sessão</button><button id="disconnect" type="button" class="secondary">Desconectar</button></section>
+<p id="status" role="status" aria-live="polite"></p><small>Escolha uma aba para sincronizar. Quem guia controla play, pausa e posição. Cada pessoa precisa de acesso ao vídeo. Netflix experimental; pode ser necessário clicar em play.</small>
+<script src="popup.js"></script></body></html>

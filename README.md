@@ -10,6 +10,19 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
+**Volume na 4.6.0:** o reforço das transmissões agora
+respeita os 300% do controle, inclusive ao restaurar o volume salvo. Antes, o som
+ficava limitado a 200%, mesmo com o controle acima disso.
+
+**Assistir juntos (experimental, 4.6.0):** uma sessão na call
+conecta o Teletela a uma extensão de Chrome/Edge/Brave. Quem guia controla play, pausa,
+posição e troca de vídeo no YouTube ou Netflix; cada amigo reproduz pela própria conta.
+Abra **Assistir juntos** no ícone de tela com play, crie/entre na sessão e gere seu
+código individual para colar na extensão. O botão **Baixar extensão** entrega o ZIP;
+para empacotar localmente, use `npm run watch:extension`. [Instalação e limitações](public/watch-extension/LEIA-ME.md).
+Netflix usa integração experimental, ainda não validada, e planos com anúncios não
+são suportados. O som fica no navegador. Atualize o app para receber o painel novo.
+
 **[Novidades da 4.5.1](https://github.com/Castzzz/telinha/releases/tag/v4.5.1):** correções de segurança no chat, nos anexos de salas com senha e na moderação de voz; ajustes no repasse de vídeo e no buffer de recepção das transmissões.
 
 **[Novidades da 4.5.0](https://github.com/Castzzz/telinha/releases/tag/v4.5.0):** mensagens temporárias e privadas, marcações com foto, prévia da
@@ -510,6 +523,13 @@ Recuperar a conta troca o código e encerra as sessões anteriores. Depois de vi
 o backup antigo do perfil deixa de substituir o login para recuperar seus acessos.
 
 ### Testar o bot de música nas calls
+
+**Correção aplicada ao bot em 13/11/2026:** o extrator passa a excluir
+o player `web_embedded`, que retornava 403 mesmo com a conta conectada. A candidata
+obteve áudio de duas músicas em processos isolados na Oracle, sem custo ou novo login.
+Aplicada somente essa fonte no servidor, com autorização e backup prévio; apenas Node
+foi reiniciado. O código instalado voltou a obter/decodificar a música sem 403.
+A escuta na call ainda precisa ser conferida pelo grupo.
 
 O bot já pode ser testado dentro dos canais, com fila, pausar/continuar, pular, remover
 pedidos e volume individual. O servidor toca uma única vez e transmite em Opus por WebRTC;

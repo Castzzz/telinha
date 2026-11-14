@@ -209,3 +209,23 @@ test('M2.7: VoiceActivityDetector Lifecycle', () => {
 
   vad.destroy();
 });
+
+
+test('Volume da transmissão aplica e restaura 300% no ganho real', () => {
+  const mixer = new VolumeMixerManager({ audioContext: new MockAudioContext() });
+  const stream = new MockMediaStream([new MockMediaStreamTrack({ kind: 'audio' })]);
+  mixer.attachScreenStream('tela', stream);
+  for (const percent of [0, 50, 100, 150, 200, 250, 300, 400]) {
+    mixer.setStreamVolume('tela', percent);
+    const entry = mixer.streamMixers.get('tela');
+    assert.equal(entry.gainNode.gain.value, Math.min(percent, 300) / 100);
+  }
+  mixer.setStreamAudible('tela', false);
+  assert.equal(mixer.streamMixers.get('tela').gainNode.gain.value, 0);
+  mixer.setStreamAudible('tela', true);
+  assert.equal(mixer.streamMixers.get('tela').gainNode.gain.value, 3);
+  mixer.loadStreamVolume = () => 300;
+  mixer.attachScreenStream('tela', stream);
+  assert.equal(mixer.streamMixers.get('tela').volumePercent, 300);
+  assert.equal(mixer.streamMixers.get('tela').gainNode.gain.value, 3);
+});

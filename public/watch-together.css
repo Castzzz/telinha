@@ -1,0 +1,15 @@
+.watch-modal { display: block; padding: 24px; width: min(580px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); overflow-y: auto; }
+.watch-modal .modal-header { align-items: center; margin-bottom: 12px; }
+.watch-modal h2, .watch-modal h3 { color: var(--text-header); }
+.watch-modal h3 { margin: 18px 0 10px; font-size: 16px; }
+.watch-hint { color: var(--text-muted); font-size: 13px; line-height: 1.6; margin: 12px 0; overflow-wrap: anywhere; }
+ol.watch-hint { padding-left: 22px; }
+.watch-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.watch-actions a { text-decoration: none; }
+.watch-members { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 8px; color: var(--text-normal); font-size: 13px; }
+.watch-connect { border-top: 1px solid var(--border-subtle); margin-top: 18px; }
+#watch-code-row label { display: block; font-size: 12px; color: var(--text-muted); margin: 12px 0 6px; }
+#watch-code { width: 100%; margin-bottom: 8px; font-family: monospace; }
+#watch-status { color: var(--text-normal); line-height: 1.5; font-size: 14px; }
+.watch-modal details { color: var(--text-normal); font-size: 13px; margin-top: 14px; }
+.watch-modal [hidden] { display: none; }

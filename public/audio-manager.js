@@ -554,7 +554,7 @@ export class VolumeMixerManager {
 
     const savedVol = this.loadStreamVolume(streamId);
     const safeVol = sanitizeVolumePercent(savedVol, 100);
-    let clampedGain = Math.max(0.0, Math.min(2.0, safeVol / 100));
+    let clampedGain = Math.max(0.0, Math.min(MAX_STREAM_VOLUME_PERCENT / 100, safeVol / 100));
     if (!Number.isFinite(clampedGain)) clampedGain = 1.0;
     if (gainNode.gain && typeof gainNode.gain.setValueAtTime === 'function') {
       gainNode.gain.setValueAtTime(clampedGain, this.audioContext.currentTime || 0);
@@ -563,10 +563,10 @@ export class VolumeMixerManager {
     }
 
     const safeVolumePercent = safeVol === Infinity
-      ? 200
+      ? MAX_STREAM_VOLUME_PERCENT
       : safeVol === -Infinity
         ? 0
-        : Math.max(0, Math.min(200, safeVol));
+        : Math.max(0, Math.min(MAX_STREAM_VOLUME_PERCENT, safeVol));
 
     this.streamMixers.set(streamId, {
       sourceNode,
@@ -673,7 +673,7 @@ export class VolumeMixerManager {
 
   applyStreamGain(entry) {
     if (!entry.gainNode || !entry.gainNode.gain) return;
-    let target = entry.audible === false ? 0 : Math.max(0.0, Math.min(2.0, entry.volumePercent / 100));
+    let target = entry.audible === false ? 0 : Math.max(0.0, Math.min(MAX_STREAM_VOLUME_PERCENT / 100, entry.volumePercent / 100));
     if (!Number.isFinite(target)) target = 1.0;
     const now = this.audioContext?.currentTime || 0;
     if (typeof entry.gainNode.gain.cancelScheduledValues === 'function') {

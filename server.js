@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { normalizeImageCrop } from './public/image-crop.js';
 import { PermissionStore, PERMISSIONS } from './permission-store.js';
 import { DiceStore, installDice } from './dice-store.js';
+import { installWatchTogether } from './watch-together.js';
 import { normalizePresence, effectivePresence, presencePriority, PRESENCE_IDLE_MS } from './public/presence.js';
 import { SERVER_NAME, MAX_SERVER_ICON_BYTES, SERVER_ICON_RE, validServerIcon } from './public/server-branding.js';
 import { MemberAvatarStore } from './member-avatar-store.js';
@@ -1708,6 +1709,7 @@ installAccountHttp({ app, store: accounts, limit: accountLimit, onRevoke: revoke
 
 const dice = new DiceStore(DATA_DIR);
 const setupDiceSocket = installDice({ io, store: dice });
+const watchTogether = installWatchTogether({ app, io, channels, server });
 
 // Quem não tem a senha nem chega a entrar (a senha de admin também abre a porta)
 io.use((socket, next) => {
@@ -1823,6 +1825,7 @@ io.on('connection', (socket) => {
     limit: accountLimit, onRevoke: revokeAccountSockets, onFriendsChanged: broadcastFriends, isOnline: friendOnline, getFriendState: friendState });
   if (accountSession) queueMicrotask(broadcastFriends);
   setupDiceSocket(socket);
+  watchTogether.setup(socket);
   if (accessIdentity.token) socket.emit('permission-identity', { token: accessIdentity.token });
   sendPermissions(socket);
   // Scrypt tem custo alto; limita criações e tentativas antes de calcular qualquer hash.
@@ -3310,6 +3313,7 @@ function callSoundSeed() {
 function leaveCurrentChannel(socket) {
   const user = socket.data?.user;
   if (!user || !user.channelId) return;
+  watchTogether.leave(socket.id);
   if (SFU_SECRET) for (const id of [user.mediaId, user.voiceHostId, user.voiceViewerId]) revokeSfuMedia(id);
 
   dailyCalls.leave(socket.id);

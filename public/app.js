@@ -37,6 +37,7 @@ import { MobileScreenSource } from './mobile-screen.js';
 import { setupMobileUI, setMobileView, syncMobileState } from './mobile.js';
 import { setupPermissions, hasPermission } from './permissions.js';
 import { setupMusic } from './music.js';
+import { setupWatchTogether } from './watch-together.js';
 import { setupDice } from './dice.js';
 import { setupStageSocial } from './stage-social.js';
 import { setupStageControls } from './stage-controls.js';
@@ -52,6 +53,7 @@ import { setupAccounts, accountSession, initialAccountProfile, accountProfileSna
 let channelOrganizer = null;
 let musicUI = null;
 let diceUI = null;
+let watchTogetherUI = null;
 let stageSocialUI = null;
 let serverMembersUI = null;
 
@@ -1561,6 +1563,7 @@ function renderChannelsTree() {
 
 function updateTopBar() {
   diceUI?.sync();
+  watchTogetherUI?.syncChannel();
   syncConnectionMonitor();
   updateTextLayout();
   updateStageControls();
@@ -5379,14 +5382,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.5.1';
+const WHATS_NEW_VERSION = '4.6.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-5-1', '4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -8265,6 +8268,7 @@ function initApp() {
   initAudioSystem();
   musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options) });
   diceUI = setupDice({ socket, appState, showToast, escapeHtml });
+  watchTogetherUI = setupWatchTogether({ socket, appState, serverUrl: SERVER_URL, mountStageOverlay, showToast });
   stageSocialUI = setupStageSocial({ appState, prefs, savePrefs, music: musicUI,
     avatarInnerHtml, safeColor, frameClass, frameStyle, nameStyle, sortedUsers,
     isWatching: () => appState.activeStreams.size > 0,

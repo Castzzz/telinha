@@ -171,6 +171,62 @@ Pontos importantes:
   ao minimizar, sem duplicar a captura ou mudar o mixer. Detalhes em [ANDROID.md](ANDROID.md).
   Compartilhar a tela do celular exige integração MediaProjection e ainda não existe.
 
+### Assistir juntos por extensão (experimental, 4.6.0)
+
+Implementação solicitada pelo dono para YouTube e Netflix com extensão ligada ao
+Teletela. Na preparação da 4.6.0 foram conferidos o painel no Electron, pareamento,
+autenticação, sincronização por HTTP e download do ZIP. Reprodução entre navegadores
+reais, anúncios e Netflix ainda precisam de validação.
+
+- `watch-together.js` no servidor mantém uma sessão efêmera por canal de voz, com guia,
+  participantes, link canônico, posição, taxa, âncora temporal e revisão dos comandos.
+  Não grava histórico nem credenciais em disco. Não usa o SFU nem retransmite mídia.
+- `public/watch-together.js` e `.css` criam o painel **Assistir juntos** na barra superior,
+  no palco e no chat. A sessão é descoberta pelos membros da call; participar é explícito.
+  Qualquer participante pode assumir o guia. Quem guia pode encerrar para todos; sair
+  da call, ser movido/expulso ou desconectar revoga os próprios códigos/tokens. Se o guia
+  sair da sessão/call, ela termina. Não há retomada automática após reconectar o app.
+- A extensão Manifest V3 fica em `public/watch-extension/`, para Chrome/Edge/Brave no
+  computador. O popup solicita permissão apenas para o host do servidor informado no
+  código (HTTPS, ou HTTP em localhost/127.0.0.1). Só a aba selecionada é sincronizada.
+  As credenciais ficam em `chrome.storage.session`, acessível pelos contextos confiáveis
+  da extensão, sem cookies/senhas dos serviços. Fechar o navegador exige parear de novo.
+- Cada pessoa gera um código próprio com 32 bytes aleatórios, uso único e validade de
+  cinco minutos, vinculado ao socket já autorizado na call. A troca entrega outro token,
+  de até 12 horas, válido somente enquanto esse socket continuar participante da sessão.
+  Gerar outro código revoga a conexão anterior. Nunca colocar códigos reais em logs/docs.
+- `background.js` faz as requisições autenticadas; `content.js` lê/controla o vídeo e
+  consulta a sessão uma vez por segundo. Eventos do guia também enviam atualização
+  imediatamente. A revisão de comandos permite corrigir play/pausa e avanços pequenos;
+  deriva acima de 1,25 s gera busca com intervalo mínimo. Não promete sincronismo exato.
+  Ausência de relatos do guia por seis segundos suspende o estado reproduzindo.
+- No YouTube, usa o elemento de vídeo no próprio site, detectando `.ad-showing` para
+  suspender sincronização durante anúncios. Na Netflix, `netflix-bridge.js` roda no
+  contexto da página e tenta a API interna do player, com alternativa no elemento de
+  vídeo. Nenhum token do Teletela entra nessa ponte. Essa API pode mudar e **a Netflix
+  ainda precisa de validação real**. Planos Netflix com anúncios e vídeos ao vivo não
+  são suportados; autenticação, acesso ao título, idioma e legendas são individuais.
+- Som/volume saem pelo navegador e não passam pelo mixer/ensurdecer do Teletela.
+  Navegador pode exigir clique em play. Travamentos de um participante não pausam todos.
+  Troca de vídeo acompanha o guia somente na aba escolhida, com player já aberto;
+  o popup também oferece **Abrir vídeo da sessão**. Não abre abas sem ação do usuário.
+
+Eventos Socket.IO (payload `{}`, com ack `{success, ...}`): `watch-together:state`,
+`:join`, `:pair`, `:lead`, `:leave`, `:stop`. `watch-together:state` também é emitido
+com `{channelId, session}` para os sockets da call; clientes fora dela não recebem a sessão.
+HTTP: `POST /api/watch-together/pair` troca `{code}`; `POST .../sync` recebe `{report}`;
+`POST .../status` consulta sem marcar uma aba como conectada; `POST .../disconnect`
+revoga o token. Estes três últimos exigem `Authorization: Bearer <token>`, com nova
+conferência do socket/membro/canal em cada requisição. Limites: JSON de 4 KiB, 20
+requisições/s por token e 30 ações Socket.IO a cada dez segundos por socket.
+
+`GET /api/watch-together/extension.zip` entrega somente os oito arquivos públicos
+permitidos da extensão, em ZIP gerado sem ferramentas externas. `npm run watch:extension`
+gera o mesmo pacote em `dist/Teletela-Assistir-Juntos.zip`, sem iniciar servidor.
+[Instruções de instalação manual](../public/watch-extension/LEIA-ME.md).
+`package.json` e `deploy/oracle/deploy.sh` incluem o novo módulo do servidor nos pacotes;
+esta mudança exige **release + deploy**; publicação autorizada pelo dono em 14/11/2026.
+
 ### Transmissão em janela no desktop
 
 O botão ⧉ / atalho P usa `public/stream-window.js` para abrir o player local
@@ -199,6 +255,15 @@ vídeos do mosaico. No palco individual o controle sobre o vídeo fica oculto, e
 duplicação. O alto-falante alterna mute/restauração do último volume positivo por
 transmissão, guardado só durante a sessão; o percentual restaura 100%. O volume salvo por
 perfil continua no fluxo existente. A barra usa escala de 0–300 e os três temas.
+Correção local de 13/11/2026 (sem release/deploy): `attachScreenStream` e
+`applyStreamGain` ainda limitavam o ganho a 2, embora o controle e `setStreamVolume`
+aceitassem 300%. Ambos agora usam `MAX_STREAM_VOLUME_PERCENT`. Testes precisam conferir
+o ganho aplicado e a amplitude na saída, além do percentual/retorno do setter.
+`npm run test:stream:ui` mede o áudio recebido por WebRTC após o `outputGain` com os
+sliders da interface: transmissão em 50/100/150/200/250/300% e geral em 0/50/100/200%.
+Isso verifica o sinal antes da saída do sistema; não simula o mixer do Windows/Linux
+nem a rede dos amigos. O relato de não mudar acima de 100% e de falhar ao reduzir
+o geral ainda não foi reproduzido nesses testes locais.
 Redesign local de 12/11/2026: validado posteriormente no Electron com SFU/P2P,
 incluindo mute, restauração do volume anterior, retorno a 100% e os três temas.
 
@@ -488,6 +553,23 @@ pessoal ou de outros sites; não reabrir a sessão exportada no navegador. Um en
 forçado do Node pode deixar cópias em `/tmp`; removê-las como operador com o bot parado.
 Quando a sessão expirar, renovar via login manual e atualizar a variável com reinício
 autorizado do servidor. Não há garantia contra novos bloqueios ou restrições da conta.
+Em 13/11/2026, o dono relatou 403 em todas as músicas. A leitura isolada de uma música
+falhou com o ambiente oficial, mesmo com extração fresca e serviços ativos; um vídeo
+curto de controle entregou bytes. HLS não ofereceu formato e o acesso anônimo exigiu
+confirmação de robô. O dono renovou o login em perfil Firefox exclusivo, mas a candidata
+também retornou 403, inclusive sem WARP e em AAC/M4A; não foi aplicada. Perfil e cópias
+temporárias removidos, serviços/configuração oficiais preservados. Após a pesquisa e
+autorização para seguir só com alternativas gratuitas, excluir `web_embedded` resolveu
+a leitura em processos isolados. A candidata de `music/source.mjs` usa
+`youtube:player_client=default,-web_embedded` na extração e no download. Duas músicas
+entregaram cinco segundos de áudio via `prepareStream` → `startMusicDownload` → FFmpeg,
+com a conta/WARP atuais e sem instalar provedores. **Aplicada com autorização do dono
+em 13/11/2026 às 22:14 de Brasília**, copiando somente esse módulo e reiniciando apenas
+Node. Backup completo prévio e cópia da fonte anterior preservados. Código instalado
+repetiu a obtenção/decodificação sem 403; saúde pública OK e quatro clientes reconectados.
+Credenciais, SFU e WARP preservados; escuta na call ainda depende do grupo. Sem release
+desktop ou publicação das outras mudanças locais. Detalhes em
+[DIAGNOSTICO-BOT-MUSICA.md](DIAGNOSTICO-BOT-MUSICA.md).
 Servidores locais de desenvolvimento continuam com música desativada por padrão; as ferramentas
 nativas não vão dentro dos instaladores desktop.
 
@@ -2092,3 +2174,18 @@ Node, Caddy, interface servida, dependências e configuração da VM foram prese
   `~/Teletela-backups/teletela-dados-2026-11-13_10-55-11.tar.gz` (`gzip -t` passou).
   O reinício do Node aguardou o limite de encerramento de 90 segundos do systemd;
   houve indisponibilidade HTTP temporária nesse intervalo. Segredos preservados na VM.
+
+
+### Preparação da 4.6.0 (14/11/2026)
+
+Publicação de release e deploy autorizada pelo dono para disponibilizar Assistir juntos
+e corrigir o download da extensão na sala oficial. Inclui as alterações locais de
+volume das transmissões até 300% e a compatibilidade do extrator de música do YouTube.
+Popup de novidades atualizado; Android 4.6.0/código 17.
+
+- `npm test`: 62 testes passaram; regressões m1/m2/m3: 81 testes passaram.
+- Integração de canais/admin e 12 testes de fontes de música/segurança passaram.
+- Electron: janela de transmissão e amplitude real de 50–300% passaram; popup 4.6.0
+  e painel Assistir juntos conferidos visualmente.
+- Verificação local da sessão, código de uso único, autenticação, sincronização via HTTP,
+  ZIP com oito arquivos e revogação ao sair passou. Não valida reprodução real na Netflix.

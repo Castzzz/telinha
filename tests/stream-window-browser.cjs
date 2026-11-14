@@ -210,6 +210,44 @@ app.whenReady().then(async () => {
   await pause(2500);
   const received = await js(viewer, `(()=>{const video=document.getElementById('video-el-${screenKey}');return {width:video.videoWidth,height:video.videoHeight}})()`);
   assert(await js(sender, `appState.localScreenStream.getVideoTracks()[0].getSettings().width === 1920`), 'A fonte de teste precisa ser 1080p');
+  await until(viewer, `Boolean(appState.mixerManager.streamMixers.get('${screenKey}')?.sourceNode)`);
+  await js(viewer, `
+    const mixer=appState.mixerManager;
+    window.volumeAnalyser=mixer.audioContext.createAnalyser();
+    volumeAnalyser.fftSize=4096;
+    mixer.outputGain.connect(volumeAnalyser);
+    window.measureStreamVolume=async()=>{
+      await new Promise(resolve=>setTimeout(resolve,180));
+      const samples=new Float32Array(volumeAnalyser.fftSize);
+      let energy=0;
+      for(let n=0;n<8;n++){
+        volumeAnalyser.getFloatTimeDomainData(samples);
+        energy+=samples.reduce((sum,x)=>sum+x*x,0)/samples.length;
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      return Math.sqrt(energy/8);
+    };
+    void 0;
+  `);
+  const adjust = async (selector, percent) => js(viewer, `(()=>{const slider=document.querySelector('${selector}');slider.value='${percent}';slider.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await adjust('#input-stream-volume', 100);
+  await adjust('#input-master-volume', 100);
+  const baseVolume = await js(viewer, 'measureStreamVolume()');
+  assert(baseVolume > .005, 'A transmissão WebRTC deve entregar som ao mixer');
+  for (const percent of [50, 100, 150, 200, 250, 300]) {
+    await adjust('#input-stream-volume', percent);
+    const ratio = await js(viewer, 'measureStreamVolume()') / baseVolume;
+    assert(Math.abs(ratio - percent/100) < .12, `Transmissão em ${percent}%: amplitude relativa ${ratio.toFixed(2)}`);
+  }
+  await adjust('#input-stream-volume', 100);
+  for (const percent of [50, 0, 100, 200]) {
+    await adjust('#input-master-volume', percent);
+    const ratio = await js(viewer, 'measureStreamVolume()') / baseVolume;
+    assert(Math.abs(ratio - percent/100) < .12, `Volume geral em ${percent}%: amplitude relativa ${ratio.toFixed(2)}`);
+  }
+  await adjust('#input-master-volume', 100);
+  assert(await js(viewer, `document.getElementById('video-el-${screenKey}').muted && document.getElementById('video-el-${screenKey}').dataset.mixerOutput === '1'`), 'O vídeo deve ficar mudo para não tocar som fora do volume geral');
+  console.log('Amplitude real da transmissão: 50–300%; volume geral: 0/50/100/200%.');
   await click(sender, '#btn-stage-diagnostics');
   await until(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('Resolução da captura')`);
   assert(await js(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('1920 × 1080')`), 'Diagnóstico precisa identificar a captura real');

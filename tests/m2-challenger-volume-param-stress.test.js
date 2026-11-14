@@ -39,8 +39,8 @@ class StrictAuditingAudioParam {
       if (!Number.isFinite(val)) {
         throw new TypeError(`[AudioParam Specification Violation] ${fnName} on '${this.name}' received non-finite value: ${val}`);
       }
-      if (val < 0.0 || val > 2.0) {
-        throw new RangeError(`[AudioParam Safety Boundary Violation] ${fnName} on '${this.name}' received out-of-range gain: ${val} (expected [0.0, 2.0])`);
+      if (val < 0.0 || val > 3.0) {
+        throw new RangeError(`[AudioParam Safety Boundary Violation] ${fnName} on '${this.name}' received out-of-range gain: ${val} (expected [0.0, 3.0])`);
       }
     } else {
       throw new TypeError(`[AudioParam Specification Violation] ${fnName} on '${this.name}' received non-numeric value: ${typeof val}`);
@@ -337,7 +337,7 @@ test('ADVERSARIAL 3.1: attachUserStream and attachScreenStream with poisoned loc
 
     assert.ok(streamGainNode);
     assert.equal(Number.isFinite(streamGainNode.gain.value), true);
-    assert.ok(streamGainNode.gain.value >= 0.0 && streamGainNode.gain.value <= 2.0);
+    assert.ok(streamGainNode.gain.value >= 0.0 && streamGainNode.gain.value <= 3.0);
   }
 });
 
