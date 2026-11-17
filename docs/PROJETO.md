@@ -1,3 +1,5 @@
+**[4.7.0 publicada em 17/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.7.0)** — clipes de voz de 10 a 60 segundos com envio para um canal de texto. Teste entre dois clientes Electron aprovado. APK de teste 4.7.0 (código 18), dez anexos conferidos e atualização automática de Windows/Linux validada pelos manifestos públicos. Deploy na Oracle concluído com backup íntegro, serviços ativos e hashes de servidor, interface e gravador iguais aos locais.
+
 **[4.6.0 publicada em 14/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.6.0):** Assistir juntos experimental, download da extensão, volume de transmissão até 300% e compatibilidade do bot de música. Release e deploy concluídos; reprodução real entre navegadores e Netflix ainda precisam de validação.
 
 **[4.5.1 publicada em 13/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.5.1):** correções de segurança e ajustes no SFU. Testes anteriores aproveitados a pedido do dono; pacotes, popup de novidades e saúde dos serviços conferidos.
