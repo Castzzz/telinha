@@ -1,4 +1,5 @@
 (() => {
+  const extensionApi = globalThis.browser || globalThis.chrome;
   let active = false, host = false, running = false, pending = false, nextProbe = 0;
   let boundVideo = null, lastGood = null, navigatedTo = '', lastSeekAt = 0;
   let lastControl = null, lastPlaying = null;
@@ -60,12 +61,12 @@
   }
   function onChange() { if (active && host) tick(); }
   async function tick() {
-    if (!chrome.runtime?.id || (!active && Date.now() < nextProbe)) return;
+    if (!extensionApi.runtime?.id || (!active && Date.now() < nextProbe)) return;
     if (running) { pending = true; return; }
     running = true;
     try {
       const report = await read();
-      const result = await chrome.runtime.sendMessage({ type: 'watch:sync', report });
+      const result = await extensionApi.runtime.sendMessage({ type: 'watch:sync', report });
       if (result?.inactive) { active = false; host = false; nextProbe = Date.now() + 5000; box.remove(); return; }
       if (result?.skipped) return;
       if (result?.error) { active = true; status(result.error); return; }
@@ -122,7 +123,7 @@
       tick();
     } catch { status('use o botão de play do próprio vídeo para liberar a reprodução', true); }
   });
-  chrome.runtime.onMessage.addListener(message => {
+  extensionApi.runtime.onMessage.addListener(message => {
     if (message?.type === 'watch:attach') { active = true; nextProbe = 0; tick(); }
     if (message?.type === 'watch:detach') { active = false; host = false; box.remove(); }
   });

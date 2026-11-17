@@ -10,9 +10,20 @@ Salas de voz e transmissão de tela entre amigos, estilo Discord/TeamSpeak. Dá 
 - 🎚️ Volume de cada amigo só pra você, perfil com foto, chat e reações
 - 🔄 O app de PC se atualiza sozinho
 
+**[Novidades da 4.7.0](https://github.com/Castzzz/telinha/releases/tag/v4.7.0)** — use a tesoura da call para enviar de 10 a 60 segundos de voz a um canal de texto. A mensagem inclui o player, a data e a hora.
+
 **[Novidades da 4.6.0](https://github.com/Castzzz/telinha/releases/tag/v4.6.0) — volume:** o reforço das transmissões agora
 respeita os 300% do controle, inclusive ao restaurar o volume salvo. Antes, o som
 ficava limitado a 200%, mesmo com o controle acima disso.
+
+**Firefox no Linux/Windows (extensão 0.2.0):** baixe pelo botão **Baixar extensão**
+no Teletela e extraia o ZIP. Também é possível carregar
+`public/watch-extension/manifest.json` em `about:debugging#/runtime/this-firefox` →
+**Carregar extensão temporária…** (Firefox 140+). Refaça ao reiniciar o navegador.
+Conexão e comandos de um vídeo de teste conferidos no Firefox; Netflix real continua
+pendente. O servidor já entrega a 0.2.0; o anexo antigo da release 4.6.0 no GitHub
+continua na 0.1.0.
+[Instruções completas](public/watch-extension/LEIA-ME.md#instalar-no-firefox-linux-ou-windows).
 
 **Assistir juntos (experimental, 4.6.0):** uma sessão na call
 conecta o Teletela a uma extensão de Chrome/Edge/Brave. Quem guia controla play, pausa,
@@ -363,6 +374,7 @@ canais. A separação começa com a atualização do servidor; o APK local acomp
 | **Abrir o chat da call** | 💬 do lado do canal em que você está (bolinha vermelha = mensagem nova). Clicar no canal volta da tela de texto pra call |
 | **Mudar o tamanho das transmissões** | Vendo várias lado a lado, arraste a divisória entre elas (duplo clique deixa igual) |
 | **Mandar imagem ou GIF no chat** | 📎 do lado do campo, `Ctrl+V` ou arraste pro chat (até 15 MB; GIF continua animado). O texto vai como legenda. Clique na imagem pra ver grande |
+| **Clipar as vozes da call** | Clique na tesoura da call (no celular, **Opções da chamada → Clipar vozes**). O clique marca o fim do trecho. Escolha de 10 a 60 segundos e o canal de texto. A mensagem traz um player, a data e a hora. O histórico começa quando você entra na call. |
 | **Enviar vídeo ou arquivo** | Use o mesmo 📎 ou arraste pro chat (até 20 MB por arquivo). MP4/WebM têm player; outros formatos ficam disponíveis para baixar. Nos canais de texto os anexos ficam salvos; no chat da call são temporários |
 | **Sons ao mutar/desmutar** | Em ⚙️ → *Som* → *Áudios dos controles*, escolha a opção 1 (quatro sons separados) ou a opção 2 (a nova dupla, igual para microfone e áudio). Dá para desligar os avisos; só você ouve, seguindo o volume geral, inclusive ao ensurdecer |
 | **Esconder minha própria transmissão** | Menu do botão 🖥️ ou ⚙️ → *Transmissão*. A prévia fica escondida automaticamente, mas clicar no seu **AO VIVO** ou **CÂMERA** abre só a prévia escolhida. O **✕** na aba volta a escondê-la. Os amigos continuam vendo e a preferência fica salva |

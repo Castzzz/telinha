@@ -835,7 +835,7 @@ function saveChatImage(data, mime) {
 
 // Arquivos ficam fora da pasta pública; só vídeos reconhecidos podem abrir no player.
 const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
-const ATTACHMENT_FILE_RE = /^[a-f0-9-]{36}\.(bin|mp4|webm)$/;
+const ATTACHMENT_FILE_RE = /^[a-f0-9-]{36}\.(bin|mp4|webm|wav)$/;
 function attachmentStorage(directory, maxBytes, temporary = false) {
   if (temporary) fs.rmSync(directory, { recursive: true, force: true });
   fs.mkdirSync(directory, { recursive: true });
@@ -884,12 +884,23 @@ function prepareAttachment(payload) {
     mime = payload.mime;
     ext = mp4 ? 'mp4' : 'webm';
   }
+  // Só o PCM mono de 16 kHz gerado pelo recorte abre no player de voz.
+  if (payload.mime === 'audio/wav' && data.length > 44 && data.length <= 44 + 60 * 32000 &&
+      data.length % 2 === 0 && data.toString('latin1', 0, 4) === 'RIFF' &&
+      data.readUInt32LE(4) === data.length - 8 && data.toString('latin1', 8, 16) === 'WAVEfmt ' &&
+      data.readUInt32LE(16) === 16 && data.readUInt16LE(20) === 1 && data.readUInt16LE(22) === 1 &&
+      data.readUInt32LE(24) === 16000 && data.readUInt32LE(28) === 32000 &&
+      data.readUInt16LE(32) === 2 && data.readUInt16LE(34) === 16 &&
+      data.toString('latin1', 36, 40) === 'data' && data.readUInt32LE(40) === data.length - 44) {
+    mime = 'audio/wav';
+    ext = 'wav';
+  }
   return { data, mime, ext, name: attachmentName(payload.name) };
 }
 
 function removeTextAttachment(msg) {
   if (msg?.attachment?.url) assetChannels.delete(msg.attachment.url);
-  const match = typeof msg?.attachment?.url === 'string' && msg.attachment.url.match(/^\/api\/text-file\/([a-f0-9-]{36}\.(?:bin|mp4|webm))$/);
+  const match = typeof msg?.attachment?.url === 'string' && msg.attachment.url.match(/^\/api\/text-file\/([a-f0-9-]{36}\.(?:bin|mp4|webm|wav))$/);
   if (match) textAttachments.remove(match[1]);
 }
 

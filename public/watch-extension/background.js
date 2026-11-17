@@ -1,11 +1,13 @@
+// Firefox usa APIs com promessas pelo namespace browser.
+const extensionApi = globalThis.browser || globalThis.chrome;
 const KEY = 'watchConnection';
 let syncing = false;
 let current = null, loading = null;
 const load = async () => {
-  loading ||= chrome.storage.session.get(KEY).then(data => { current = data[KEY] || null; });
+  loading ||= extensionApi.storage.session.get(KEY).then(data => { current = data[KEY] || null; });
   await loading; return current;
 };
-const save = connection => { current = connection; return chrome.storage.session.set({ [KEY]: connection }); };
+const save = connection => { current = connection; return extensionApi.storage.session.set({ [KEY]: connection }); };
 const supported = raw => {
   try { const url = new URL(raw); return url.protocol === 'https:' && ['www.youtube.com', 'www.netflix.com'].includes(url.hostname); }
   catch { return false; }
@@ -31,7 +33,7 @@ async function api(connection, path, body = {}) {
   return { ...data, roundTrip: Date.now() - start };
 }
 async function handle(message, sender) {
-  const fromPopup = sender.url === chrome.runtime.getURL('popup.html') && !sender.tab;
+  const fromPopup = sender.url === extensionApi.runtime.getURL('popup.html') && !sender.tab;
   let connection = await load();
   if (message?.type === 'watch:sync') {
     if (!connection?.token || sender.tab?.id !== connection.tabId || !supported(sender.url)) return { inactive: true };
@@ -70,7 +72,7 @@ async function handle(message, sender) {
     const server = serverOrigin(message.server);
     if (!/^[\w-]{43}$/.test(message.code || '')) throw new Error('Código inválido. Gere outro no Teletela.');
     const url = new URL(server);
-    if (!await chrome.permissions.contains({ origins: [`${url.protocol}//${url.hostname}/*`] })) throw new Error('Permita a conexão com o servidor.');
+    if (!await extensionApi.permissions.contains({ origins: [`${url.protocol}//${url.hostname}/*`] })) throw new Error('Permita a conexão com o servidor.');
     const data = await api({ server }, 'pair', { code: message.code });
     // O servidor revoga o token anterior quando o código é trocado.
     if (connection?.token) await api(connection, 'disconnect').catch(() => {});
@@ -79,7 +81,7 @@ async function handle(message, sender) {
   }
   if (message?.type === 'watch:disconnect') {
     current = null;
-    await chrome.storage.session.remove(KEY);
+    await extensionApi.storage.session.remove(KEY);
     if (connection?.token) await api(connection, 'disconnect').catch(() => {});
     return { success: true };
   }
@@ -91,31 +93,31 @@ async function handle(message, sender) {
     const url = connection.session?.url;
     if (!/^https:\/\/www\.(youtube\.com\/watch\?v=[\w-]{11}|netflix\.com\/watch\/\d{1,20})$/.test(url || '')) throw new Error('Aguarde quem guia escolher o vídeo.');
     // Continua no service worker mesmo quando a abertura da aba fecha o popup.
-    const tab = await chrome.tabs.create({ url });
+    const tab = await extensionApi.tabs.create({ url });
     const oldTabId = connection.tabId;
     connection.tabId = tab.id; connection.error = ''; await save(connection);
-    if (oldTabId && oldTabId !== tab.id) chrome.tabs.sendMessage(oldTabId, { type: 'watch:detach' }).catch(() => {});
-    chrome.tabs.sendMessage(tab.id, { type: 'watch:attach' }).catch(() => {});
+    if (oldTabId && oldTabId !== tab.id) extensionApi.tabs.sendMessage(oldTabId, { type: 'watch:detach' }).catch(() => {});
+    extensionApi.tabs.sendMessage(tab.id, { type: 'watch:attach' }).catch(() => {});
     return { success: true };
   }
   if (message?.type === 'watch:bind') {
     if (!connection?.token) throw new Error('Conecte com seu código primeiro.');
-    const tab = await chrome.tabs.get(message.tabId);
+    const tab = await extensionApi.tabs.get(message.tabId);
     if (!supported(tab.pendingUrl || tab.url)) throw new Error('Abra o YouTube ou a Netflix nesta aba.');
     const oldTabId = connection.tabId;
     connection.tabId = tab.id; connection.error = ''; await save(connection);
-    if (oldTabId && oldTabId !== tab.id) chrome.tabs.sendMessage(oldTabId, { type: 'watch:detach' }).catch(() => {});
-    try { await chrome.tabs.sendMessage(tab.id, { type: 'watch:attach' }); }
+    if (oldTabId && oldTabId !== tab.id) extensionApi.tabs.sendMessage(oldTabId, { type: 'watch:detach' }).catch(() => {});
+    try { await extensionApi.tabs.sendMessage(tab.id, { type: 'watch:attach' }); }
     catch { throw new Error('Aba selecionada. Recarregue a página para ativar a extensão.'); }
     return { success: true };
   }
   throw new Error('Ação desconhecida.');
 }
-chrome.runtime.onMessage.addListener((message, sender, respond) => {
+extensionApi.runtime.onMessage.addListener((message, sender, respond) => {
   handle(message, sender).then(respond, error => respond({ error: error.message }));
   return true;
 });
-chrome.tabs.onRemoved.addListener(async tabId => {
+extensionApi.tabs.onRemoved.addListener(async tabId => {
   const connection = await load();
   if (connection?.tabId === tabId) { connection.tabId = null; await save(connection); }
 });

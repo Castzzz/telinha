@@ -60,10 +60,19 @@
     <div class="mobile-sheet-header"><h2 id="mobile-call-options-title">Opções da chamada</h2><button type="button" id="mobile-close-options" class="mobile-icon-button" aria-label="Fechar opções">✕</button></div>
     <button type="button" id="btn-mobile-screen" class="mobile-settings-row hidden"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span><span id="mobile-screen-label">Transmitir tela com som</span><small id="mobile-screen-hint">O Android vai pedir permissão</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row hidden" id="mobile-flip-camera-option" data-mobile-proxy="btn-mobile-flip-camera"><span>Virar câmera<small id="mobile-flip-camera-hint">Usar câmera traseira</small></span><span class="mobile-row-icon" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-6v6h6m-5 4a8 8 0 0 0 14 5l3-3m0 6v-6h-6"/></svg></span></button>
+    <button type="button" class="mobile-settings-row" id="mobile-voice-clip">Clipar vozes<small>Últimos 10 a 60 segundos</small></button>
     <button type="button" id="btn-mobile-music" class="mobile-settings-row hidden"><span>Música<small>Fila e controles do bot nesta call</small></span><span aria-hidden="true">›</span></button>
     <button type="button" id="btn-mobile-audio-output" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></span><span>Saída de áudio<small>Escolher alto-falante ou fone</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Volume e redução de ruído</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Volume e sons<small>Áudio da call e das transmissões</small></span><span aria-hidden="true">›</span></button>
+  </dialog>
+  <dialog id="voice-clip-dialog" class="modal-card" aria-labelledby="voice-clip-title">
+    <div class="modal-header"><h3 id="voice-clip-title">Clipar vozes</h3><button type="button" class="modal-close-btn" aria-label="Fechar">✕</button></div>
+    <form class="tools-form">
+      <label>Últimos segundos<input class="form-input" type="number" name="duration" min="10" max="60" value="30" required></label>
+      <label>Enviar no canal<select class="form-select" name="channel" required></select></label>
+      <button type="submit" class="btn-primary">Enviar clipe</button>
+    </form>
   </dialog>
   <dialog id="mobile-message-options" class="mobile-sheet" aria-labelledby="mobile-message-options-title">
     <div class="mobile-sheet-handle" aria-hidden="true"></div>
@@ -334,6 +343,7 @@
 
         <div class="stage-controls-right">
           <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
+          <button type="button" id="btn-voice-clip" class="btn-control-icon" title="Clipar os últimos 10 a 60 segundos de voz" aria-label="Clipar vozes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 12 12M8 16 20 4"/></svg></button>
           <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
           <button type="button" id="btn-stage-diagnostics" class="btn-control-icon" title="Diagnóstico das transmissões" aria-label="Diagnóstico das transmissões"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V7"/></svg></button>
           <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
@@ -666,17 +676,23 @@
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 4.6.0</h3>
+        <h3 id="modal-whats-new-title">📺 Teletela 4.7.0</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
+        <ul class="whats-new-list">
+          <li><strong>Clipes de voz na call.</strong> Clique na tesoura para guardar os últimos 10 a 60 segundos de conversa. Escolha o canal de texto para enviar o áudio com a data e a hora do clique.</li>
+        </ul>
+        <div id="whats-new-4-6-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 4.6.0</h4>
         <ul class="whats-new-list">
           <li><strong>Assistir juntos (experimental):</strong> conecte a extensão de Chrome, Edge ou Brave à sua call para acompanhar play, pausa e posição no YouTube e Netflix. Cada pessoa usa a própria conta; Netflix ainda precisa de validação real.</li>
           <li><strong>Baixe a extensão pelo app:</strong> abra Assistir juntos, baixe o ZIP e siga as instruções de instalação. Cada amigo gera seu próprio código de conexão.</li>
           <li><strong>Volume das transmissões:</strong> o reforço agora respeita os 300% do controle, inclusive ao restaurar o volume salvo.</li>
           <li><strong>Música na call:</strong> ajuste de compatibilidade na busca e reprodução do YouTube.</li>
         </ul>
+        </div>
         <div id="whats-new-4-5-1" class="whats-new-older hidden">
           <h4>E o que chegou na 4.5.1</h4>
         <ul class="whats-new-list">

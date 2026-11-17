@@ -1,3 +1,4 @@
+import { setupVoiceClips } from './voice-clips.js';
 import { setupMicrophoneTest } from './microphone-test.js';
 import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js';
 import { setupServerBranding } from './server-branding.js';
@@ -53,6 +54,7 @@ import { setupAccounts, accountSession, initialAccountProfile, accountProfileSna
 let channelOrganizer = null;
 let musicUI = null;
 let diceUI = null;
+let voiceClips = null;
 let watchTogetherUI = null;
 let stageSocialUI = null;
 let serverMembersUI = null;
@@ -632,6 +634,7 @@ socket.on('connect', () => {
 });
 
 socket.on('disconnect', (reason) => {
+  voiceClips?.stop();
   pendingChannelJoin = null;
   syncConnectionMonitor();
   renderServerHome();
@@ -752,7 +755,8 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
     updateUserDockProfile();
   }
 
-  if (channelId !== appState.currentChannelId) activateVoiceChannel(channelId);
+  const enteredChannel = channelId !== appState.currentChannelId;
+  if (enteredChannel) activateVoiceChannel(channelId);
 
   let ch = appState.channels.get(channelId);
   if (!ch) {
@@ -774,6 +778,8 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
     ch.userCount = ch.users.size;
   }
 
+  voiceClips?.start(channelId);
+
   // Populate recent messages
   if (Array.isArray(recentMessages)) {
     appState.channelChats.set(channelId, recentMessages);
@@ -794,6 +800,7 @@ socket.on('channel-state', ({ channelId, channelName, callStartedAt, me, users, 
   renderChannelsTree();
   updateTopBar();
   renderChannelChat(channelId);
+  if (enteredChannel) addSystemChatMessage(`Você entrou no canal #${ch.name}. Quem está na call pode clipar o último minuto de voz.`, channelId);
   updateVoiceLounge();
   if (attempt) setMobileView('sala');
   // A escolha salva restaura o botão; a captura só é aberta quando a call começa.
@@ -1240,10 +1247,6 @@ function activateVoiceChannel(cleanId) {
   updateTopBar();
   renderChannelChat(cleanId);
   updateVoiceLounge();
-
-  const targetCh = appState.channels.get(cleanId);
-  const targetName = targetCh ? targetCh.name : cleanId;
-  addSystemChatMessage(`Você entrou no canal #${targetName}.`, cleanId);
 }
 
 // Sair da call sem fechar o app: desliga voz e transmissões e fica fora de todos os canais.
@@ -2834,14 +2837,15 @@ function chatImageHtml(image) {
 }
 
 function chatAttachmentHtml(attachment) {
-  if (!attachment || typeof attachment.url !== 'string' || !/^\/api\/(chat|text)-file\/[a-f0-9-]{36}\.(bin|mp4|webm)$/.test(attachment.url)) return '';
+  if (!attachment || typeof attachment.url !== 'string' || !/^\/api\/(chat|text)-file\/[a-f0-9-]{36}\.(bin|mp4|webm|wav)$/.test(attachment.url)) return '';
   const url = chatAssetUrl(attachment.url);
   const name = typeof attachment.name === 'string' ? attachment.name : 'Arquivo';
   const size = Number(attachment.size) || 0;
   const sizeText = size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(size / 1024)} KB`;
   const download = `${url}&download=1&name=${encodeURIComponent(name)}`;
   const video = /\.(mp4|webm)$/.test(attachment.url);
-  return `${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
+  const audio = attachment.url.endsWith('.wav') ? `<audio class="chat-voice-clip" src="${escapeHtml(url)}" controls preload="none" aria-label="${escapeHtml(name)}"></audio>` : '';
+  return `${audio}${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
     <a class="chat-file" href="${escapeHtml(download)}" download="${escapeHtml(name)}">
       <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6m-3-3 3 3 3-3"/></svg>
       <span><strong>${escapeHtml(name)}</strong><small>${sizeText} · Baixar${video ? ' vídeo' : ' arquivo'}</small></span>
@@ -5382,14 +5386,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.6.0';
+const WHATS_NEW_VERSION = '4.7.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-5-1', '4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-6-0', '4-5-1', '4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -5758,6 +5762,7 @@ function attachVoiceStream(userId, stream) {
     const entry = appState.mixerManager.userMixers.get(userId);
     if (entry?.gainNode) {
       appState.userMixers.set(userId, entry.gainNode);
+      voiceClips?.attach(userId, entry.gainNode);
     }
     routeElementThroughMixer(audioEl, entry);
   }
@@ -6320,7 +6325,7 @@ function updateStageControls() {
   $('.stage-controls-left')?.classList.toggle('hidden', !watching);
   $('.reactions-bar')?.classList.toggle('hidden', !inCall);
   $('.lounge-cta')?.classList.toggle('hidden', !inCall);
-  for (const id of ['btn-share-screen', 'btn-share-camera', 'btn-soundboard']) {
+  for (const id of ['btn-share-screen', 'btn-share-camera', 'btn-soundboard', 'btn-voice-clip']) {
     document.getElementById(id)?.classList.toggle('hidden', !inCall);
   }
   $('#btn-stage-stop-watching')?.classList.toggle('hidden', !watchingOthers);
@@ -6481,6 +6486,7 @@ function cleanupUserConnections(userId) {
     appState.mixerManager.detachUserStream(userId);
     appState.mixerManager.detachScreenStream(userId);
   }
+  voiceClips?.detach(userId);
   appState.userMixers.delete(userId);
   appState.streamMixers.delete(userId);
 
@@ -6963,6 +6969,8 @@ async function handleIncomingVoiceOffer(senderId, sdp) {
 function onWebRTCChannelChange(oldChannelId, newChannelId) {
   console.log(`[WebRTC] Channel changed from #${oldChannelId} to #${newChannelId}. Tearing down old mesh...`);
 
+  voiceClips?.stop();
+
   // Close all inbound screen connections
   for (const [senderId, pc] of appState.screenPeersIn.entries()) {
     try { pc.close(); } catch (_) {}
@@ -7070,7 +7078,8 @@ async function restartMicrophone(deviceId) {
     appState.localMicStream?.getTracks().forEach((t) => t.stop());
     appState.localMicStream = await openMicrophone(deviceId);
     const newTrack = appState.localMicStream.getAudioTracks()[0];
-    if (newTrack) newTrack.enabled = wasEnabled;
+    if (newTrack) newTrack.enabled = wasEnabled && appState.myUser.isMicOn;
+    voiceClips?.setMic();
     const voicePcs = [...appState.voicePeers.values()];
     // Voz pelo SFU: troca a faixa na mesma conexão (sem reconectar)
     const pub = appState.sfuVoicePublisher;
@@ -7129,6 +7138,8 @@ async function onMicrophoneToggle(isMicOn) {
       });
 
       syncMobileState(appState);
+
+      voiceClips?.setMic();
 
       // Initialize or enable VAD
       if (!appState.vadDetector && appState.localMicStream) {
@@ -7225,6 +7236,9 @@ function onDeafenToggle(isDeafened) {
       }
     }
   }
+
+  voiceClips?.deafen(isDeafened);
+  voiceClips?.setMic();
 
   // CRITICAL ISOLATION CHECK: Outbound screen loopback audio MUST continue playing for peers!
   if (appState.localScreenStream) {
@@ -8266,6 +8280,7 @@ function initApp() {
     window.history.replaceState({}, '', `${window.location.pathname}${query ? `?${query}` : ''}${window.location.hash}`);
   }
   initAudioSystem();
+  voiceClips = setupVoiceClips({ appState, socket, showToast });
   musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options) });
   diceUI = setupDice({ socket, appState, showToast, escapeHtml });
   watchTogetherUI = setupWatchTogether({ socket, appState, serverUrl: SERVER_URL, mountStageOverlay, showToast });

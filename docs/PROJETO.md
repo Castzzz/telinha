@@ -189,7 +189,12 @@ reais, anúncios e Netflix ainda precisam de validação.
   da call, ser movido/expulso ou desconectar revoga os próprios códigos/tokens. Se o guia
   sair da sessão/call, ela termina. Não há retomada automática após reconectar o app.
 - A extensão Manifest V3 fica em `public/watch-extension/`, para Chrome/Edge/Brave no
-  computador. O popup solicita permissão apenas para o host do servidor informado no
+  computador; extensão 0.2.0 acrescenta Firefox 140+, disponível pelo download do
+  servidor desde 14/11/2026 (instalação temporária, sem assinatura Mozilla).
+  O manifesto combina `background.service_worker` para Chromium 121+ e
+  `background.scripts` para Firefox, com ID fixo `assistir-juntos@teletela`.
+  Os scripts escolhem `browser` quando disponível e usam `chrome` como alternativa.
+  O popup solicita permissão apenas para o host do servidor informado no
   código (HTTPS, ou HTTP em localhost/127.0.0.1). Só a aba selecionada é sincronizada.
   As credenciais ficam em `chrome.storage.session`, acessível pelos contextos confiáveis
   da extensão, sem cookies/senhas dos serviços. Fechar o navegador exige parear de novo.
@@ -2205,3 +2210,57 @@ Popup de novidades atualizado; Android 4.6.0/código 17.
   SHA-256 idêntico ao pacote local. Corrige o `Cannot GET` da versão anterior no servidor.
 - Backup prévio íntegro: `~/Teletela-backups/teletela-dados-2026-11-14_12-55-42.tar.gz`
   (`gzip -t` passou). Segredos preservados na VM.
+
+
+### Firefox na extensão 0.2.0 — adaptação local (14/11/2026)
+
+Solicitada pelo dono após a publicação da 4.6.0. O mesmo pacote passa a carregar em
+Firefox 140+ e Chromium 121+, sem mudar o protocolo nem exigir mudança no servidor.
+A instalação Firefox usa `about:debugging#/runtime/this-firefox` e o `manifest.json`
+extraído; é temporária até fechar/reiniciar o navegador. Instalação permanente ainda
+depende de assinatura pela Mozilla. Não desativar a verificação de assinatura.
+
+- Firefox 159.0.1 no Linux, em perfil descartável via Selenium/geckodriver: manifesto
+  instalado, background ativo, popup aberto, autorização do host e pareamento local
+  passaram. O teste acionou a conexão pela API do popup após conceder a permissão,
+  sem automatizar o clique final do formulário dentro do painel.
+- Content script instalado em aba YouTube enviou play, pausa e avanço de um WebM
+  de teste para o servidor local; desconexão passou. Isso não valida anúncios,
+  dois participantes sincronizados nem episódio real da Netflix.
+- `npm test`: 62 testes passaram. `node --test tests/watch-extension.test.js`: dois
+  testes passaram para namespaces `browser`/`chrome`, sem exposição do token ao popup,
+  bloqueio de abas não selecionadas e desconexão.
+- Pacote local gerado com `npm run watch:extension`; instruções no painel, README e
+  LEIA-ME atualizadas. Naquela etapa ainda sem nova release/deploy; o deploy direcionado
+  autorizado posteriormente está registrado abaixo.
+
+
+### Download público da extensão Firefox 0.2.0 (14/11/2026)
+
+Atualização do servidor autorizada pelo dono. Publicados somente os oito arquivos de
+`public/watch-extension/` e `public/watch-together.js` (instruções no site). A rota do
+ZIP lê os arquivos a cada requisição; não foi necessário reiniciar Node, SFU ou Caddy.
+A pasta da extensão foi trocada atomicamente, com cópia do código anterior em
+`/opt/telinha/extension-backup-h_xtc_t5`. Demais arquivos e configuração preservados.
+
+- Backup prévio íntegro: `~/Teletela-backups/teletela-dados-2026-11-14_13-34-18.tar.gz`
+  (`gzip -t` passou).
+- `node --test tests/watch-extension.test.js`: dois testes passaram antes da publicação;
+  testes gerais e Firefox real da preparação anterior aproveitados.
+- Download público conferido: ZIP íntegro, oito arquivos, manifesto 0.2.0 e bytes iguais
+  ao pacote local. SHA-256: `a18fe28d17b7e704e19f62a1d58a56e49332bdf9697b3b6a1cf5d2a3c34ebcfd`.
+- Node, SFU e Caddy ativos e com mesmos PIDs/horários de início antes e depois;
+  `/api/health` e `/sfu/health` saudáveis. Hashes do manifesto e da ajuda iguais aos locais.
+- Sem nova release desktop/Android nem alteração dos anexos da release 4.6.0 no GitHub.
+  O botão **Baixar extensão** dos apps já instalados agora entrega a versão 0.2.0.
+  As instruções novas dentro do app instalado dependem de uma release futura.
+
+### Clipes de voz da chamada
+
+Na entrada confirmada no canal, `public/voice-clips.js` liga ao mixer um AudioWorklet
+com histórico circular de 60 s (PCM mono, 16 kHz, 1,92 MB). Entram o mic local e os
+ganhos individuais das vozes recebidas por SFU ou P2P. Ensurdecer silencia a entrada.
+Tela, música e soundboard têm outras rotas. Sair, trocar de canal ou desconectar
+descarta a sessão. A tesoura congela uma cópia para escolher o trecho e o destino.
+O evento existente `text-file` publica o WAV e a data/hora do clique no canal escolhido,
+com as permissões, a persistência e a cota dos anexos. A VM só recebe o trecho enviado.

@@ -1,6 +1,8 @@
+// Firefox usa APIs com promessas pelo namespace browser.
+const extensionApi = globalThis.browser || globalThis.chrome;
 const $ = selector => document.querySelector(selector);
 const send = async message => {
-  const result = await chrome.runtime.sendMessage(message);
+  const result = await extensionApi.runtime.sendMessage(message);
   if (result?.error) throw new Error(result.error);
   return result;
 };
@@ -32,14 +34,14 @@ $('#connect').addEventListener('submit', event => {
     if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error();
     origin = `${url.protocol}//${url.hostname}/*`;
   } catch { $('#status').textContent = 'Código inválido. Copie o código completo no Teletela.'; return; }
-  const permission = chrome.permissions.request({ origins: [origin] });
+  const permission = extensionApi.permissions.request({ origins: [origin] });
   run(async () => {
     if (!await permission) throw new Error('Permita a conexão com o servidor para assistir junto.');
     await send({ type: 'watch:connect', ...payload }); $('#code').value = '';
   });
 });
 $('#bind').addEventListener('click', () => run(async () => {
-  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await extensionApi.tabs.query({ active: true, currentWindow: true });
   await send({ type: 'watch:bind', tabId: tab.id });
 }));
 $('#open').addEventListener('click', () => run(() => send({ type: 'watch:open' })));
