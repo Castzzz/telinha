@@ -13,7 +13,17 @@
 .diagnostic-card dd { margin: 0; text-align: right; }
 @media (max-width: 480px) { .tools-fields { grid-template-columns: 1fr; } }
 
-#voice-clip-dialog { margin: auto; color: var(--text-primary); width: min(420px, calc(100vw - 32px)); }
-#voice-clip-dialog:not([open]) { display: none; }
-#voice-clip-dialog::backdrop { background: rgb(0 0 0 / 60%); }
+:is(#voice-clip-dialog, #sound-trim) { margin: auto; color: var(--text-primary); width: min(420px, calc(100vw - 32px)); }
+:is(#voice-clip-dialog, #sound-trim):not([open]) { display: none; }
+:is(#voice-clip-dialog, #sound-trim)::backdrop { background: rgb(0 0 0 / 60%); }
 .chat-voice-clip { display: block; max-width: 100%; }
+
+#voice-clip-preview { width: 100%; }
+
+.clip-recorded { display: block; color: var(--text-muted); margin: 4px 0; }
+
+#sound-trim audio { width: 100%; }
+#sound-trim [role=status]:empty { display: none; }
+.live-thumbnail { position: fixed; z-index: 2000; pointer-events: none; width: min(240px, 90vw); height: 135px; object-fit: contain; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border-medium); }
+#chat-reading { display: flex; justify-content: center; gap: 6px; }
+#chat-reading button { padding: 4px 10px; font-size: 12px; }

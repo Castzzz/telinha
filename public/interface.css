@@ -1,0 +1,42 @@
+/* Paleta compartilhada pela janela de entrada e pela sala. */
+:root:root {
+  --bg-primary: #151621;
+  --bg-secondary: #1d1f2c;
+  --bg-tertiary: #101119;
+  --bg-floating: #202230;
+  --bg-card: #252736;
+  --bg-elevated: var(--bg-card);
+  --border-subtle: #303241;
+  --border-medium: #424556;
+  --text-header: #f5f4ff;
+  --text-normal: #dfdfeb;
+  --text-muted: #abacbf;
+  --accent-brand: #6951cd;
+  --accent-brand-hover: #5942b9;
+  --interface-ink: color-mix(in srgb, var(--accent-brand) 44%, white);
+  --interface-tint: color-mix(in srgb, var(--accent-brand) 13%, var(--bg-secondary));
+  --interface-line: color-mix(in srgb, var(--accent-brand) 42%, var(--border-medium));
+  --interface-radius: 14px;
+}
+:root[data-theme="preto"] {
+  --bg-primary: #090a0e;
+  --bg-secondary: #111217;
+  --bg-tertiary: #030405;
+  --bg-floating: #191a21;
+  --bg-card: #1a1b22;
+  --border-subtle: #26272f;
+  --border-medium: #383943;
+}
+:root[data-theme="claro"] {
+  --bg-primary: #f5f5fa;
+  --bg-secondary: #fff;
+  --bg-tertiary: #ebebf3;
+  --bg-floating: #fff;
+  --bg-card: #eeeef7;
+  --text-header: #212132;
+  --text-normal: #323346;
+  --text-muted: #626277;
+  --border-subtle: #dcdce7;
+  --border-medium: #c6c6d6;
+  --interface-ink: var(--accent-brand);
+}

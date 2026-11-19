@@ -1,5 +1,5 @@
-function voiceWav(samples) {
-  const buffer = new ArrayBuffer(44 + samples.byteLength);
+export function voiceWav(samples, rate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   const tag = (offset, value) => [...value].forEach((c, i) => view.setUint8(offset + i, c.charCodeAt(0)));
   tag(0, 'RIFF');
@@ -8,13 +8,17 @@ function voiceWav(samples) {
   view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);
   view.setUint16(22, 1, true);
-  view.setUint32(24, 16000, true);
-  view.setUint32(28, 32000, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate * 2, true);
   view.setUint16(32, 2, true);
   view.setUint16(34, 16, true);
   tag(36, 'data');
-  view.setUint32(40, samples.byteLength, true);
-  samples.forEach((sample, i) => view.setInt16(44 + i * 2, sample, true));
+  view.setUint32(40, samples.length * 2, true);
+  // Conserva a dinâmica quando a soma de várias vozes ultrapassa o limite do WAV.
+  let peak = 1;
+  for (let i = 0; i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]));
+  const scale = 32767 / peak;
+  for (let i = 0; i < samples.length; i++) view.setInt16(44 + i * 2, Math.round(samples[i] * scale), true);
   return buffer;
 }
 
@@ -25,6 +29,41 @@ export function setupVoiceClips({ appState, socket, showToast }) {
   const { duration, channel } = form.elements;
   const submit = form.querySelector('[type="submit"]');
   let session, moduleReady, snapshot, markedAt, pending = false, destination = '', preferredSeconds = 30;
+
+  const preview = dialog.querySelector('audio');
+  const rate = Math.min(ctx?.sampleRate || 48000, 48000);
+  let previewUrl, prepared, preparedSeconds;
+  // O volume geral e a saída são os mesmos da call.
+  const players = new WeakMap();
+  document.addEventListener('play', event => {
+    const player = event.target;
+    const output = appState.mixerManager?.outputGain;
+    if (!output || !player.matches?.('#voice-clip-preview, .chat-voice-clip, #sound-trim audio')) return;
+    if (!players.has(player)) {
+      const source = ctx.createMediaElementSource(player);
+      players.set(player, source);
+      player.addEventListener('pause', () => source.disconnect());
+    }
+    players.get(player).connect(output);
+    ctx.resume().catch(() => {});
+  }, true);
+
+  function clearPreview() {
+    preview.pause();
+    preview.removeAttribute('src');
+    preview.load();
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = prepared = null;
+  }
+  function updatePreview() {
+    clearPreview();
+    if (!snapshot || !duration.validity.valid) return;
+    preparedSeconds = Number(duration.value);
+    prepared = voiceWav(snapshot.subarray(-preparedSeconds * rate), rate);
+    previewUrl = URL.createObjectURL(new Blob([prepared], { type: 'audio/wav' }));
+    preview.src = previewUrl;
+  }
+  duration.addEventListener('input', updatePreview);
 
   function setMic() {
     if (!session?.bus) return;
@@ -92,21 +131,38 @@ export function setupVoiceClips({ appState, socket, showToast }) {
       return showToast('O áudio da call ainda não está pronto para clipar.', 'error');
     }
     const channels = [...appState.textChannels.values()].filter(ch => ch.canWrite !== false);
-    if (!channels.length) return showToast('Você precisa de um canal de texto onde possa enviar o clipe.', 'error');
+
     channel.replaceChildren(...channels.map(ch => new Option('#' + ch.name, ch.id)));
     if (channels.some(ch => ch.id === destination)) channel.value = destination;
     const current = session;
     pending = true;
     markedAt = new Date();
-    current.node.port.onmessage = ({ data }) => {
+    current.node.port.onmessage = async ({ data }) => {
       if (session !== current) return;
+      if (ctx.sampleRate > rate && data.length) {
+        // Só aparelhos acima de 48 kHz precisam do filtro de reamostragem do navegador.
+        try {
+          const offline = new OfflineAudioContext(1, Math.max(1, Math.round(data.length * rate / ctx.sampleRate)), rate);
+          const source = offline.createBufferSource();
+          source.buffer = offline.createBuffer(1, data.length, ctx.sampleRate);
+          source.buffer.copyToChannel(data, 0);
+          source.connect(offline.destination); source.start();
+          data = (await offline.startRendering()).getChannelData(0);
+        } catch {
+          if (current === session) { pending = false; showToast('Não deu para preparar o áudio do clipe.', 'error'); }
+          return;
+        }
+        if (current !== session) return;
+      }
       pending = false;
-      const seconds = Math.floor(data.length / 16000);
+      const seconds = Math.floor(data.length / rate);
       if (seconds < 10) return showToast('Aguarde pelo menos 10 segundos na call para clipar.');
       snapshot = data;
       duration.max = seconds;
       duration.value = Math.min(seconds, preferredSeconds);
-      submit.disabled = false;
+      form.elements.clipTitle.value = markedAt.toLocaleString('pt-BR');
+      updatePreview();
+      submit.disabled = !channel.value;
       dialog.showModal();
     };
     current.node.port.postMessage('clipar');
@@ -116,24 +172,26 @@ export function setupVoiceClips({ appState, socket, showToast }) {
   ctx?.addEventListener('statechange', () => {
     if (ctx.state !== 'running') session?.node?.port.postMessage('limpar');
   });
+  document.querySelector('#btn-dock-clip').onclick = open;
   document.querySelector('#btn-voice-clip').onclick = open;
   document.querySelector('#mobile-voice-clip').onclick = open;
   dialog.querySelector('.modal-close-btn').onclick = () => dialog.close();
-  dialog.addEventListener('close', () => { snapshot = null; });
+  dialog.addEventListener('close', () => { snapshot = null; clearPreview(); });
   form.onsubmit = async event => {
     event.preventDefault();
     if (!snapshot || submit.disabled || !socket.connected) return;
     const seconds = Number(duration.value);
     const clip = snapshot;
-    const data = voiceWav(snapshot.subarray(-seconds * 16000));
+    if (!prepared || preparedSeconds !== seconds) updatePreview();
+    const data = prepared;
     const stamp = markedAt.toLocaleString('pt-BR');
     preferredSeconds = seconds;
     destination = channel.value;
     submit.disabled = true;
     try {
       const response = await socket.timeout(20000).emitWithAck('text-file', {
-        channelId: destination, mime: 'audio/wav', name: 'clipe-de-voz.wav', data,
-        text: `Clipe da call · ${seconds} s · ${stamp}`
+        channelId: destination, mime: 'audio/wav', name: 'clipe-de-voz.wav', data, clippedAt: markedAt.getTime(),
+        text: form.elements.clipTitle.value.trim() || stamp
       });
       if (!response?.success) throw new Error(response?.error || 'Falha ao enviar o clipe.');
       if (snapshot === clip) dialog.close();

@@ -149,9 +149,9 @@ function startHotkeySocket() {
   try { fs.unlinkSync(sock); } catch {}
   hotkeySocketServer = http.createServer((req, res) => {
     const action = (req.url || '').replace(/^\/+/, '');
-    const ok = ['mute', 'deafen'].includes(action) && mainWindow && !mainWindow.isDestroyed();
+    const ok = ['mute', 'deafen', 'clip'].includes(action) && mainWindow && !mainWindow.isDestroyed();
     if (ok) mainWindow.webContents.send('global-hotkey', action);
-    res.writeHead(ok ? 200 : 404).end(ok ? 'ok\n' : 'ação desconhecida (use /mute ou /deafen)\n');
+    res.writeHead(ok ? 200 : 404).end(ok ? 'ok\n' : 'ação desconhecida (use /mute, /deafen ou /clip)\n');
   });
   hotkeySocketServer.on('error', (err) => console.warn('[Electron] Socket de atalhos:', err.message));
   hotkeySocketServer.listen(sock);
@@ -637,7 +637,7 @@ function setupPermissionsAndCapture() {
   });
 }
 
-// Botões de minimizar/maximizar/fechar com a cor da barra de cima de cada tema (--bg-tertiary)
+// Fundo da janela e cor dos símbolos nativos em cada tema.
 const THEME_TITLEBAR = {
   escuro: { color: '#1e1f22', symbolColor: '#dbdee1' },
   preto: { color: '#000000', symbolColor: '#dbdee1' },
@@ -648,6 +648,11 @@ function titleBarColors(theme) {
   return THEME_TITLEBAR[theme] || THEME_TITLEBAR.escuro;
 }
 
+function mainWindowOverlay(colors) {
+  // Deixa a própria barra aparecer sob os três botões, inclusive com papel de parede.
+  return { color: '#00000000', symbolColor: colors.symbolColor, height: 52 };
+}
+
 function applyThemeToWindow(theme) {
   if (!mainWindow || mainWindow.isDestroyed()) return;
   const colors = titleBarColors(theme);
@@ -655,7 +660,7 @@ function applyThemeToWindow(theme) {
   updateStreamWindowTheme(mainWindow, colors);
   if (process.platform === 'darwin') return;
   try {
-    mainWindow.setTitleBarOverlay({ ...colors, height: 52 });
+    mainWindow.setTitleBarOverlay(mainWindowOverlay(colors));
   } catch (err) {
     console.warn('[Electron] Não deu pra mudar a cor da barra:', err.message);
   }
@@ -679,7 +684,7 @@ async function createWindow() {
     // direito da barra do app (alguns ambientes Linux, como os tiling, não mostram botão nenhum)
     ...(process.platform === 'darwin'
       ? {}
-      : { titleBarStyle: 'hidden', titleBarOverlay: { ...initialColors, height: 52 } }),
+      : { titleBarStyle: 'hidden', titleBarOverlay: mainWindowOverlay(initialColors) }),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

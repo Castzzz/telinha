@@ -24,3 +24,14 @@ html.has-personal-wallpaper[data-look="novo"] .chat-drawer {
 }
 /* Texto e controles continuam sobre superfícies sólidas, sem blur ou animação extra. */
 html.has-personal-wallpaper .home-header { padding: 16px; background: var(--bg-primary); border-radius: var(--radius-md); }
+
+.visual-picker { min-width: 0; padding: 0; border: 0; margin-bottom: 20px; }
+[data-somente-terminal][hidden] { display: none; }
+.visual-picker legend { margin-bottom: 10px; color: var(--text-header); font-size: 14px; font-weight: 650; }
+.visual-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 112px), 1fr)); gap: 8px; }
+.visual-picker .visual-choice { position: relative; display: block; margin: 0; border: 1px solid var(--border-medium); border-radius: 9px; overflow: hidden; cursor: pointer; background: var(--bg-secondary); }
+.visual-choice img { display: block; width: 100%; height: auto; }
+.visual-choice input { position: absolute; right: 8px; bottom: 11px; accent-color: var(--accent-brand); }
+.visual-choice span { display: block; padding: 8px 26px 8px 10px; font-size: 13px; font-weight: 600; color: var(--text-header); }
+.visual-picker .visual-choice:has(:checked) { border-color: var(--accent-brand); box-shadow: inset 0 -2px var(--accent-brand); }
+.visual-picker .visual-choice:focus-within { outline: 2px solid var(--text-header); outline-offset: 2px; }

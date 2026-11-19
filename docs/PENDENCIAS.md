@@ -1,9 +1,37 @@
 # Pendências atuais
 
-Atualizado em 14/11/2026. Última versão publicada: **4.6.0**.
+Última publicação conferida em 18/11/2026. [Teletela 4.7.0, de 17/11/2026](https://github.com/Castzzz/telinha/releases/tag/v4.7.0).
 Esta lista contém trabalho pendente; registros antigos ficam no [histórico](historico/PENDENCIAS.md).
 
+## Implementado localmente em 19/11/2026
+
+- [x] **Clipe → soundboard.** Selecionar o começo e o fim de um trecho da call, ouvir a prévia, dar um nome e adicionar ao soundboard. Aumentar de 10 para **15 segundos** a duração máxima de cada som, tanto no envio de arquivo quanto na criação a partir de clipe.
+- [x] **K7, o bot de música.** Personagem em forma de fita cassete, conversa lateral para pedidos e fila compartilhada em uma aba própria. Validação pendente.
+- [x] **Barra da transmissão.** Música, dados, diagnóstico e parar de assistir ficam em Mais opções (⋯). Assistir juntos fica no topo e o modo Só call foi retirado.
+- [x] **Voltar de onde parei no chat.** Reabrir a conversa na primeira mensagem não lida, com atalho para pular às recentes. Ao seguir uma resposta até a mensagem original, permitir voltar ao ponto anterior de leitura.
+- [x] **Prévia no selo AO VIVO.** Ao passar o mouse ou focar o selo pelo teclado, mostrar uma miniatura estática antes de entrar na transmissão. Proposta: capturar um quadro de baixa resolução no aparelho de quem transmite a cada 15 segundos, manter apenas o mais recente em memória e liberar a imagem só para quem pode assistir. Distinguir as telas de cada pessoa e retirar a miniatura quando o compartilhamento terminar.
+
+## Candidatos à 5.0 na main
+
+Inventário do código local em 18/11/2026, comparado com a tag `v4.7.0`. A combinação destas mudanças ainda precisa de validação.
+
+| Área | Mudança desde a 4.7.0 |
+| --- | --- |
+| Aparência | Roda e Terminal opcionais, com o Clássico como padrão. Cor do tema para superfícies, cor primária para ações e secundária para destaques. |
+| Call e navegação | Última fileira centralizada no Roda. Terminal com índice por teclado, indicador de fala na bolinha e cursor configurável. Animações de entrada e de painéis. O título Canais abre o início da sala com a call conectada. Botões da janela principal com fundo transparente. |
+| Conversas | Histórico privado entre contas amigas, paginado e disponível nos aparelhos da conta. Cartão do primeiro link nos canais, no chat da call e nas conversas diretas, com miniatura para YouTube. |
+| Clipes | Pré-escuta e título antes do envio, renomeação, gravação em até 48 kHz, tesoura no painel de voz e atalho configurável no desktop. A gravação de trechos de 10 a 60 segundos já saiu na 4.7.0. |
+
+Sintonia, Recorte, Órbita e Fliperama continuam no trabalho de redesign em `design/estudio`. Há arquivos locais ainda fora do Git nos dois diretórios de trabalho.
+
+Antes da publicação, conferir a atualização da 4.7.0 com perfil e preferências existentes, a troca de visuais e cores no desktop e no Android, DMs entre contas, prévias de links e reprodução de clipes antigos e novos. As DMs, os metadados de links e o reconhecimento dos novos WAVs dependem do servidor atualizado. O pacote, o popup de novidades e a configuração do APK ainda identificam a 4.7.0.
+
 ## Assistir juntos — experimental, 4.6.0
+
+- [x] Extensão 0.2.0 para Firefox 140+ (14/11/2026), com
+  pareamento e comandos de vídeo testados em perfil descartável no Linux.
+  Instalação temporária documentada e download no servidor atualizado. Ainda sem
+  assinatura Mozilla; anexo da release 4.6.0 no GitHub permanece na versão antiga.
 
 - [x] Implementar sessão por call, guia transferível, extensão Chrome/Edge/Brave para
   YouTube/Netflix, código individual e revogação ao sair da call; pacote ZIP e documentação.

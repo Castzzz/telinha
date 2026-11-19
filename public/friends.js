@@ -1,6 +1,8 @@
+import { setupDirectMessages } from './direct-messages.js';
 import { imageCropStyle } from './image-crop.js';
 import { PRESENCE_LABELS, normalizePresence } from './presence.js';
-export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab, serverUrl = '', assetKey = () => '' }) {
+export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab, showToast, serverUrl = '', assetKey = () => '' }) {
+  const direct = setupDirectMessages({ socket, getAccount, serverUrl });
   const tab = document.createElement('button');
   tab.type = 'button'; tab.className = 'settings-tab'; tab.dataset.settingsTab = 'amigos';
   tab.innerHTML = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-2a8 8 0 0 1 16 0v2M17 4a4 4 0 0 1 0 8M23 21v-2a7 7 0 0 0-4-6"/></svg><span>Amigos</span>';
@@ -57,6 +59,13 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
       if (kind === 'friends') { const dot = document.createElement('span'); dot.className = 'user-presence-dot'; dot.dataset.presence = socket.connected && person.online ? normalizePresence(person.presence || 'online') : 'offline'; avatar.append(dot); }
       info.append(name, detail); row.append(avatar, info);
       const actions = document.createElement('div'); actions.className = 'friend-actions';
+      if (kind === 'friends') {
+        const chat = document.createElement('button');
+        chat.type = 'button'; chat.className = 'btn-secondary'; chat.textContent = 'Conversar';
+        chat.disabled = !socket.connected;
+        chat.onclick = () => direct.open(person.id);
+        actions.append(chat);
+      }
       for (const action of kind === 'incoming' ? ['accept', 'reject'] : kind === 'outgoing' ? ['cancel'] : ['remove']) {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'btn-secondary';
         button.textContent = labels[action]; button.disabled = busy || !socket.connected;
@@ -66,8 +75,26 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
       row.append(actions); root.append(row);
     }
   }
+  const perfil = document.getElementById('user-popover-friend');
+  let pessoa = null;
+  function atualizarPerfil() {
+    if (!perfil) return;
+    const conta = getAccount();
+    perfil.hidden = !pessoa || !conta || pessoa === conta.id || !supported;
+    if (perfil.hidden) return;
+    const tem = lista => lista.some(item => item.id === pessoa);
+    const amigo = tem(state.friends), enviado = tem(state.outgoing), recebido = tem(state.incoming);
+    const label = amigo ? 'Amigos' : enviado ? 'Pedido enviado' : recebido ? 'Aceitar pedido' : 'Adicionar amigo';
+    perfil.querySelector('span').textContent = label;
+    perfil.querySelector('[data-sinal]').setAttribute('d', amigo || recebido ? 'm15 11 2 2 4-5' : enviado ? 'M16 11h5' : 'M18 8v6m-3-3h6');
+    perfil.dataset.estado = amigo ? 'amigos' : enviado ? 'pendente' : 'disponivel';
+    perfil.disabled = busy || amigo || enviado || !socket.connected;
+    perfil.onclick = () => request(recebido ? 'accept' : 'request', { accountId: pessoa }, true);
+  }
   function render() {
+    atualizarPerfil();
     const account = getAccount();
+    direct.sync(state.friends);
     $('#friends-status').textContent = !account ? 'Use uma conta para salvar seus amigos entre o PC e o celular.'
       : !socket.connected ? 'Sem conexão. Os pedidos voltam a funcionar quando a sala reconectar.'
       : !supported ? 'Esta sala ainda não oferece amigos. Atualize o servidor para usar esse recurso.'
@@ -80,17 +107,20 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
     renderList('#friends-outgoing', state.outgoing, 'outgoing');
     tab.querySelector('span').textContent = state.incoming.length && account ? `Amigos (${state.incoming.length})` : 'Amigos';
   }
-  async function request(action, payload) {
+  async function request(action, payload, peloPerfil = false) {
     if (busy || !socket.connected || !getAccount()) return;
     busy = true; feedback(); render();
     try {
       const result = await socket.timeout(10000).emitWithAck(`friend-${action}`, payload);
       if (!result?.success) throw new Error(result?.error || 'Não deu para concluir.');
       state = result;
-      if (action === 'request') $('#friend-username').value = '';
+      if (action === 'request' && !peloPerfil) $('#friend-username').value = '';
       feedback(action === 'request' ? 'Pedido enviado.' : action === 'accept' ? 'Amizade aceita.' : 'Lista atualizada.');
-    } catch (error) { feedback(error.message === 'operation has timed out' ? 'A sala demorou para responder. Confira a lista antes de tentar de novo.' : error.message, true); }
-    finally { busy = false; render(); }
+    } catch (error) {
+      const aviso = error.message === 'operation has timed out' ? 'A sala demorou para responder. Confira a lista antes de tentar de novo.' : error.message;
+      feedback(aviso, true);
+      if (peloPerfil) showToast?.(aviso, 'error');
+    } finally { busy = false; render(); }
   }
   tab.addEventListener('click', () => { selectSettingsTab('amigos'); render(); });
   $('#friends-open-account').addEventListener('click', () => selectSettingsTab('conta'));
@@ -101,4 +131,5 @@ export function setupFriends({ socket, tabs, body, getAccount, selectSettingsTab
   socket.on('connect', () => { supported = false; state = { friends: [], incoming: [], outgoing: [] }; render(); });
   socket.on('disconnect', render);
   render();
+  return { mostrarPerfil(id) { pessoa = id; atualizarPerfil(); } };
 }

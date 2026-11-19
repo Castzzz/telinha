@@ -2,7 +2,7 @@ import { PRESENCE_LABELS, normalizePresence } from './presence.js';
 const PEOPLE = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M1 21v-2a8 8 0 0 1 16 0v2M17 4a4 4 0 0 1 0 8M23 21v-2a7 7 0 0 0-4-6"/></svg>';
 const narrow = window.matchMedia('(max-width: 1279px)');
 
-export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName, openProfile, serverUrl, assetKey }) {
+export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName, openProfile, serverUrl, assetKey, closeMusic }) {
   const panel = document.createElement('aside'); panel.id = 'server-members'; panel.className = 'server-members';
   panel.setAttribute('aria-labelledby', 'server-members-title');
   panel.innerHTML = `<div id="members-resizer" class="members-resizer" role="separator" aria-orientation="vertical" aria-label="Largura da lista de membros" tabindex="0" title="Arraste para ajustar a largura; duplo clique restaura"></div><div class="server-members-header"><div>${PEOPLE}<h2 id="server-members-title">Membros</h2><span id="server-members-count"></span></div><button type="button" id="server-members-close" class="btn-icon-close" aria-label="Recolher membros">✕</button></div>
@@ -16,7 +16,7 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
     button.innerHTML = `${PEOPLE}${id === 'btn-server-members' ? '<span>Membros</span>' : ''}`;
     button.setAttribute('aria-label', 'Membros do servidor'); button.setAttribute('aria-controls', panel.id); button.title = 'Membros do servidor';
     document.querySelector(parent).append(button); buttons.push(button);
-    button.addEventListener('click', () => setOpen(!isOpen(), button));
+    button.addEventListener('click', () => setOpen(closeMusic?.() || !isOpen(), button));
   }
   const $ = selector => panel.querySelector(selector);
   let members = [], received = false, supported = null, desktopOpen = prefs.membersOpen !== false, overlayOpen = false, returnFocus;
@@ -30,7 +30,7 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
     if (!open) returnFocus?.focus();
   }
   function renderVisibility() {
-    const open = isOpen(); panel.classList.toggle('hidden', !open);
+    const open = isOpen() && !document.querySelector('#modal-music:not(.hidden)'); panel.classList.toggle('hidden', !open);
     document.body.classList.toggle('members-open', open); scrim.classList.toggle('hidden', !open || !narrow.matches);
     buttons.forEach(button => button.setAttribute('aria-expanded', String(open)));
     if (narrow.matches) { panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-modal', 'true'); }
@@ -86,6 +86,6 @@ export function setupServerMembers({ socket, prefs, savePrefs, avatar, applyName
   socket.on('connect', () => { supported = null; render(); });
   renderVisibility(); render();
   return { findMember(id) { const member = members.find(member => member.memberId === id); return member ? shown(member) : null; }, find(id) { const member = members.find(member => member.id === id); return member ? shown(member) : null; },
-    list() { return members.map(shown); },
+    renderVisibility, list() { return members.map(shown); },
     closeOverlay() { if (!narrow.matches || !overlayOpen) return false; setOpen(false); return true; } };
 }

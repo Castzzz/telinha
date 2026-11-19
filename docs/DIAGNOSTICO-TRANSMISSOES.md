@@ -1,5 +1,44 @@
 # Imagem congelada e quedas de qualidade
 
+## Janela do Firefox congela ao entrar em tela cheia no Linux (14/11/2026)
+
+Relato: transmitir apenas a janela do Firefox com YouTube em modo teatro e entrar em
+tela cheia congela a imagem no Teletela. O vídeo continua normal no Firefox; sair da
+tela cheia não recupera a transmissão. Compartilhar o monitor inteiro funciona.
+Outro amigo teve o problema no Linux; Windows ainda não foi testado nesse cenário.
+
+Inspeção somente de leitura deste PC: Hyprland 0.57.1/Wayland,
+`xdg-desktop-portal-hyprland` 1.5.0, PipeWire 1.6.10, Firefox 159.0.1.
+No journal do portal, em 14/11 às 19:02:44, a seleção de janela foi seguida de
+`Incompatible formats, renegotiate stream` e
+`DMA-BUF fixation failed after 2 attempts, falling back to SHM`. Às 19:03:05
+houve novas renegociações/falhas de alocação e seleção do monitor inteiro.
+Esses registros reforçam a hipótese de falha na captura, mas não registram o instante
+da entrada em tela cheia nem comprovam sozinhos a causa do congelamento.
+
+A [issue #451 do portal](https://github.com/hyprwm/xdg-desktop-portal-hyprland/issues/451)
+descreve o mesmo gatilho na versão 1.5.0. Conferido também no
+[código dessa versão](https://github.com/hyprwm/xdg-desktop-portal-hyprland/blob/v1.5.0/src/portals/Screencopy.cpp):
+os callbacks `hlOnFailed` e `wlrOnFailed` apenas marcam `FRAME_FAILED`, sem devolver
+o buffer ao PipeWire nem agendar o próximo quadro. A issue propõe recuperação nesse
+caminho. A correspondência é forte, mas falta uma reprodução instrumentada local;
+não atribuir o problema ao SFU ou afirmar que todo Linux tem a mesma causa.
+
+Contorno confirmado pelo dono: compartilhar o monitor inteiro. Alternativa ainda
+não validada: entrar em tela cheia **antes** de selecionar a janela para compartilhar,
+evitando mudar seu tamanho durante a captura. Não há correção aplicada nesta análise:
+nenhuma alteração no app, portal, serviços do usuário ou servidor. Testes sintéticos
+de câmera/player não validam esse caminho real do portal. Para confirmar uma correção,
+repetir teatro → tela cheia → teatro com captura de janela e verificar quadros novos
+na prévia do Teletela e no receptor, correlacionando os horários com o journal.
+
+Segunda análise pelo Gemini via AgY, autorizada pelo dono, concordou com a hipótese e
+com os limites acima. Forçar SHM pode isolar a negociação DMA-BUF, mas não corrige os
+callbacks sem retomada; não foi aplicado. Reabrir a captura automaticamente no app
+também exigiria nova seleção no portal, sem corrigir a origem do problema.
+
+---
+
 Análise de 22/10/2026, após o relato de problemas na VM antiga de 1 GB. A correção abaixo
 faz parte da versão 3.4.0; a inspeção inicial das VMs foi somente leitura, sem reiniciar a sala.
 

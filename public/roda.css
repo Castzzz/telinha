@@ -1,0 +1,149 @@
+/* A largura vem da área da call, que também muda ao abrir o chat ou a lista de membros. */
+[data-visual="roda"] .lounge-users-grid {
+  --cartao-min: 270px;
+  --intervalo: 16px;
+  container-type: inline-size;
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: center;
+  align-content: flex-start;
+  gap: var(--intervalo);
+
+  & > .lounge-user-card {
+    min-width: 0;
+    flex: 0 0 min(100%, var(--cartao-min));
+
+    @supports (width: calc(1px * round(down, 10px / 2px, 1))) {
+      --colunas: max(1, round(down, (100cqw + var(--intervalo)) / (var(--cartao-min) + var(--intervalo)), 1));
+      flex-basis: round(down, (100% + var(--intervalo)) / var(--colunas) - var(--intervalo), 1px);
+    }
+
+    @media (max-width: 760px) and (orientation: portrait) {
+      flex-basis: calc((100% - var(--intervalo)) / 2);
+    }
+  }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  [data-visual="roda"] .lounge-users-grid { --cartao-min: 130px; }
+}
+
+/* Os arcos usam a tinta de destaque. As superfícies recebem a cor do tema em theme-color.css. */
+:root[data-visual="roda"] {
+  --bg-primary: #1d2022; --bg-secondary: #25282a; --bg-tertiary: #151719;
+  --bg-card: #2d3031; --bg-floating: #303334; --bg-hover: #35383a;
+  --border-subtle: #383b3b; --border-medium: #4a4d4c;
+  --text-header: #faf6ef; --text-normal: #e9e5de; --text-muted: #bab6ae;
+  --accent-brand: #9c4936; --accent-brand-hover: #89402f;
+  --interface-ink: color-mix(in srgb, var(--accent-brand) 40%, #fff0da);
+  --accent-soft: color-mix(in srgb, var(--interface-ink) 14%, transparent);
+  --roda-titulo: Georgia, ui-serif, serif;
+  --roda-capa: color-mix(in srgb, var(--interface-ink) 9%, var(--bg-secondary));
+  --interface-radius: 18px; --panel-radius: 18px;
+}
+:root[data-visual="roda"][data-theme="claro"] {
+  --bg-primary: #f8f6f0; --bg-secondary: #fffdf8; --bg-tertiary: #eae8e2;
+  --bg-card: #f0ede6; --bg-floating: #fffdf8; --bg-hover: #e9e6df;
+  --text-header: #262826; --text-normal: #353833; --text-muted: #65675f;
+  --border-subtle: #dbd9d0; --border-medium: #c3c3b9; --interface-ink: var(--accent-brand);
+}
+:root[data-visual="roda"][data-theme="preto"] {
+  --bg-primary: #080909; --bg-secondary: #111212; --bg-tertiary: #000;
+  --bg-card: #1c1d1d; --bg-floating: #202122; --border-subtle: #2d2f2d;
+}
+
+[data-visual="roda"] :is(.home-header, .launcher-hero) {
+  position: relative; isolation: isolate; overflow: hidden;
+  background: var(--roda-capa); border: 1px solid var(--interface-line); border-radius: 24px;
+}
+[data-visual="roda"] :is(.home-header, .launcher-hero)::before {
+  content: ''; position: absolute; z-index: -1; inset: 0 0 0 auto; width: 46%; pointer-events: none;
+  background: radial-gradient(circle at 109% 95%,
+    transparent 0 24%, var(--interface-ink) 24.3% 35%, transparent 35.3% 41%,
+    var(--interface-ink) 41.3% 47%, transparent 47.3% 57%, var(--interface-ink) 57.3% 60%, transparent 60.3%);
+  opacity: .56;
+}
+[data-visual="roda"] .home-header {
+  display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 18px; min-height: 170px;
+  padding: clamp(20px, 3.5cqw, 44px); margin-bottom: 0;
+}
+[data-visual="roda"] .home-header > div:first-child { width: 100%; max-width: 78%; align-items: center; }
+[data-visual="roda"] .home-header .home-server-icon { border-radius: 50%; background: var(--bg-secondary); }
+[data-visual="roda"] :is(.home-header h1, .launcher-hero h1, .lounge-header h2) {
+  font-family: var(--roda-titulo); font-weight: 400; letter-spacing: -.045em; line-height: 1.08;
+}
+[data-visual="roda"] .home-header h1 { font-size: clamp(30px, 5.6cqw, 62px); }
+[data-visual="roda"] .home-summary { color: var(--text-normal); }
+[data-visual="roda"] .home-news-button { background: var(--bg-secondary); border-radius: 999px; }
+[data-visual="roda"] #btn-server-members[aria-expanded="true"],
+[data-visual="roda"] .home-news-button .icon-svg { color: var(--interface-ink); }
+[data-visual="roda"] :is(.home-section-heading h2, .settings-section-title, .friends-heading h2,
+  .mobile-header-copy strong, .modal-header h3, .server-members-header h2) {
+  font-family: var(--roda-titulo); letter-spacing: -.035em; font-weight: 500;
+}
+[data-visual="roda"] .home-section-heading h2 { font-size: 24px; }
+[data-visual="roda"] .home-voice-card {
+  min-height: 108px; padding: 16px; align-content: center;
+  grid-template-columns: 40px minmax(0,1fr); gap: 10px 12px;
+}
+[data-visual="roda"] .home-card-bottom { border: 0; padding: 0; min-height: 24px; }
+[data-visual="roda"] .home-channel-icon { border-radius: 50%; width: 40px; height: 40px; }
+[data-visual="roda"] .home-voice-card.occupied { background: var(--roda-capa); }
+[data-visual="roda"] .home-enter { gap: 6px; font-size: 12px; }
+[data-visual="roda"] .lounge-header { border-color: var(--interface-line); }
+[data-visual="roda"] .lounge-header .lounge-icon { border-radius: 50%; }
+[data-visual="roda"] .lounge-header h2 { font-size: clamp(27px, 3.5vw, 44px); }
+[data-visual="roda"] .lounge-call-timer { font: 500 12px/1.3 system-ui, sans-serif; letter-spacing: normal; }
+[data-visual="roda"] :is(.lounge-call-timer, .channel-call-timer) {
+  color: var(--interface-ink); background: var(--interface-tint); border-color: var(--interface-line);
+  font-variant-numeric: tabular-nums;
+}
+[data-visual="roda"] .btn-share-primary { background: var(--accent-brand); box-shadow: none; border-radius: 999px; }
+[data-visual="roda"] .btn-share-primary:hover { background: var(--accent-brand-hover); filter: none; }
+[data-visual="roda"] #lounge-users-grid > .lounge-user-card {
+  border-radius: 22px; background: var(--bg-secondary); border-color: var(--border-subtle);
+}
+[data-visual="roda"] #lounge-users-grid .user-avatar-wrap {
+  border-radius: 50%; outline: 1px solid var(--interface-line); outline-offset: 5px;
+}
+[data-visual="roda"] #lounge-users-grid > .lounge-user-card:has(.is-speaking) {
+  background: var(--roda-capa); border-color: var(--interface-ink);
+}
+[data-visual="roda"] #lounge-users-grid .user-avatar-wrap.is-speaking { outline: 3px solid var(--interface-ink); }
+[data-visual="roda"] .channel-active > .channel-row,
+[data-visual="roda"] #modal-settings .settings-tab.active {
+  background: var(--interface-tint); color: var(--interface-ink); border-radius: 999px;
+}
+[data-visual="roda"] #modal-settings .modal-header { background: var(--roda-capa); border-color: var(--interface-line); }
+[data-visual="roda"] #modal-settings .settings-panels { background: var(--bg-primary); }
+[data-visual="roda"] #modal-settings .settings-section > .form-group { border-radius: 16px; }
+[data-visual="roda"] :is(.chat-welcome-banner, .music-current, .dice-result, .mobile-room-status, #dm-dialog .modal-header) {
+  background: var(--roda-capa); border-radius: 18px; border-color: var(--interface-line);
+}
+[data-visual="roda"] :is(.soundboard-popover, .pins-popover, .mobile-settings-group, .user-popover, .friends-panel) {
+  border-radius: 18px; border-color: var(--interface-line);
+}
+[data-visual="roda"] :is(.chat-composer, #dm-input) { border-radius: 20px; }
+[data-visual="roda"] .dm-message { border-radius: 16px 16px 16px 4px; }
+[data-visual="roda"] #dm-dialog .dm-own { border-radius: 16px 16px 4px 16px; }
+[data-visual="roda"] .launcher-hero::before { inset: 0 0 auto auto; width: 30%; height: 44%; }
+[data-visual="roda"] .launcher-hero h1 { max-width: 76%; font-size: clamp(36px, 4.8vw, 58px); }
+[data-visual="roda"] .launcher :is(.primary-button, .theme-btn) { border-radius: 999px; }
+[data-visual="roda"] .launcher :is(.friend-avatar, .room-icon) { border-radius: 50%; }
+[data-visual="roda"] #player-titlebar { background: var(--roda-capa); }
+[data-visual="roda"] #player-controls { background: var(--bg-secondary); }
+[data-visual="roda"] #window-stream-name { color: var(--interface-ink); }
+[data-visual="roda"] #player-controls { border-color: var(--interface-line); border-radius: 20px; }
+[data-visual="roda"] :is(button, a, summary, [tabindex="0"]):focus-visible { outline: 2px solid var(--interface-ink); outline-offset: 2px; }
+@container (max-width: 460px) {
+  [data-visual="roda"] .home-header > div:first-child { max-width: 100%; grid-template-columns: minmax(0,1fr); }
+  [data-visual="roda"] .home-header .home-server-icon { grid-row: auto; width: 38px; height: 38px; }
+  [data-visual="roda"] .home-header::before { width: 32%; opacity: .23; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-visual="roda"] .home-enter > span { transition: translate 140ms ease-out; }
+  [data-visual="roda"] .home-voice-card:enabled:is(:hover, :focus-visible) .home-enter > span { translate: 3px 0; }
+  [data-visual="roda"] #lounge-users-grid > .lounge-user-card { transition: border-color 160ms, background-color 160ms; }
+}
+:root[data-visual="roda"].pause-in-background:is(.app-hidden, .app-unfocused)
+  :is(.lounge-user-card, .modal-card, .server-members) { animation: none; }

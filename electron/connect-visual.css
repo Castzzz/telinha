@@ -1,0 +1,10 @@
+/* A entrada usa os mesmos painéis e destaques dos canais. */
+body { background: var(--bg-primary); }
+.launcher { width: min(100%, 1440px); }
+.launcher-header { border-bottom: 1px solid var(--border-medium); padding-bottom: 18px; margin-bottom: 24px; }
+.launcher-main { align-items: stretch; gap: 18px; }
+.launcher-hero, .friends-panel { padding: clamp(18px, 3vw, 42px); border: 1px solid var(--border-medium); border-radius: var(--interface-radius); background: var(--bg-secondary); box-shadow: none; }
+.launcher-hero { background: var(--interface-tint); border-color: var(--interface-line); }
+.launcher-hero .eyebrow, .room-icon { color: var(--interface-ink); }
+.server-card { border: 0; padding: 16px 0 0; border-radius: 0; background: transparent; box-shadow: none; }
+.launcher-footer { justify-content: flex-end; }

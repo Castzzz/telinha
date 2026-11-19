@@ -3,6 +3,24 @@ export function setupStageControls({ fullscreen, delay = 3000 }) {
   const bar = document.getElementById('stage-controls-bar');
   const stage = document.getElementById('stage-section');
   if (!bar || !stage) return;
+  const mais = document.getElementById('stage-more');
+  const gatilho = mais.querySelector('summary');
+  document.addEventListener('pointerdown', event => {
+    if (mais.open && !mais.contains(event.target)) mais.open = false;
+  }, true);
+  mais.addEventListener('keydown', event => {
+    if (event.key !== 'Escape' || !mais.open) return;
+    event.preventDefault(); event.stopPropagation();
+    mais.open = false; gatilho.focus();
+  });
+  mais.addEventListener('focusout', event => {
+    if (event.relatedTarget && !mais.contains(event.relatedTarget)) mais.open = false;
+  });
+  mais.addEventListener('click', event => {
+    if (!event.target.closest('button')) return;
+    mais.open = false;
+    if (mais.contains(document.activeElement)) gatilho.focus();
+  });
   let timer, hovering = false, pressing = false;
   const reveal = () => {
     clearTimeout(timer);

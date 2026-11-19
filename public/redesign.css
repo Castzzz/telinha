@@ -132,6 +132,7 @@
 
 /* Painel "Voz conectada" + sair da call: só no visual novo */
 .voice-panel-info,
+.user-dock:not(.in-call) #btn-dock-clip,
 .dock-leave {
   display: none;
 }
@@ -164,6 +165,7 @@
 [data-look="novo"] #btn-share-camera { grid-area: cam; }
 [data-look="novo"] .voice-panel-info { grid-area: info; }
 [data-look="novo"] .dock-leave { grid-area: leave; }
+[data-look="novo"] #btn-dock-clip { grid-area: clip; }
 
 [data-look="novo"] .user-dock:not(.in-call) #btn-share-screen,
 [data-look="novo"] .user-dock:not(.in-call) #btn-share-camera {
@@ -171,11 +173,15 @@
 }
 
 [data-look="novo"] .user-dock.in-call {
+  grid-template-columns: minmax(0, 1fr) repeat(4, 28px);
+  column-gap: 0;
   grid-template-areas:
-    "info share cam leave"
-    "profile mic deaf gear";
+    "info clip share cam leave"
+    "profile profile mic deaf gear";
   row-gap: 8px;
 }
+
+[data-look="novo"] .user-dock.in-call .dock-btn { width: 28px; }
 
 /* linha separando as duas partes */
 [data-look="novo"] .user-dock.in-call::before {
@@ -207,12 +213,13 @@
   color: var(--accent-green);
   font-size: 12.5px;
   font-weight: 700;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 [data-look="novo"] .voice-panel-status .icon-svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
 }
 
 [data-look="novo"] .voice-panel-status[data-quality="measuring"] { color: var(--text-muted); }
@@ -512,7 +519,8 @@
 .text-with-stream #stage-controls-bar, .text-with-stream #video-stage,
 .text-with-stream #voice-lounge, .text-with-stream .video-tile-overlay,
 .text-with-stream .tile-badge, .text-with-stream .tile-volume,
-.text-with-stream .tile-btn { display: none; }
+.text-with-stream .tile-btn:not(.tile-close-btn) { display: none; }
+.text-with-stream .tile-close-btn { margin-left: auto; }
 
 /* Canais: nome e contexto ocupam o espaço; ações aparecem ao interagir. */
 [data-look="novo"] .sidebar-header { height: 68px; padding: 16px; gap: 6px; border-bottom: 1px solid var(--border-subtle); margin-bottom: 14px; }

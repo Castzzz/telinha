@@ -1,6 +1,6 @@
 # Ideias futuras
 
-Atualizado em 09/11/2026. Lista para editar com o dono, sem prazo ou compromisso de implementar.
+Atualizado em 19/11/2026. Lista para editar com o dono, sem prazo ou compromisso de implementar.
 Trabalho em andamento fica em [PENDENCIAS.md](PENDENCIAS.md).
 
 - **Personalização mais ampla:** avaliar temas e plano de fundo do app/perfil além das

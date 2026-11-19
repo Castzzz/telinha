@@ -6,7 +6,7 @@ const USERS_ICON_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" st
 const MIC_OFF_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/><path d="M3 3l18 18"/></svg>';
 const HEADPHONES_OFF_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3zM3 19a2 2 0 0 0 2 2h1v-6H3z"/><path d="M3 3l18 18"/></svg>';
 const SCREEN_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>';
-const MUSIC_BOT_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+const AVATAR_K7 = '<img class="k7-avatar" src="k7.svg" alt="">';
 
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const NAME_COLLATOR = new Intl.Collator('pt-BR', { sensitivity: 'base', numeric: true });
@@ -57,24 +57,26 @@ export function setupStageSocial(deps = {}) {
   let idleTimer = null;
   let stageVisible = false;
 
+  const areaDaTransmissao = '#videos-grid, #video-stage';
+  const eventosDoPalco = ['pointerover', 'pointermove', 'pointerdown', 'pointerout', 'focusin'];
+
   function revealParticipants() {
-    clearTimeout(idleTimer);
     const bar = document.getElementById('stage-cinema-bar');
-    if (!bar) return;
+    if (!stageVisible || !bar) return;
+    clearTimeout(idleTimer);
     bar.classList.remove('is-idle');
-    if (!collapsed || !stageVisible) return;
-    idleTimer = setTimeout(() => {
-      // O foco de teclado e o mouse sobre a faixa mantêm o controle acessível.
-      if (bar.matches(':hover') || bar.querySelector(':focus-visible')) {
-        revealParticipants();
-        return;
-      }
-      bar.classList.add('is-idle');
-    }, 3000);
+    idleTimer = setTimeout(() => bar.classList.add('is-idle'), 2500);
   }
 
   function onStageInteraction(event) {
-    if (event.type === 'keydown' || event.target?.closest?.('#stage-section, :fullscreen')) revealParticipants();
+    if (!stageVisible || !event.target.closest?.(areaDaTransmissao)) return;
+    if (event.type === 'pointerout') {
+      if (event.pointerType === 'touch' || event.relatedTarget?.closest?.(areaDaTransmissao)) return;
+      clearTimeout(idleTimer);
+      document.getElementById('stage-cinema-bar')?.classList.add('is-idle');
+    } else {
+      revealParticipants();
+    }
   }
 
   function resolveStageContainer() {
@@ -377,7 +379,7 @@ export function setupStageSocial(deps = {}) {
     const isPaused = Boolean(m?.isPaused || m?.paused || m?.phase === 'paused');
     const isPreparing = Boolean(m?.isPreparing || m?.loading || m?.phase === 'preparing');
     const trackObj = m?.track || m?.current || null;
-    const title = trackObj?.title || (isPreparing ? 'Buscando música…' : 'Bot de Música');
+    const title = trackObj?.title || (isPreparing ? 'Buscando música…' : 'K7');
     const status = isPreparing ? 'Carregando…' : isPaused ? 'Pausado' : isPlaying ? 'Tocando' : 'Na fila';
 
     if (!botEl) {
@@ -387,7 +389,7 @@ export function setupStageSocial(deps = {}) {
       botEl.dataset.stageMusicBot = 'true';
       botEl.innerHTML = `
         <div class="user-avatar-wrap stage-cinema-avatar-wrap">
-          <div class="user-avatar stage-cinema-avatar music-bot-avatar">${MUSIC_BOT_SVG}</div>
+          <div class="user-avatar stage-cinema-avatar music-bot-avatar">${AVATAR_K7}</div>
           <span class="speaking-halo"></span>
         </div>
         <span class="stage-cinema-name">
@@ -404,7 +406,7 @@ export function setupStageSocial(deps = {}) {
     botEl.classList.remove('is-speaking');
     botEl.classList.toggle('is-playing', isPlaying);
     botEl.classList.toggle('is-paused', isPaused);
-    botEl.title = `Bot de Música · ${title} (${status}) — clique para abrir`;
+    botEl.title = `K7 · ${title} (${status}) — clique para abrir`;
 
     const wrap = botEl.querySelector('.stage-cinema-avatar-wrap');
     if (wrap) wrap.classList.toggle('is-speaking', isPlaying);
@@ -435,7 +437,10 @@ export function setupStageSocial(deps = {}) {
     const becameVisible = shouldShow && !stageVisible;
     stageVisible = shouldShow;
     if (!shouldShow) { clearTimeout(idleTimer); return; }
-    if (becameVisible) revealParticipants();
+    if (becameVisible) {
+      bar.classList.add('is-idle');
+      if (document.querySelector('#videos-grid:hover, #video-stage:hover')) revealParticipants();
+    }
 
     syncControlsOffset(bar);
 
@@ -600,7 +605,7 @@ export function setupStageSocial(deps = {}) {
     update();
   };
 
-  for (const type of ['pointermove', 'pointerdown', 'keydown', 'focusin']) document.addEventListener(type, onStageInteraction, true);
+  for (const type of eventosDoPalco) document.addEventListener(type, onStageInteraction, true);
   window.addEventListener('teletela:music-state', onMusicStateEvent);
   document.addEventListener('fullscreenchange', onFullscreenChange);
 
@@ -610,7 +615,7 @@ export function setupStageSocial(deps = {}) {
 
   function destroy() {
     clearTimeout(idleTimer);
-    for (const type of ['pointermove', 'pointerdown', 'keydown', 'focusin']) document.removeEventListener(type, onStageInteraction, true);
+    for (const type of eventosDoPalco) document.removeEventListener(type, onStageInteraction, true);
     window.removeEventListener('teletela:music-state', onMusicStateEvent);
     document.removeEventListener('fullscreenchange', onFullscreenChange);
     document.getElementById('stage-cinema-bar')?.remove();

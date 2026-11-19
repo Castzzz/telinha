@@ -20,7 +20,7 @@ function setupStreamWindow(mainWindow, shell, { getTitleBarColors = () => ({ col
       return {
         action: 'allow',
         overrideBrowserWindowOptions: {
-          width: 960, height: 580, minWidth: 360, minHeight: 240,
+          width: 960, height: 580, minWidth: 320, minHeight: 240,
           title: 'Transmissão — Teletela',
           icon: path.join(__dirname, '..', 'public', 'icon.png'),
           frame: true, backgroundColor: getTitleBarColors().color,
@@ -39,12 +39,12 @@ function setupStreamWindow(mainWindow, shell, { getTitleBarColors = () => ({ col
     if (/^https?:\/\//i.test(url)) shell.openExternal(url).catch(() => {});
     return { action: 'deny' };
   });
-  mainWindow.webContents.on('did-create-window', child => {
+  mainWindow.webContents.on('did-create-window', (child, details) => {
     children.add(child);
     child.on('closed', () => children.delete(child));
     child.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     child.webContents.on('will-navigate', (event, url) => {
-      if (url !== playerUrl) event.preventDefault();
+      if (url !== details.url) event.preventDefault();
     });
   });
 }

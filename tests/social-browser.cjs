@@ -75,6 +75,7 @@ app.whenReady().then(async () => {
     await js(win, `document.querySelectorAll('.modal-backdrop').forEach(el=>el.classList.add('hidden'));document.querySelector('#channel-geral .channel-row').click();void 0`);
     await until(win, 'appState.currentChannelId === "geral"');
   }
+  await click(first, '#stage-more summary');
   await click(first, '#stage-controls-bar .dice-trigger');
   await until(first, 'document.querySelector("#dice-status").textContent === ""');
   await click(first, '[data-die="1d20"]');
@@ -83,6 +84,7 @@ app.whenReady().then(async () => {
   await until(first, 'document.querySelector("#dice-result-value").textContent === document.querySelector("#dice-history li b").textContent');
   await js(second, `document.querySelector('#btn-header-add-channel').click();document.querySelector('#input-channel-name').value='Cinema';document.querySelector('#form-create-channel').requestSubmit();void 0`);
   await until(second, 'appState.currentChannelId === "cinema"');
+  await click(second, '#stage-more summary');
   await click(second, '#stage-controls-bar .dice-trigger');
   await until(second, 'document.querySelectorAll("#dice-history li b").length === 1');
   if (await js(second, 'document.querySelector("#dice-history li b").textContent') !== result) throw new Error('Os aparelhos receberam resultados diferentes.');

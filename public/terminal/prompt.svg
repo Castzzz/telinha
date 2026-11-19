@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 132 60">
+  <defs><pattern id="p" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="4.6" height="4.6" rx="0.6" fill="white"/></pattern></defs>
+  <path fill="url(#p)" d="M0 0h24v6h6v6h6v6h6v6h6v12h-6v6h-6v6h-6v6h-6v6H0v-6h6v-6h6v-6h6v-6h6V24h-6v-6h-6v-6H6V6H0zM60 48h66v12H60z"/>
+</svg>

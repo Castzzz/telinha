@@ -1,7 +1,7 @@
 const icon = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="3"/><path d="m10 7 5 3-5 3ZM8 21h8m-4-4v4"/></svg>';
 
 export function setupWatchTogether({ socket, appState, serverUrl, mountStageOverlay, showToast }) {
-  const buttons = ['.app-topbar .topbar-right', '#stage-controls-bar .stage-controls-right', '#chat-drawer .chat-header'].map(selector => {
+  const buttons = ['.app-topbar .topbar-right', '#chat-drawer .chat-header-actions'].map(selector => {
     const parent = document.querySelector(selector);
     if (!parent) return null;
     const button = document.createElement('button');
@@ -10,6 +10,7 @@ export function setupWatchTogether({ socket, appState, serverUrl, mountStageOver
     button.setAttribute('aria-controls', 'modal-watch-together'); button.innerHTML = icon;
     parent.prepend(button); return button;
   }).filter(Boolean);
+  buttons.push(document.getElementById('btn-mobile-watch'));
   const modal = document.createElement('div');
   modal.id = 'modal-watch-together'; modal.className = 'modal-backdrop hidden';
   modal.innerHTML = `<section class="modal-card watch-modal" role="dialog" aria-modal="true" aria-labelledby="watch-title" tabindex="-1">
@@ -80,7 +81,10 @@ export function setupWatchTogether({ socket, appState, serverUrl, mountStageOver
   }
   const close = () => { generation++; modal.classList.add('hidden'); clearCode(); opener?.focus(); };
   for (const button of buttons) button.addEventListener('click', () => {
-    opener = button; mountStageOverlay(modal); modal.classList.remove('hidden');
+    const opcoes = document.getElementById('mobile-call-options');
+    opener = opcoes.contains(button) ? document.getElementById('mobile-call-more') : button;
+    if (opcoes.open) opcoes.close();
+    mountStageOverlay(modal); modal.classList.remove('hidden');
     render(); act('state'); $('#watch-close').focus();
   });
   for (const action of ['join', 'pair', 'lead', 'leave', 'stop']) $(`#watch-${action}`).addEventListener('click', () => act(action));

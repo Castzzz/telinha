@@ -18,9 +18,9 @@ test('o histórico de 60 segundos descarta o início e mantém a ordem na volta 
     for (let i = 0; i < 100; i++) processor.process([[block]], [[block]]);
   }
   processor.port.onmessage({ data: 'clipar' });
-  assert.equal(snapshot.length, 16000 * 60);
+  assert.equal(snapshot.length, 44100 * 60);
   for (let second = 0; second < 60; second++) {
-    assert.ok(Math.abs(snapshot[16000 * second + 8000] / 32767 - (second + 5) / 100) < 0.001);
+    assert.ok(Math.abs(snapshot[44100 * second + 8000] - (second + 5) / 100) < 0.001);
   }
   processor.port.onmessage({ data: 'parar' });
   assert.equal(processor.process([], []), false);

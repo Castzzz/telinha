@@ -60,7 +60,9 @@ app.whenReady().then(async () => {
     check(getComputedStyle(document.querySelector('#user-dock')).display === 'none', 'O dock de PC não deve ocupar o celular');
     document.querySelector('#mobile-call-more').click();
     check(document.querySelector('#mobile-call-options').open, 'Opções de áudio precisam abrir em uma folha');
-    document.querySelector('#mobile-close-options').click();
+    document.querySelector('#btn-mobile-watch').click();
+    check(!document.querySelector('#mobile-call-options').open && document.querySelector('#watch-close').checkVisibility(), 'Assistir juntos deve abrir pelas opções da chamada');
+    document.querySelector('#watch-close').click();
     document.querySelector('#mobile-back').click();
     check(document.body.dataset.mobileView === 'canais', 'Minimizar a call deve voltar aos canais');
     const bar = document.querySelector('#mobile-callbar').getBoundingClientRect();

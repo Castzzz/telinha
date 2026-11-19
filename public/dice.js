@@ -9,14 +9,18 @@ const DIE_SHAPES = {
   100: '<rect x="2" y="3" width="13" height="13" rx="2"/><path d="M9 16v3a2 2 0 0 0 2 2h9a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-5M6 7h.01M11 12h.01M17 12h.01M17 17h.01"/>'
 };
 const svg = paths => `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths}</svg>`;
-export function setupDice({ socket, showToast, escapeHtml }) {
-  const buttons = ['#stage-controls-bar .stage-controls-right', '#chat-drawer .chat-header'].map(selector => {
+export function setupDice({ socket, showToast, escapeHtml, mountStageOverlay }) {
+  const buttons = ['#stage-options', '#chat-drawer .chat-header-actions'].map(selector => {
     const parent = document.querySelector(selector);
     if (!parent) return null;
     const button = document.createElement('button');
     button.type = 'button'; button.className = 'btn-control-icon dice-trigger';
     button.title = 'Dados e histórico do servidor'; button.setAttribute('aria-label', button.title);
     button.setAttribute('aria-controls', 'modal-dice'); button.innerHTML = svg(DIE_PATH);
+    if (parent.id === 'stage-options') {
+      button.className = 'stage-option dice-trigger';
+      button.append('Rolar dados');
+    }
     parent.prepend(button); return button;
   }).filter(Boolean);
   const news = document.querySelector('#btn-home-whats-new');
@@ -82,8 +86,9 @@ export function setupDice({ socket, showToast, escapeHtml }) {
     } catch (err) { if (run === generation) $('#dice-status').textContent = err.message; }
   };
   const open = event => {
-    opener = event.currentTarget; generation++;
+    opener = event.currentTarget.closest('details')?.querySelector('summary') || event.currentTarget; generation++;
     document.querySelector('#mobile-call-options')?.close();
+    mountStageOverlay(modal);
     modal.classList.remove('hidden'); load(); $('#dice-notation').focus();
   };
   async function roll(notation) {

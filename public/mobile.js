@@ -92,6 +92,7 @@ function renderChrome(state) {
 export function setMobileView(view) {
   if (!smallScreen.matches || !['canais', 'sala', 'chat', 'voce'].includes(view)) return;
   const previous = document.body.dataset.mobileView || 'canais';
+  if (view !== previous) hooks?.closeMusic?.();
   if (view === 'chat' && previous !== 'chat') chatReturnView = previous === 'sala' ? 'sala' : 'canais';
   if (view !== 'sala') $('#mobile-call-options')?.close();
   document.body.dataset.mobileView = view;
@@ -126,6 +127,7 @@ function back() {
   const modal = [...all('.modal-backdrop:not(.hidden)')].at(-1);
   const close = modal?.querySelector('[data-close-modal]');
   if (close) { close.click(); return true; }
+  if (hooks.closeMusic?.()) return true;
   const view = document.body.dataset.mobileView;
   if (view === 'chat') {
     hooks.showRoom();

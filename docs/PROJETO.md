@@ -186,7 +186,7 @@ reais, anúncios e Netflix ainda precisam de validação.
   participantes, link canônico, posição, taxa, âncora temporal e revisão dos comandos.
   Não grava histórico nem credenciais em disco. Não usa o SFU nem retransmite mídia.
 - `public/watch-together.js` e `.css` criam o painel **Assistir juntos** na barra superior,
-  no palco e no chat. A sessão é descoberta pelos membros da call; participar é explícito.
+  no chat e em Opções da chamada no celular. A sessão é descoberta pelos membros da call; participar é explícito.
   Qualquer participante pode assumir o guia. Quem guia pode encerrar para todos; sair
   da call, ser movido/expulso ou desconectar revoga os próprios códigos/tokens. Se o guia
   sair da sessão/call, ela termina. Não há retomada automática após reconectar o app.
@@ -401,6 +401,8 @@ PORT=3999 OWNER_KEY=segredo-dono TELINHA_DATA_DIR=/tmp/teletela-data node server
 ```
 
 Sem `SFU_SECRET` a transmissão vai P2P, o que é ótimo pra testar no mesmo PC.
+
+O **K7** aparece na call quando o servidor habilita música. O painel em `public/music.js` e `public/index.html` abre na lateral da sala e acompanha o palco em tela cheia. A conversa guarda até 60 mensagens no aparelho enquanto a pessoa estiver no canal. A troca de canal ou desconexão limpa os pedidos locais. As buscas e a fila usam o protocolo de música existente. O avatar compartilhado pela sala e pelo modo cinema fica em `public/k7.svg`.
 
 ### Laboratório isolado do bot de música
 
@@ -1055,9 +1057,11 @@ de ruído, e 11 inicialização (`initApp`).
 | Contas opcionais | `account-store.js`, `accounts-protocol.js`, `public/accounts.js`/`.css`; auth `accountToken`, aba Conta e login HTTP antes da senha da sala |
 | Dados de RPG | `dice-store.js`, `public/dice.js`/`.css`; eventos `dice-roll`, `dice-history`, `dice-rolled` |
 | Cinema e miniplayer | `public/stage-social.js`/`.css` e API de estado/ações em `public/music.js`; integração em `app.js` |
+| Visuais locais | A preferência `visual` escolhe Clássico, Roda ou Terminal. O valor antigo `violeta` é lido como `roda`; novas seleções usam `roda`. `public/visual.js` ativa as folhas na entrada e na sala. Na janela de transmissão, `public/window-appearance.js` acompanha as mudanças de tema, visual e cores da janela principal. `public/personalization.js` aplica as cores locais de `appearanceExperiment`: `themeColor` para as superfícies geradas por `public/theme-color.css`, `accent` para ações e `secondary` para destaques. |
 | Tela inicial e controles por contexto | `renderServerHome` e `setupServerHome`: cartões de voz/pessoas e atalhos de texto; `updateTextLayout` e `updateStageControls`: chat e controles apenas no contexto correspondente |
 | Canais de texto | `renderTextChannels`, `openTextChannel`, `loadTextHistory`; servidor: `readTextMessages`, `appendTextMessage` |
 | Chat (responder, reagir, editar, apagar) | `buildChatMessage`, `setupChatMessageActions`, `startEditMessage`; servidor: `message-edit/delete/react` |
+| Prévia de links | `public/link-previews.js` monta um cartão por mensagem da call, de texto ou direta. O cliente pede o evento `link-preview` quando o cartão chega perto da tela. `link-previews.js` no servidor consulta oEmbed do YouTube ou o HTML e a imagem de páginas públicas, valida o IPv4 de cada conexão e mantém um cache em memória. A miniatura do YouTube vem de `i.ytimg.com` no cliente. Para clipes do Medal, o player nativo carrega o MP4 de `medal.tv/api/content/<id>/socialVideoUrl` e aguarda o play. Usa a capa retornada pelo servidor ou o primeiro quadro do vídeo quando a capa está indisponível. |
 | @menção | `mentionify`, `mentionsMe`, `notifyMention`, `setupMentionAutocomplete` |
 | Reações da call | `setupEmojiPicker`: hover/clique/teclado abre só os atalhos; **＋** carrega o seletor completo; `renderQuickReactions`, `countReactionUse`, `closeCallReactions` |
 | Fixar mensagem | `pinMessage`, `renderPins`, `setupPins`; servidor: `message-pin`, `text-pins` |
@@ -1128,6 +1132,12 @@ de ruído, e 11 inicialização (`initApp`).
   O APK usa todos os arquivos de `public/`; incrementar `versionCode` junto da próxima release
   e manter assinatura, ID e nome do artefato existentes.
 
+### Acesso por transmissão
+
+O servidor anuncia `streamAccess` em `room-info`. O painel em `public/stream-access.js` usa o evento `stream-access` para preparar ou editar o acesso de cada tela e da câmera na call. A transmissão começa aberta por padrão. `stream-access.js` no Node mantém em memória os convites e bloqueios por identidade de membro, a verificação da senha por HMAC com chave efêmera e as admissões por sessão. O término daquela transmissão ou a saída do dono limpa a regra. Se a conexão de quem transmite cair, o cliente interrompe a fonte protegida e exige revisar o acesso antes de retomá-la. Transmissões restritas não oferecem quadros de prévia.
+
+Os pedidos e as ofertas/respostas P2P e a emissão de tokens de espectador no SFU consultam a mesma regra. A expulsão fecha o peer de saída no transmissor e retira a reprodução no espectador. Cada espectador tem uma identidade de mídia própria por transmissão no SFU, revogada pelo endpoint interno existente, inclusive ao sair do canal. A voz, o bot de música e as outras telas têm sessões independentes. O cliente novo e o servidor Node atualizado habilitam o recurso.
+
 ### Amigos por conta e controles em tela cheia (31/10/2026, local)
 
 `accounts.json` v2 ganha `friendships`, opcional ao ler arquivos anteriores. Cada relação
@@ -1144,7 +1154,7 @@ válida conectada, mesmo fora de call, e atualiza ao conectar/desconectar/recupe
 Não é uma lista global entre servidores. Clientes antigos ignoram os novos eventos;
 o painel novo informa falta de suporte ao entrar em servidor anterior.
 
-`public/friends.js` inclui a aba Amigos nas configurações e a página móvel Você.
+`public/friends.js` também apresenta a amizade no mini perfil usando o ID de conta fornecido pelo servidor para membros autenticados. O mesmo estado de pedidos alimenta o perfil, a aba Amigos nas configurações e a página móvel Você.
 `public/accounts.js` restaura as preferências em memória se a gravação da sessão falhar.
 `public/stage-controls.js` esconde a barra após 3 s em tela cheia nativa ou alternativa CSS,
 mantém Tab/toque disponíveis e suspende a ocultação durante hover, arraste ou foco de teclado.
@@ -1331,7 +1341,7 @@ Coisas que já deram problema e o motivo:
 20. **Próprio AO VIVO sem abrir com a prévia oculta:** `hideOwnStream` controla a abertura
     automática. `localPreviews` guarda o `MediaStream` original mesmo escondido; o clique
     explícito usa esse mesmo objeto em `registerScreenStream(..., true)`, sem outra captura,
-    conexão SFU ou assinatura de si próprio. O ✕ na aba local chama `removeScreenStream`,
+    conexão SFU ou assinatura de si próprio. O ✕ sobre a prévia local chama `removeScreenStream`,
     mantendo captura e transmissão. Parar a transmissão chama `dropLocalPreview` e limpa
     também o registro. Não chame `unwatchScreen` nem pare faixas para esconder a prévia.
 21. **Início e hover em PC fraco:** o início usa as listas que já chegam do servidor,
@@ -1438,8 +1448,8 @@ para os dados funcionarem na sala oficial são necessários release do cliente e
 
 ### Retomada do cinema, música e chat em 28/10/2026
 
-A faixa recolhida de participantes some após 3 segundos sem interação no palco. Eventos
-de ponteiro, toque e teclado a revelam; hover e foco visível mantêm o controle acessível.
+Aberta ou recolhida, a faixa de participantes acompanha a interação com o vídeo. Ela some
+ao tirar o mouse ou após 2,5 segundos parado. O toque a revela e o foco de teclado na faixa a mantém visível.
 Os snapshots de música e de fala não reiniciam esse tempo. A fala fica na borda dos avatares.
 
 A barra de ações fica acima do overlay de participantes. Na tela cheia nativa, o mesmo
@@ -1527,7 +1537,7 @@ Branch `melhoria/inicializacao-busca-e-diagnostico`:
   limitado às 50 mensagens da call atual. Resultados são limpos ao perder acesso/desconectar.
   Não há migração de dados nem índice adicional; a leitura é síncrona, como a paginação
   existente, limitada ao canal escolhido.
-- `public/transmission-diagnostics.js`: painel no palco e Configurações → Transmissão.
+- `public/transmission-diagnostics.js`: painel em Mais opções (⋯) no palco e em Configurações → Transmissão.
   `getStats()` a cada 2 segundos apenas com o painel aberto; tela, extras e câmera,
   envio/recepção P2P e SFU. Taxa usa delta de bytes de vídeo; recepção calcula perdas por
   intervalo, envio usa perda informada pelo destino. Codec RTX não é contado como vídeo.
@@ -2257,12 +2267,50 @@ A pasta da extensão foi trocada atomicamente, com cópia do código anterior em
   O botão **Baixar extensão** dos apps já instalados agora entrega a versão 0.2.0.
   As instruções novas dentro do app instalado dependem de uma release futura.
 
+### Captura de janela ao entrar em tela cheia no Linux (14/11/2026)
+
+Firefox continua reproduzindo YouTube, mas a captura no Teletela congela ao entrar em
+tela cheia e não volta ao sair. Confirmado pelo dono somente no Linux; monitor inteiro
+funciona. No PC inspecionado, Hyprland 0.57.1/Wayland e portal Hyprland 1.5.0; o journal
+mostra renegociação de formatos e falhas DMA-BUF durante uma captura de janela.
+A issue upstream #451 descreve o mesmo gatilho e callbacks de falha sem retomada de
+quadros, conferidos no código da versão 1.5.0. Hipótese forte de falha no portal,
+ainda sem reprodução instrumentada que confirme a causa neste PC.
+Evidências, contorno e critérios de validação em
+[DIAGNOSTICO-TRANSMISSOES.md](DIAGNOSTICO-TRANSMISSOES.md#janela-do-firefox-congela-ao-entrar-em-tela-cheia-no-linux-14112026).
+Nenhuma correção de código, mudança no sistema, release ou deploy nesta análise.
+
 ### Clipes de voz da chamada
 
 Na entrada confirmada no canal, `public/voice-clips.js` liga ao mixer um AudioWorklet
-com histórico circular de 60 s (PCM mono, 16 kHz, 1,92 MB). Entram o mic local e os
+com histórico circular de 60 s (mono, Float32 na taxa do mixer, 11,52 MB a 48 kHz). Entram o mic local e os
 ganhos individuais das vozes recebidas por SFU ou P2P. Ensurdecer silencia a entrada.
 Tela, música e soundboard têm outras rotas. Sair, trocar de canal ou desconectar
 descarta a sessão. A tesoura congela uma cópia para escolher o trecho e o destino.
-O evento existente `text-file` publica o WAV e a data/hora do clique no canal escolhido,
+A prévia e o envio reutilizam o mesmo WAV PCM16 (até 48 kHz, 5,76 MB/min). Picos acima do limite são atenuados em conjunto ao exportar o trecho. O player usa o volume geral do mixer. O evento existente `text-file` publica o WAV e a data/hora do clique no canal escolhido,
 com as permissões, a persistência e a cota dos anexos. A VM só recebe o trecho enviado.
+
+### Conversas privadas entre amigos
+
+`direct-messages.js` atende `dm-history` e `dm-send` pelo Socket.IO autenticado da sala.
+O servidor resolve o autor pela sessão e exige amizade aceita em cada operação. Entrega
+`dm-message` aos aparelhos ativos dessas duas contas. Remover a amizade bloqueia
+envio e leitura; se a dupla voltar a ser amiga, recupera o mesmo histórico.
+As mensagens ficam no backup de dados, em `conversas/<par de contas>/`, fora de
+`public/`. Cada página JSON contém até 40 mensagens de 2000 caracteres. O arquivo
+`recentes.json` é substituído por rename depois de salvar uma página cheia.
+A interface em `public/direct-messages.js` abre pela lateral ou pela aba Amigos.
+`dm-inbox` consulta a última atividade somente das amizades aceitas. O marcador
+de leitura fica no aparelho, por sala, conta e amigo, sem o conteúdo das mensagens.
+A tesoura do painel de voz e a da barra móvel usam o mesmo histórico local da call.
+
+A prévia usa uma URL de blob local do WAV do trecho selecionado. Trocar a duração
+ou fechar a janela libera a URL. O título usa o texto editável da mensagem; o valor
+inicial é a data e a hora da captura. O atalho `clip` usa o registro de atalhos
+do Electron e a rota local `/clip` no Wayland. Os clipes podem ser fixados como qualquer mensagem do canal de texto.
+
+### Recursos locais de 19/11/2026
+
+- A tesoura e os anexos WAV do chat abrem o editor de trecho em `public/sound-trim.js`. O cliente gera um WAV mono a 24 kHz e usa o envio existente `soundboard-add`. Quinze segundos cabem no limite de 1 MB.
+- Os canais de texto usam a marca de leitura das preferências e carregam páginas anteriores ao retomar. O chat temporário da call usa uma marca em memória. As DMs usam a marca local por sala, conta e amigo.
+- O emissor gera um JPEG de até 320 × 180 por tela a cada 15 segundos. O evento `screen-preview-set` troca o quadro em memória no socket do emissor. A consulta `screen-preview-get` verifica a visibilidade do canal, a senha e a tela ativa. Encerrar a tela ou sair da call descarta o quadro. A prévia depende da atualização do servidor.

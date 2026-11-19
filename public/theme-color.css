@@ -1,0 +1,36 @@
+/* A mesma tinta forma superfícies distintas para a lista, o palco, os cartões e os menus. */
+:root.has-theme-color[data-theme] {
+  color-scheme: dark;
+  --theme-ground: #0b0b0e;
+  --theme-surface: #111114;
+  --bg-primary: color-mix(in srgb, var(--theme-color) 18%, var(--theme-ground));
+  --bg-secondary: color-mix(in srgb, var(--theme-color) 23%, var(--theme-surface));
+  --bg-tertiary: color-mix(in srgb, var(--theme-color) 11%, var(--theme-ground));
+  --bg-card: color-mix(in srgb, var(--theme-color) 30%, var(--theme-surface));
+  --bg-floating: color-mix(in srgb, var(--theme-color) 32%, var(--theme-surface));
+  --bg-elevated: var(--bg-floating);
+  --bg-hover: color-mix(in srgb, var(--theme-color) 14%, var(--bg-card));
+  --bg-active: color-mix(in srgb, var(--theme-color) 24%, var(--bg-card));
+  --bg-modifier-hover: var(--bg-hover);
+  --text-header: color-mix(in srgb, var(--theme-color) 5%, light-dark(#161616, white));
+  --text-normal: color-mix(in srgb, var(--theme-color) 10%, light-dark(#262626, #fafafa));
+  --text-muted: color-mix(in srgb, var(--theme-color) 16%, light-dark(#414141, #dedede));
+  --text-link: color-mix(in srgb, var(--theme-color) 36%, light-dark(#101010, white));
+  --border-subtle: color-mix(in srgb, var(--text-normal) 14%, var(--bg-secondary));
+  --border-medium: color-mix(in srgb, var(--text-normal) 28%, var(--bg-secondary));
+  --interface-ink: var(--text-link);
+  --glow-brand: radial-gradient(ellipse at 20% 8%, var(--bg-card), transparent 55%);
+}
+:root.has-theme-color[data-theme="preto"] {
+  --theme-ground: #000;
+  --theme-surface: #040404;
+}
+:root.has-theme-color[data-theme="claro"] {
+  color-scheme: light;
+  --theme-ground: #fafafa;
+  --theme-surface: white;
+  --bg-primary: color-mix(in srgb, var(--theme-color) 8%, var(--theme-ground));
+  --bg-secondary: color-mix(in srgb, var(--theme-color) 5%, white);
+  --bg-card: color-mix(in srgb, var(--theme-color) 11%, white);
+  --bg-floating: color-mix(in srgb, var(--theme-color) 4%, white);
+}

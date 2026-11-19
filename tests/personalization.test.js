@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeAppearance, readableAccent } from '../public/personalization.js';
 test('personalização aceita apenas cores e imagens locais válidas e limita intensidade', () => {
-  assert.deepEqual(normalizeAppearance({ accent: 'red; color: blue', wallpaper: 'url(https://exemplo.test)', intensity: 90 }), { accent: '', wallpaper: '', intensity: 30 });
+  assert.deepEqual(normalizeAppearance({ accent: 'red; color: blue', wallpaper: 'url(https://exemplo.test)', intensity: 90 }), { themeColor: '', accent: '', secondary: '', wallpaper: '', intensity: 30 });
   assert.equal(normalizeAppearance({ wallpaper: 'data:image/svg+xml;base64,AAAA' }).wallpaper, '');
   assert.equal(normalizeAppearance({ wallpaper: 'data:image/png;base64,AAAA', intensity: -8 }).intensity, 5);
   assert.equal(normalizeAppearance(null).accent, '');

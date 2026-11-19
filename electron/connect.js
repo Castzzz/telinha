@@ -1,8 +1,8 @@
 const api = window.telinhaLauncher;
 const prefsApi = window.electronAPI;
 const $ = id => document.getElementById(id);
-const themes = ['escuro', 'preto', 'claro'];
-const labels = { escuro: 'Escuro', preto: 'Preto', claro: 'Claro' };
+const labels = window.temasTeletela;
+const themes = Object.keys(labels);
 let serverRoomUrl, timer, previewRun = 0;
 const defaultRoomIcon = $('server-room-icon').innerHTML;
 
@@ -13,7 +13,14 @@ function applyTheme(theme) {
   try { localStorage.setItem('telinha_theme', next); } catch { /* Preferência do app continua disponível. */ }
 }
 try { applyTheme(localStorage.getItem('telinha_theme')); } catch { applyTheme('escuro'); }
-Promise.resolve(prefsApi?.getPrefs?.()).then(prefs => { if (prefs?.theme) applyTheme(prefs.theme); }).catch(() => {});
+Promise.resolve(prefsApi?.getPrefs?.()).then(async prefs => {
+  window.aplicarVisual(prefs?.visual);
+  if (prefs?.theme) applyTheme(prefs.theme);
+  if (prefs?.appearanceExperiment) {
+    const { applyAppearanceColors } = await import('../public/personalization.js');
+    applyAppearanceColors(prefs.appearanceExperiment);
+  }
+}).catch(() => {});
 $('btn-theme').addEventListener('click', () => {
   const next = themes[(themes.indexOf(document.documentElement.dataset.theme) + 1) % themes.length];
   applyTheme(next);

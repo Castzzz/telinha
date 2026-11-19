@@ -177,7 +177,18 @@ async function runTests() {
     assert.equal((await legacyError).code, 'channel-password', 'cliente antigo também é barrado');
     await join(carol, cofre.channelId, 'carol-profile-0003', 'segredo do canal');
     assert.equal((await emit(bob, 'sfu-token', { ownerId: carol.id, role: 'viewer', kind: 'voice' })).ok, false, 'mídia não atravessa canais');
+    const previewKey = { targetId: carol.id, kind: 'screen2' };
+    const sampleFrame = 'data:image/jpeg;base64,/9j/2Q==';
+    carol.emit('user-state-changed', { extraScreens: [2] });
+    carol.emit('screen-preview-set', { kind: 'screen2', image: sampleFrame });
+    assert.equal(await emit(carol, 'screen-preview-get', previewKey), sampleFrame);
+    assert.equal(await emit(bob, 'screen-preview-get', previewKey), null);
     await join(bob, cofre.channelId, 'bob-profile-00002', 'segredo do canal');
+    assert.equal(await emit(bob, 'screen-preview-get', previewKey), sampleFrame);
+    assert.equal(await emit(bob, 'screen-preview-get', { ...previewKey, kind: 'screen3' }), null);
+    carol.emit('user-state-changed', { extraScreens: [] });
+    carol.emit('user-state-changed', { extraScreens: [2] });
+    assert.equal(await emit(carol, 'screen-preview-get', previewKey), null);
     await emit(carol, 'leave-channel', {});
     assert.equal((await emit(carol, 'join-channel', { channelId: cofre.channelId })).success, false, 'sair e voltar exige senha de novo');
     carol.off('channel-state', recordState);

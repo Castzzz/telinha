@@ -62,11 +62,23 @@ app.whenReady().then(async () => {
   b.setSize(390, 844); await pause(200);
   assert(await js(b, 'document.documentElement.scrollWidth <= innerWidth'));
   fs.writeFileSync('/tmp/teletela-amigos-celular.png', (await b.webContents.capturePage()).toPNG());
+  await click(a, '#friends-list .friend-actions button');
+  await until(a, "document.querySelector('#dm-dialog').open && !document.querySelector('#dm-thread').hidden");
+  await js(a, "document.querySelector('#dm-input').value='Só entre nós';document.querySelector('#dm-compose').requestSubmit();void 0");
+  await until(b, "document.querySelector('#dm-badge').textContent==='1'");
+  await b.loadURL(roomUrl(url));
+  await until(b, "document.querySelector('#dm-badge').textContent==='1' && !document.querySelector('#dm-badge').hidden");
+  await click(b, '#dm-open');
+  await click(b, '#dm-friends button');
+  await until(b, "document.querySelector('#dm-log').textContent.includes('Só entre nós')");
+  assert.equal(await js(b, "document.querySelector('#dm-dialog').getBoundingClientRect().width<=innerWidth"), true);
+  fs.writeFileSync('/tmp/teletela-conversa-celular.png', (await b.webContents.capturePage()).toPNG());
+  await click(a, '#dm-close'); await click(b, '#dm-close');
   await click(a, '[data-settings-tab=conta]'); failPrefs = true; await click(a, '#account-logout');
   await until(a, "document.querySelector('#account-feedback').textContent.includes('Não foi possível salvar')"); failPrefs = false;
   assert(prefs.get(a.webContents.id).accountSessions[url]?.token);
   await click(a, '[data-settings-tab=amigos]');
-  await click(a, '#friends-list button'); await until(b, "document.querySelector('#friends-list').textContent.includes('Nenhum amigo')");
+  await click(a, '#friends-list button[aria-label^="Remover"]'); await until(b, "document.querySelector('#friends-list').textContent.includes('Nenhum amigo')");
   // Reabrir preserva conta e perfil, sem publicar o visitante salvo no aparelho.
   await a.webContents.reload(); await until(a, 'Boolean(window.appState?.myId)');
   await click(a, '#btn-open-settings'); await click(a, '[data-settings-tab=conta]'); await until(a, "document.querySelector('#account-username').textContent === '@cast_teste'");

@@ -58,6 +58,7 @@ app.whenReady().then(async () => {
   }
   const sender = await open('Emissor');
   const viewer = await open('Espectador');
+  assert(await js(viewer, "!document.querySelector('#stage-controls-bar .watch-trigger') && !!document.querySelector('.app-topbar .watch-trigger')"));
   await click(sender, '#btn-share-camera');
   await until(sender, 'appState.myUser.isCameraOn');
   await until(sender, `Boolean(appState.sfuCameraPublisher?.pc?.localDescription || appState.screenPeersOut.size || !appState.sfuEnabled)`);
@@ -95,6 +96,12 @@ app.whenReady().then(async () => {
   await click(viewer, '#btn-stage-pip');
   const player = await created;
   await until(player, 'Boolean(document.querySelector("video")?.videoWidth)');
+  await js(viewer, "window.aplicarVisual('roda');void 0");
+  await until(player, "document.documentElement.dataset.visual === 'roda' && getComputedStyle(document.querySelector('#player-controls')).borderRadius === '20px'");
+  await js(viewer, "window.aplicarVisual('terminal');void 0");
+  await until(player, "document.documentElement.dataset.visual === 'terminal' && getComputedStyle(document.querySelector('#player-controls')).borderRadius === '2px'");
+  await js(viewer, "window.aplicarVisual('classico');void 0");
+  await until(player, "document.querySelector('link[data-visual-css=terminal]').media === 'not all'");
   assert(player.isResizable() && player.isMaximizable() && player.isFullScreenable(), 'Janela precisa permitir tamanho e tela cheia');
   assert(await js(player, 'document.querySelector("video").muted'), 'Player deve manter o áudio no mixer original');
   assert(await js(viewer, `appState.activeStreams.get('${key}').stream === originalStream`), 'Abrir janela não pode substituir o stream recebido');
@@ -135,7 +142,8 @@ app.whenReady().then(async () => {
     await js(viewer, "document.body.dataset.mobileView='sala';void 0");
     fs.writeFileSync(`/tmp/teletela-volume-${theme}.png`, (await viewer.webContents.capturePage()).toPNG());
   }
-  player.webContents.setZoomFactor(2);
+  const larguraOriginal = await js(player, 'innerWidth');
+  player.webContents.setZoomFactor(Math.max(2, larguraOriginal / 500));
   await until(player, 'innerWidth <= 540');
   await js(player, 'document.querySelector("#stream-name").textContent="Um nome muito comprido para testar a transmissão em janela pequena";document.querySelector("#stream-player").dispatchEvent(new Event("pointermove"));void 0');
   assert(await js(player, 'getComputedStyle(document.querySelector("#fullscreen span")).display === "none"'), 'Janela compacta deve mostrar botões só com ícones');
@@ -172,6 +180,8 @@ app.whenReady().then(async () => {
   await click(viewer, '#btn-stage-pip');
   await until(thirdPlayer, 'document.querySelector("#stream-name").textContent.includes("Emissor")');
   await until(viewer, `document.getElementById('video-el-${ownKey}').srcObject?.getVideoTracks().length > 0`);
+  await click(viewer, '#stage-more summary');
+  await until(viewer, "document.querySelector('#btn-stage-stop-watching').checkVisibility()");
   await click(viewer, '#btn-stage-stop-watching');
   await pause(300);
   assert(thirdPlayer.isDestroyed(), 'Parar de assistir precisa fechar o player');
@@ -202,6 +212,9 @@ app.whenReady().then(async () => {
   await until(sender, 'Boolean(appState.localScreenStream)');
   const screenKey = await js(sender, 'appState.myId');
   await until(viewer, `Boolean(document.querySelector('[data-stream-key="${screenKey}"]'))`);
+  await js(viewer, `Array.from(document.querySelectorAll('[data-stream-key="${screenKey}"]')).find(el=>el.offsetWidth)?.dispatchEvent(new PointerEvent('pointerover',{bubbles:true}));void 0`);
+  await until(viewer, "Boolean(document.querySelector('.live-thumbnail')?.naturalWidth)");
+  assert.equal(await js(viewer, `appState.activeStreams.has('${screenKey}')`), false);
   const watchStarted = Date.now();
   await click(viewer, `[data-stream-key="${screenKey}"]`);
   await until(viewer, `document.getElementById('video-el-${screenKey}')?.videoWidth > 0`);
@@ -248,10 +261,12 @@ app.whenReady().then(async () => {
   await adjust('#input-master-volume', 100);
   assert(await js(viewer, `document.getElementById('video-el-${screenKey}').muted && document.getElementById('video-el-${screenKey}').dataset.mixerOutput === '1'`), 'O vídeo deve ficar mudo para não tocar som fora do volume geral');
   console.log('Amplitude real da transmissão: 50–300%; volume geral: 0/50/100/200%.');
+  await click(sender, '#stage-more summary');
   await click(sender, '#btn-stage-diagnostics');
   await until(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('Resolução da captura')`);
   assert(await js(sender, `document.getElementById('transmission-diagnostics-results').textContent.includes('1920 × 1080')`), 'Diagnóstico precisa identificar a captura real');
   fs.writeFileSync('/tmp/teletela-diagnostico-envio.png', (await sender.webContents.capturePage()).toPNG());
+  await click(viewer, '#stage-more summary');
   await click(viewer, '#btn-stage-diagnostics');
   await until(viewer, `document.getElementById('transmission-diagnostics-results').textContent.includes('Resolução recebida')`);
   fs.writeFileSync('/tmp/teletela-diagnostico-recepcao.png', (await viewer.webContents.capturePage()).toPNG());

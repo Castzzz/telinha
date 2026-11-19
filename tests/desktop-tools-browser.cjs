@@ -14,6 +14,7 @@ process.env.TELINHA_DATA_DIR = path.join(directory, 'data'); process.env.SFU_SEC
 fs.mkdirSync(path.join(process.env.TELINHA_DATA_DIR, 'text'), { recursive: true });
 fs.writeFileSync(path.join(process.env.TELINHA_DATA_DIR, 'channels.json'), JSON.stringify({ channels: [], textChannels: [{ id: 'arquivo', name: 'Arquivo' }] }));
 const messages = Array.from({ length: 300 }, (_, i) => ({ id: 'antiga-' + i, channelId: 'arquivo', userName: 'João', text: 'Café da turma ' + i, timestamp: Date.now() - (300 - i) * 1000 }));
+messages[299].replyTo = { id: 'antiga-2', text: messages[2].text, userName: 'João' };
 fs.writeFileSync(path.join(process.env.TELINHA_DATA_DIR, 'text', 'arquivo.jsonl'), messages.map(m => JSON.stringify(m)).join('\n') + '\n');
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const js = async (win, code) => { try { return await win.webContents.executeJavaScript(code); } catch (error) { console.error('Falha no trecho de teste:', code); throw error; } };
@@ -34,7 +35,7 @@ app.whenReady().then(async () => {
   backend = await import('../server.js'); const server = await backend.startServer(0, '127.0.0.1');
   async function open(name) {
     const win = new BrowserWindow({ width: 1280, height: 900, show: false, webPreferences: { partition: 'tools-' + name, preload: path.join(__dirname, '../electron/preload.cjs'), offscreen: true, backgroundThrottling: false } });
-    windows.push(win); preferences.set(win.webContents.id, { profile: { id: 'tools-profile-' + name, name, color: '#5865f2' }, seenWhatsNew: '99', micOn: false });
+    windows.push(win); preferences.set(win.webContents.id, { visual: process.env.TEST_PERSONALIZATION === '1' && name === 'Cast' ? 'violeta' : 'classico', profile: { id: 'tools-profile-' + name, name, color: '#5865f2' }, seenWhatsNew: '99', micOn: false, textLastSeen: { arquivo: messages[210].timestamp } });
     win.webContents.on('console-message', event => { if (event.level === 'error' && !event.message.includes('Autofill')) { errors.push(event.message); console.error('[Interface]', event.message); } });
     handleAppProtocol(win.webContents.session); await win.loadURL(roomUrl('http://127.0.0.1:' + server.address().port));
     await until(win, 'Boolean(window.appState?.myId && document.querySelector("#channel-geral"))');
@@ -42,6 +43,16 @@ app.whenReady().then(async () => {
     return win;
   }
   const first = await open('Cast'), second = await open('Amigo');
+  await click(second, '[data-text-channel-id="arquivo"] .channel-row');
+  await until(second, `(() => { const log=document.querySelector('#chat-messages'), row=log.querySelector('[data-msg-id="antiga-211"]'); return row && Math.abs(row.getBoundingClientRect().top-log.getBoundingClientRect().top)<20; })()`);
+  await click(second, '#chat-latest');
+  await until(second, "document.querySelector('[data-msg-id=antiga-299]').getBoundingClientRect().top < document.querySelector('#chat-messages').getBoundingClientRect().bottom");
+  await click(second, '[data-msg-id="antiga-299"] .chat-reply-ref');
+  await until(second, "Boolean(document.querySelector('[data-msg-id=antiga-2].flash'))");
+  await pause(600);
+  await click(second, '#chat-back-reading');
+  await until(second, "document.querySelector('[data-msg-id=antiga-299]').getBoundingClientRect().top < document.querySelector('#chat-messages').getBoundingClientRect().bottom");
+  await click(second, '#btn-close-chat');
   await click(first, '#btn-open-settings'); await until(first, '!document.querySelector("#autostart-setting").classList.contains("hidden")');
   await click(first, '#check-autostart'); await until(first, '!document.querySelector("#check-autostart").disabled && document.querySelector("#check-autostart").checked');
   assert(autostart.get().enabled); assert(fs.existsSync(path.join(directory, 'config/autostart/telinha.desktop')));
@@ -53,6 +64,12 @@ app.whenReady().then(async () => {
   assert.equal(fs.readFileSync(path.join(directory,'config/hypr/hyprland.conf'),'utf8'),'exec-once = waybar\n');
 
   if (process.env.TEST_PERSONALIZATION === '1') {
+    assert.equal(await js(first, "document.documentElement.dataset.visual"), 'roda');
+    assert(await js(first, "document.querySelector('[name=visual][value=roda]').checked"));
+    await click(first, '[name=visual][value=terminal]');
+    await click(first, '[name=visual][value=roda]');
+    await until(first, "document.documentElement.dataset.visual === 'roda'");
+    await until(first, "window.electronAPI.getPrefs().then(prefs => prefs.visual === 'roda')");
     await click(first, '[data-personal-accent="#047857"]');
     await until(first, 'document.documentElement.style.getPropertyValue("--accent-brand") === "#047857"');
     await js(first, `(async()=>{
@@ -110,6 +127,10 @@ app.whenReady().then(async () => {
   const key = await js(first, 'appState.myId + "__cam"');
   await until(second, `Boolean(document.querySelector('[data-stream-key="${key}"]'))`); await click(second, `[data-stream-key="${key}"]`);
   await until(second, `Boolean(appState.activeStreams.get('${key}')?.stream)`);
+  await click(second, '#stage-more summary');
+  await until(second, "document.querySelector('#btn-stage-diagnostics').checkVisibility()");
+  await pause(180);
+  await fs.promises.writeFile('/tmp/teletela-mais-opcoes.png', (await second.webContents.capturePage()).toPNG());
   await click(second, '#btn-stage-diagnostics');
   await until(second, 'document.querySelector("#transmission-diagnostics-results").textContent.includes("VP8")');
   await pause(2300);

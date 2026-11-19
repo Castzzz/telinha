@@ -1,3 +1,9 @@
+import { setupStreamAccess } from './stream-access.js';
+import { setupScreenPreviews } from './screen-previews.js';
+import { setupSoundTrim } from './sound-trim.js';
+import { messageLinks } from './chat-links.js';
+import { setupLinkPreviews, attachLinkPreview } from './link-previews.js';
+import { configurarIndiceTerminal, canalComFoco, restaurarFocoDoCanal } from './terminal.js';
 import { setupVoiceClips } from './voice-clips.js';
 import { setupMicrophoneTest } from './microphone-test.js';
 import { PRESENCE_LABELS, normalizePresence, savedPresence } from './presence.js';
@@ -129,12 +135,13 @@ async function loadPrefs() {
 
 const prefs = await loadPrefs();
 
-// Tema: escuro (padrão), preto ou claro
-const THEMES = ['escuro', 'preto', 'claro'];
+const THEMES = Object.keys(window.temasTeletela);
 function applyTheme(theme) {
   document.documentElement.dataset.theme = THEMES.includes(theme) ? theme : 'escuro';
 }
 applyTheme(prefs.theme);
+window.aplicarVisual(prefs.visual);
+document.documentElement.dataset.terminalCursor = ['piscar', 'fixo'].includes(prefs.terminalCursor) ? prefs.terminalCursor : 'suave';
 applyAppearance(prefs.appearanceExperiment);
 
 // Desempenho: modo leve e pausa em segundo plano são opções independentes.
@@ -263,6 +270,7 @@ const initialUsername = myProfile.name;
 const initialColor = myProfile.color;
 
 const appState = {
+  browsingHome: false,
   myId: null,
   myUser: {
     name: initialUsername,
@@ -411,6 +419,15 @@ const socket = io(SERVER_URL, {
   timeout: 20000
 });
 
+setupLinkPreviews(socket);
+const streamAccess = setupStreamAccess({ socket, appState, streamKind, streamOwner, streamKey, unwatchScreen, showToast,
+  interromper(kind) {
+    if (kind === 'screen') onStopScreenShare();
+    else if (kind === 'camera') stopCameraShare({ silent: true });
+    else stopExtraScreen(extraScreenNumber(kind), { silent: true });
+  }
+});
+
 const dailyCallClocks = createDailyCallClocks();
 // Registra a chegada com relógio monotônico; a hora do PC não altera o total do servidor.
 socket.on('channels-list', list => { if (Array.isArray(list)) dailyCallClocks.replace(list.flatMap(channel => channel.users || [])); });
@@ -536,7 +553,7 @@ const accountUI = setupAccounts({
   }
 });
 
-serverMembersUI = setupServerMembers({ socket, prefs, savePrefs, serverUrl: SERVER_URL,
+serverMembersUI = setupServerMembers({ socket, prefs, savePrefs, serverUrl: SERVER_URL, closeMusic: () => musicUI?.fecharConversa(),
   assetKey: () => appState.assetKey || '', avatar: avatarInnerHtml, applyName: applyNameStyle, openProfile: openProfileCard });
 
 const permissionUI = setupPermissions({
@@ -1138,9 +1155,10 @@ socket.on('chat-message', (msg) => {
   clearTyping(msg.userId);
   if (mentionsMe(msg)) notifyMention(msg, 'chat da call', openCallChat);
   if (msg.channelId === appState.currentChannelId) {
-    if (!appState.textView) appendChatMessage(msg, true);
+    if (!appState.textView) { appendChatMessage(msg, chatAtEnd()); requestAnimationFrame(recordVisibleMessages); }
     // Chat da call fora da vista: acende a bolinha no balão do canal
     if ((appState.textView || $('#chat-drawer')?.classList.contains('collapsed')) && msg.userId !== appState.myId) {
+      if (!callReadAt.has(msg.channelId)) callReadAt.set(msg.channelId, msg.timestamp - 1);
       appState.unreadChannels.add(msg.channelId);
       renderChannelsTree();
     }
@@ -1215,7 +1233,12 @@ function requestChannelJoin(channelId, password = '', streamKey = null) {
 function switchChannel(targetChannelId, password, streamKey = null) {
   if (!targetChannelId) return;
   const cleanId = targetChannelId.toLowerCase();
-  if (cleanId === appState.currentChannelId) return;
+  if (cleanId === appState.currentChannelId) {
+    if (appState.textView) closeTextView();
+    setBrowsingHome(false);
+    setMobileView('sala');
+    return;
+  }
   if (pendingChannelJoin) return;
   if (appState.channels.get(cleanId)?.hasPassword && password === undefined) {
     openChannelPasswordModal(cleanId, '', streamKey);
@@ -1226,6 +1249,7 @@ function switchChannel(targetChannelId, password, streamKey = null) {
 
 // Só troca a interface e as conexões de mídia depois que o servidor aceita a entrada.
 function activateVoiceChannel(cleanId) {
+  appState.browsingHome = false;
   const oldChannelId = appState.currentChannelId;
   // Entrar e trocar de canal preservam o mute escolhido no dock.
   appState.currentChannelId = cleanId;
@@ -1398,6 +1422,9 @@ function renderChannelsTree() {
   const treeContainer = $('#channels-tree');
   if (!treeContainer) return;
 
+  const foco = canalComFoco(treeContainer);
+  const focusedStream = treeContainer.contains(document.activeElement) && document.activeElement.dataset.streamKey;
+
   // Render each channel in state
   const channelIds = Array.from(appState.channels.keys());
 
@@ -1474,13 +1501,7 @@ function renderChannelsTree() {
       if (ch.users.has(userId)) return;
       moveUserToChannel(userId, chId);
     });
-    // Clicar no canal em que você já está, vendo um canal de texto: volta pra tela da call
-    const openVoice = () => {
-      if (chId === appState.currentChannelId) {
-        if (appState.textView) closeTextView();
-        setMobileView('sala');
-      } else switchChannel(chId);
-    };
+    const openVoice = () => switchChannel(chId);
     row.addEventListener('click', openVoice);
     row.addEventListener('keydown', (e) => {
       if (e.target !== row) return;
@@ -1562,6 +1583,8 @@ function renderChannelsTree() {
   renderStreamViewers();
   musicUI?.renderBot();
   channelOrganizer?.decorate('voice', treeContainer);
+  if (focusedStream) treeContainer.querySelector(`[data-stream-key="${CSS.escape(focusedStream)}"]`)?.focus({ preventScroll: true });
+  else restaurarFocoDoCanal(treeContainer, foco);
 }
 
 function updateTopBar() {
@@ -1606,15 +1629,17 @@ function updateTopBar() {
 let serverHomeSignature = '';
 
 function renderServerHome() {
-  if (appState.currentChannelId) return;
+  if (appState.currentChannelId && !appState.browsingHome) return;
   const root = $('#server-home');
   if (!root) return;
   const channels = [...appState.channels.values()];
   const textChannels = [...(appState.textChannels?.values() || [])];
   // A fala muda várias vezes por segundo; o início só precisa mudar com canais e pessoas.
+  const visual = document.documentElement.dataset.visual;
+  const terminal = visual === 'terminal';
   const signature = JSON.stringify([
-    socket.connected,
-    channels.map((ch) => [ch.id, ch.name, sortedUsers(ch).map((u) => [u.id, u.name, u.color, u.avatarV, u.avatarCrop, u.frame, u.frameColor])]),
+    visual, socket.connected,
+    channels.map((ch) => [ch.id, ch.name, ch.isPrivate, ch.hasPassword, ch.isAfk, sortedUsers(ch).map((u) => [u.id, u.name, u.color, u.avatarV, u.avatarCrop, u.frame, u.frameColor])]),
     textChannels.map((ch) => [ch.id, ch.name])
   ]);
   if (signature === serverHomeSignature) return;
@@ -1623,23 +1648,57 @@ function renderServerHome() {
   $('#home-summary').textContent = !socket.connected ? 'Reconectando à sala…'
     : count ? `${count} ${count === 1 ? 'pessoa em voz agora' : 'pessoas em voz agora'}`
       : 'A sala está aberta. Entre quando quiser.';
+  $('#server-home h1 .visual-alternativo').textContent = terminal ? 'Terminal de voz' : 'Sala de encontro';
+  $('#home-voice-title').textContent = 'Canais de voz';
   $('#home-voice-count').textContent = String(channels.length);
-  $('#home-voice-channels').innerHTML = channels.map((ch) => {
+  $('#home-voice-channels').innerHTML = channels.map((ch, indice) => {
     const users = sortedUsers(ch);
     const names = users.slice(0, 3).map((u) => u.name).join(', ');
-    const label = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : 'Livre para entrar';
-    const faces = users.slice(0, 4).map((u) => `<span class="user-avatar home-person${frameClass(u)}" style="background:${safeColor(u.color)};${frameStyle(u)}" title="${escapeHtml(u.name)}">${avatarInnerHtml(u)}</span>`).join('');
+    const tipo = [ch.isAfk && 'Ausentes', ch.isPrivate && 'Restrito', ch.hasPassword && 'Com senha'].filter(Boolean).join(' · ');
+    const presentes = users.length ? `${names}${users.length > 3 ? ` e mais ${users.length - 3}` : ''}` : '';
+    const label = [tipo, presentes].filter(Boolean).join(' · ') || 'Livre para entrar';
+    const faces = users.slice(0, 4).map((u) => {
+      return `<span class="user-avatar home-person${frameClass(u)}" style="background:${safeColor(u.color)};${frameStyle(u)}" title="${escapeHtml(u.name)}">${avatarInnerHtml(u)}</span>`;
+    }).join('');
+    if (terminal) {
+      return `<button type="button" class="terminal-canal" data-home-voice="${escapeHtml(ch.id)}" aria-label="${escapeHtml(`Entrar em ${ch.name} · ${label}`)}" ${socket.connected ? '' : 'disabled'}>
+        <span class="terminal-numero" aria-hidden="true">${String(indice + 1).padStart(2, '0')}</span>
+        <span class="terminal-canal-nome"><strong>${escapeHtml(ch.name)}</strong><small>${escapeHtml(label)}</small></span>
+        <span class="home-people" aria-hidden="true">${faces}</span>
+        <span class="terminal-ocupacao">${users.length} na voz</span><span class="terminal-entrar" aria-hidden="true">↵</span>
+      </button>`;
+    }
     return `<button type="button" class="home-voice-card${users.length ? ' occupied' : ''}" data-home-voice="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}>
-      <span class="home-channel-icon">${HEADPHONES_ON_SVG}</span>
+      <span class="home-channel-icon"${ch.hasPassword ? ' title="Canal com senha"' : ''}>${ch.hasPassword ? CHANNEL_LOCK_SVG : HEADPHONES_ON_SVG}</span>
       <span class="home-channel-info"><strong>${escapeHtml(ch.name)}</strong><span>${escapeHtml(label)}</span></span>
       <span class="home-card-bottom"><span class="home-people">${faces || '<span class="home-empty-mark" aria-hidden="true"></span>'}</span><span class="home-enter">Entrar <span aria-hidden="true">→</span></span></span>
     </button>`;
   }).join('');
+  if (terminal && !channels.length) {
+    $('#home-voice-channels').textContent = socket.connected ? 'Nenhum canal de voz disponível.' : 'Aguardando conexão…';
+  }
   $('#home-text-section').classList.toggle('hidden', !textChannels.length);
   $('#home-text-channels').innerHTML = textChannels.map((ch) => `<button type="button" class="home-text-channel" data-home-text="${escapeHtml(ch.id)}" ${socket.connected ? '' : 'disabled'}><span class="home-text-hash" aria-hidden="true">#</span><span>${escapeHtml(ch.name)}</span><span class="home-text-arrow" aria-hidden="true">→</span></button>`).join('');
 }
 
+// Navegar pelo início não altera a participação na call nem as conexões de mídia.
+function setBrowsingHome(open) {
+  if (open) musicUI?.fecharConversa();
+  if (appState.browsingHome === open) return;
+  appState.browsingHome = open;
+  updateVoiceLounge();
+  updateStageLayout();
+}
+
 function setupServerHome() {
+  $('#btn-channels-home').addEventListener('click', () => {
+    if (appState.textView) {
+      $('#chat-drawer')?.classList.add('collapsed');
+      closeTextView();
+    }
+    setBrowsingHome(true);
+  });
+  configurarIndiceTerminal($('.channels-scroller'));
   $('#home-voice-channels').addEventListener('click', (e) => {
     const button = e.target.closest('[data-home-voice]');
     if (button) switchChannel(button.dataset.homeVoice);
@@ -1659,23 +1718,24 @@ function updateVoiceLounge() {
   const home = $('#server-home');
   const inCall = Boolean(appState.currentChannelId);
   const hasStreams = appState.activeStreams.size > 0;
-  home?.classList.toggle('hidden', inCall || hasStreams);
-  if (!inCall) {
+  home?.classList.toggle('hidden', !appState.browsingHome && (inCall || hasStreams));
+  if (appState.browsingHome || !inCall) {
     lounge.classList.add('hidden');
-    if (videosGrid) videosGrid.classList.toggle('hidden', !hasStreams);
+    if (videosGrid) videosGrid.classList.toggle('hidden', appState.browsingHome || !hasStreams);
     renderServerHome();
     return;
   }
   const ch = appState.channels.get(appState.currentChannelId);
   const name = ch ? ch.name : appState.currentChannelId;
 
+  const terminal = document.documentElement.dataset.visual === 'terminal';
   const title = $('#lounge-channel-title');
   if (title) {
     if (appState.currentChannelId) {
       const timerBadge = ch?.callStartedAt
         ? ` <span class="lounge-call-timer" data-call-timer="${Number(ch.callStartedAt)}" title="Tempo ativo desta call">⏱ ${formatCallClock(ch.callStartedAt)}</span>`
         : '';
-      title.innerHTML = `Canal de Voz: ${escapeHtml(name)}${timerBadge}`;
+      title.innerHTML = terminal ? `${escapeHtml(name)}${timerBadge}` : `Canal de Voz: ${escapeHtml(name)}${timerBadge}`;
     } else {
       title.textContent = 'Escolha um canal para começar';
     }
@@ -1687,48 +1747,64 @@ function updateVoiceLounge() {
     else if (ch?.id === 'cinema') iconEl.textContent = '🎬';
     else if (ch?.id === 'futebol') iconEl.textContent = '⚽';
     else if (ch?.id === 'gameplay') iconEl.textContent = '🎮';
-    else iconEl.textContent = '🔊';
+    else iconEl.innerHTML = HEADPHONES_ON_SVG;
   }
 
-  // Populate users in lounge
+  // Reaproveita cada cartão para uma atualização da call não repetir a entrada.
   const loungeUsersGrid = $('#lounge-users-grid');
   if (loungeUsersGrid) {
     loungeUsersGrid.classList.toggle('hidden', !appState.currentChannelId);
-    loungeUsersGrid.innerHTML = '';
+    const existentes = new Map();
+    for (const card of [...loungeUsersGrid.children]) {
+      if (ch?.users.has(card.dataset.userId)) existentes.set(card.dataset.userId, card);
+      else card.remove();
+    }
+    let proximo = loungeUsersGrid.firstElementChild;
     const users = ch ? sortedUsers(ch) : [];
 
     users.forEach((u) => {
       const isMe = u.id === appState.myId;
 
-      const card = document.createElement('div');
-      card.className = 'lounge-user-card';
+      const card = existentes.get(u.id) || document.createElement('div');
+      card.classList.add('lounge-user-card');
+      card.dataset.userId = u.id;
+      const avatarTag = terminal ? 'button' : 'div';
+      const avatarAttrs = terminal ? ` type="button" aria-label="${escapeHtml(`Ver perfil de ${u.name}`)}"` : '';
+      const transmissoes = liveBadgesHtml(u);
       card.innerHTML = `
-        <div class="user-avatar-wrap ${u.isSpeaking ? 'is-speaking' : ''}">
+        <${avatarTag}${avatarAttrs} class="user-avatar-wrap ${u.isSpeaking ? 'is-speaking' : ''}">
           <div class="user-avatar${frameClass(u)}" style="background-color: ${safeColor(u.color)};${frameStyle(u)}">
             ${avatarInnerHtml(u)}
           </div>
           <span class="speaking-halo"></span>${userPresenceHtml(u)}
-        </div>
+        </${avatarTag}>
         <span class="lounge-user-name"><span class="user-name-text"${nameStyle(u)}>${escapeHtml(u.name)}</span>${ownershipBadge(u)}${isMe ? ' (Você)' : ''}</span>
+        ${terminal ? `<span class="terminal-fala"><i aria-hidden="true"></i><span class="terminal-silencio">Pausa</span><span class="terminal-falando">Falando</span></span>
+          <span class="terminal-mic">${u.isMicOn ? 'Aberto' : 'Mutado'}${muteIndicatorsHtml(u)}</span>
+          <span class="terminal-video">${transmissoes || '—'}</span>` : ''}
         ${userCallTimerHtml(u)}
         <div class="user-indicators">
           ${userGameBadgeHtml(u)}
-          ${liveBadgesHtml(u)}
-          ${muteIndicatorsHtml(u)}
+          ${terminal ? '' : transmissoes}
+          ${terminal ? '' : muteIndicatorsHtml(u)}
           ${!isMe && getVolumePref(u).muted ? `<span class="indicator-icon" title="Silenciado por você">${SPEAKER_OFF_SVG}</span>` : ''}
         </div>
       `;
       card.title = isMe ? 'Ver seu perfil' : 'Ver perfil e ajustar volume';
-      card.addEventListener('click', (e) => {
-        openUserPopover(u.id, e);
-      });
+      card.onclick = (e) => {
+        if (terminal && e.detail === 0) {
+          const rect = card.getBoundingClientRect();
+          openUserPopover(u.id, { clientX: rect.x + rect.width / 2, clientY: rect.y });
+        } else openUserPopover(u.id, e);
+      };
       card.querySelectorAll('.badge-live-stream').forEach((liveBadge) => {
         liveBadge.addEventListener('click', (e) => {
           e.stopPropagation();
           openStream(liveBadge.dataset.streamKey);
         });
       });
-      loungeUsersGrid.appendChild(card);
+      if (card !== proximo) loungeUsersGrid.insertBefore(card, proximo);
+      proximo = card.nextElementSibling;
     });
   }
   musicUI?.renderBot();
@@ -1919,6 +1995,8 @@ function renderChannelChat(channelId) {
   // Vendo um canal de texto: o chat da call fica pra quando voltar
   if (appState.textView) return;
 
+  textChatResize.disconnect();
+  container.classList.remove('follow-latest');
   container.innerHTML = '';
   const messages = appState.channelChats.get(channelId) || [];
 
@@ -1935,8 +2013,10 @@ function renderChannelChat(channelId) {
   `;
   container.appendChild(welcomeBanner);
 
+  beginReading(callReadAt.get(channelId));
   messages.forEach((msg) => appendChatMessage(msg, false));
   container.scrollTop = container.scrollHeight;
+  restoreReading();
 }
 
 function appendChatMessage(msg, autoScroll = true) {
@@ -1945,8 +2025,8 @@ function appendChatMessage(msg, autoScroll = true) {
   const div = buildChatMessage(msg);
   // Imagem que demora a carregar empurra o chat: desce de novo quando ela chegar
   const img = div.querySelector('.chat-image');
-  if (img && autoScroll) img.addEventListener('load', () => { container.scrollTop = container.scrollHeight; }, { once: true });
-  container.appendChild(div);
+  if (img && autoScroll && !appState.textView) img.addEventListener('load', () => { if (div.isConnected && container.classList.contains('follow-latest')) container.scrollTop = container.scrollHeight; }, { once: true });
+  (container.querySelector('.chat-text-history') || container).appendChild(div);
   if (autoScroll) container.scrollTop = container.scrollHeight;
 }
 
@@ -1979,6 +2059,7 @@ function buildChatMessage(msg) {
   const isTemp = Number.isFinite(msg.expiresAt) && msg.expiresAt > 0;
   div.className = `chat-msg${mentionsMe(msg) ? ' mention-me' : ''}${isWhisper ? ' is-whisper' : ''}${isTemp ? ' is-temporary' : ''}`;
   if (msg.id) div.dataset.msgId = msg.id;
+  div.dataset.timestamp = msg.timestamp || 0;
   if (isTemp) div.dataset.expiresAt = String(msg.expiresAt);
 
   const when = new Date(msg.timestamp || Date.now());
@@ -1993,12 +2074,13 @@ function buildChatMessage(msg) {
     name: msg.userName || msg.senderName, avatarV: msg.userAvatarV, avatarCrop: msg.userAvatarCrop || current?.avatarCrop,
     memberAvatarUrl: msg.authorMemberId && msg.userAvatarV ? `${SERVER_URL}/api/member-avatar/${encodeURIComponent(msg.authorMemberId)}?v=${encodeURIComponent(msg.userAvatarV)}&access=${encodeURIComponent(appState.assetKey || '')}` : '' };
   const mine = isMyMessage(msg);
+  if (mine) div.classList.add('chat-own');
   // Responder e reagir precisam do servidor novo (mensagem com id e perfil)
   const actions = msg.id ? [
     ['reply', 'Responder'],
     ['react', 'Reagir'],
     ...(appState.textView && !isWhisper && !isTemp ? [['pin', msg.pinned ? 'Desfixar' : 'Fixar']] : []),
-    ...(mine && msg.text !== undefined ? [['edit', 'Editar']] : []),
+    ...(mine && msg.text !== undefined ? [['edit', msg.attachment?.mime === 'audio/wav' ? 'Renomear clipe' : 'Editar']] : []),
     ...(mine || hasPermission(appState, 'manageMessages') ? [['delete', 'Apagar']] : [])
   ] : [];
   const whisperNames = isWhisper ? msg.whisperTo.map((r) => escapeHtml(r?.name || 'Amigo')).join(', ') : '';
@@ -2024,6 +2106,7 @@ function buildChatMessage(msg) {
     </div>
     ${actions.length ? `<div class="chat-msg-actions">${actions.map(([act, label]) => `<button type="button" data-act="${act}" title="${label}" aria-label="${label}"${act === 'delete' ? ' class="danger"' : ''}>${ACTION_ICONS[act]}</button>`).join('')}</div>` : ''}
   `;
+  attachLinkPreview(div.querySelector('.chat-text'));
   return div;
 }
 
@@ -2086,10 +2169,12 @@ function startEditMessage(id) {
   if (!msg || !el || !isMyMessage(msg) || el.querySelector('.chat-edit')) return;
   const body = el.querySelector('.chat-msg-body');
   el.querySelector('.chat-text')?.remove();
+  el.querySelector('chat-link-preview')?.remove();
   const box = document.createElement('div');
   box.className = 'chat-edit';
   box.innerHTML = '<textarea rows="1" maxlength="4000"></textarea><small>Enter salva · Esc cancela</small>';
   const area = box.querySelector('textarea');
+  if (msg.attachment?.mime === 'audio/wav') area.maxLength = 120;
   area.value = msg.text || '';
   body.querySelector('.chat-msg-header').after(box);
   const fit = () => { area.style.height = 'auto'; area.style.height = `${area.scrollHeight}px`; };
@@ -2108,7 +2193,7 @@ function startEditMessage(id) {
       finish();
     } else if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const text = area.value.trim();
+      const text = area.value.trim() || (msg.attachment?.mime === 'audio/wav' ? new Date(msg.attachment.clippedAt || msg.timestamp).toLocaleString('pt-BR') : '');
       if (text === (msg.text || '')) return finish();
       if (!text) {
         finish();
@@ -2371,7 +2456,7 @@ function setupMentionAutocomplete() {
 // Tocar manda pra toda a call; cada um escolhe nas configurações se ouve e o volume.
 appState.soundboard = [];
 const MAX_SOUNDBOARD_BYTES = 1024 * 1024;
-const MAX_SOUNDBOARD_SECONDS = 10.5;
+const MAX_SOUNDBOARD_SECONDS = 15;
 
 function soundboardUrl(id) {
   const builtIn = /^amigo-([1-9])$/.exec(id);
@@ -2431,16 +2516,14 @@ async function readSoundboardFile(file) {
   if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
     throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
   }
-  const ctx = appState.mixerManager?.audioContext;
-  if (ctx) {
-    let buffer;
-    try {
-      buffer = await ctx.decodeAudioData(await file.arrayBuffer());
-    } catch {
-      throw new Error('Não consegui tocar esse áudio.');
-    }
-    if (buffer.duration > MAX_SOUNDBOARD_SECONDS) throw new Error(`Áudio longo demais (${buffer.duration.toFixed(1)} s): o máximo é 10 s.`);
+  const ctx = appState.audioContext || new OfflineAudioContext(1, 1, 24000);
+  let buffer;
+  try {
+    buffer = await ctx.decodeAudioData(await file.arrayBuffer());
+  } catch {
+    throw new Error('Não consegui tocar esse áudio.');
   }
+  if (buffer.duration > MAX_SOUNDBOARD_SECONDS) throw new Error(`Áudio longo demais (${buffer.duration.toFixed(1)} s). O máximo é 15 s.`);
   return dataUrl;
 }
 
@@ -2487,7 +2570,7 @@ function setupSoundboard() {
 
   // Adicionar som
   const form = $('#soundboard-add-form');
-  let pendingData = '';
+  let pendingData = '', selection = 0;
   $('#btn-soundboard-add-toggle')?.addEventListener('click', () => {
     form.classList.toggle('hidden');
     if (!form.classList.contains('hidden')) $('#input-soundboard-name')?.focus();
@@ -2496,15 +2579,21 @@ function setupSoundboard() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    const current = ++selection;
+    pendingData = '';
+    $('#soundboard-file-name').textContent = 'Conferindo áudio…';
     try {
-      pendingData = await readSoundboardFile(file);
+      const data = await readSoundboardFile(file);
+      if (current !== selection) return;
+      pendingData = data;
       $('#soundboard-file-name').textContent = file.name;
       const name = $('#input-soundboard-name');
       if (name && !name.value) name.value = file.name.replace(/\.[^.]+$/, '').slice(0, 30);
       playCallSound(0, pendingData, { force: true });
     } catch (err) {
+      if (current !== selection) return;
       pendingData = '';
-      $('#soundboard-file-name').textContent = 'até 10 s e 1 MB';
+      $('#soundboard-file-name').textContent = 'até 15 s e 1 MB';
       showToast(`❌ ${err.message || 'Não consegui abrir esse áudio.'}`, 'error');
     }
   });
@@ -2521,7 +2610,7 @@ function setupSoundboard() {
       pendingData = '';
       form.reset();
       $('#input-soundboard-emoji').value = '🔊';
-      $('#soundboard-file-name').textContent = 'até 10 s e 1 MB';
+      $('#soundboard-file-name').textContent = 'até 15 s e 1 MB';
       form.classList.add('hidden');
       showToast(`🔊 Som "${name}" adicionado!`, 'success');
     });
@@ -2573,7 +2662,10 @@ function jumpToMessage(id) {
     showToast('Essa mensagem é antiga: role o chat pra cima pra carregar.');
     return false;
   }
-  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  const lista = $('#chat-messages');
+  const distancia = Math.abs(target.getBoundingClientRect().top - lista.getBoundingClientRect().top);
+  const animar = distancia < lista.clientHeight * 2 && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  target.scrollIntoView({ block: 'center', behavior: animar ? 'smooth' : 'instant' });
   target.classList.remove('flash');
   void target.offsetWidth;
   target.classList.add('flash');
@@ -2773,7 +2865,9 @@ function setupChatMessageActions() {
     const id = msgEl?.dataset.msgId;
     const jump = e.target.closest('.chat-reply-ref');
     if (jump) {
-      jumpToMessage(jump.dataset.jump);
+      const previous = { scope: readingScope(), id, atEnd: chatAtEnd(), offset: msgEl.getBoundingClientRect().top - container.getBoundingClientRect().top };
+      readingTarget = { scope: readingScope(), reply: jump.dataset.jump, previous };
+      restoreReading();
       return;
     }
     const chip = e.target.closest('.chat-reaction[data-emoji]');
@@ -2811,18 +2905,14 @@ function setupChatMessageActions() {
 }
 
 // Links do chat viram clicáveis (abrem no navegador). O texto é escapado pedaço por pedaço.
-const URL_IN_TEXT_RE = /\bhttps?:\/\/[^\s<>"']+/gi;
-
 function linkifyText(text) {
   const raw = String(text || '');
   let html = '';
   let last = 0;
-  for (const match of raw.matchAll(URL_IN_TEXT_RE)) {
-    // Pontuação no fim ("veja https://x.com.") fica fora do link
-    const url = match[0].replace(/[.,!?;:)\]]+$/, '');
-    html += mentionify(escapeHtml(raw.slice(last, match.index)));
-    html += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" class="chat-link">${escapeHtml(url)}</a>`;
-    last = match.index + url.length;
+  for (const { index, label, url } of messageLinks(raw)) {
+    html += mentionify(escapeHtml(raw.slice(last, index)));
+    html += `<a href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer" class="chat-link">${escapeHtml(label)}</a>`;
+    last = index + label.length;
   }
   return html + mentionify(escapeHtml(raw.slice(last)));
 }
@@ -2844,8 +2934,10 @@ function chatAttachmentHtml(attachment) {
   const sizeText = size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : `${Math.ceil(size / 1024)} KB`;
   const download = `${url}&download=1&name=${encodeURIComponent(name)}`;
   const video = /\.(mp4|webm)$/.test(attachment.url);
-  const audio = attachment.url.endsWith('.wav') ? `<audio class="chat-voice-clip" src="${escapeHtml(url)}" controls preload="none" aria-label="${escapeHtml(name)}"></audio>` : '';
-  return `${audio}${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
+  const audio = attachment.url.endsWith('.wav') ? `<audio class="chat-voice-clip" crossorigin="anonymous" src="${escapeHtml(url)}" controls preload="none" aria-label="${escapeHtml(name)}"></audio>` : '';
+  const recorded = audio && attachment.clippedAt ? new Date(attachment.clippedAt).toLocaleString('pt-BR') : '';
+  const info = recorded ? `<small class="clip-recorded">Capturado em ${escapeHtml(recorded)} · ${Math.round((size - 44) / (2 * (attachment.sampleRate || 16000)))} s</small>` : '';
+  return `${info}${audio}${audio ? '<button class="btn-secondary trim-saved-clip" type="button">Recortar para o soundboard</button>' : ''}${video ? `<video class="chat-video" src="${escapeHtml(url)}" controls playsinline preload="metadata" aria-label="${escapeHtml(name)}"></video>` : ''}
     <a class="chat-file" href="${escapeHtml(download)}" download="${escapeHtml(name)}">
       <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 12v6m-3-3 3 3 3-3"/></svg>
       <span><strong>${escapeHtml(name)}</strong><small>${sizeText} · Baixar${video ? ' vídeo' : ' arquivo'}</small></span>
@@ -3062,15 +3154,78 @@ function textLastSeen(id) {
   return (prefs.textLastSeen || {})[id] || 0;
 }
 
-function markTextSeen(id) {
-  const ch = appState.textChannels.get(id);
-  if (!ch?.lastMessageAt || textLastSeen(id) >= ch.lastMessageAt) return;
-  savePrefs({ textLastSeen: { ...(prefs.textLastSeen || {}), [id]: ch.lastMessageAt } });
+let readingTarget = null, returnPoint = null;
+const callReadAt = new Map();
+const readingScope = () => appState.textView ? 'text:' + appState.textView : 'call:' + appState.currentChannelId;
+function chatAtEnd() {
+  const el = $('#chat-messages');
+  return el.scrollHeight - el.clientHeight - el.scrollTop < 4;
+}
+
+function recordVisibleMessages() {
+  const el = $('#chat-messages');
+  if (readingTarget || !el.clientHeight || document.hidden || $('#chat-drawer').classList.contains('collapsed')) return;
+  const bounds = el.getBoundingClientRect();
+  const rows = el.querySelectorAll('[data-msg-id]');
+  for (let i = rows.length - 1; i >= 0; i--) {
+    const rect = rows[i].getBoundingClientRect();
+    if (rect.top >= bounds.bottom || rect.bottom <= bounds.top) continue;
+    const at = Number(rows[i].dataset.timestamp), id = appState.textView;
+    if (id && at > textLastSeen(id)) savePrefs({ textLastSeen: { ...prefs.textLastSeen, [id]: at } });
+    if (!id && at > (callReadAt.get(appState.currentChannelId) || 0)) callReadAt.set(appState.currentChannelId, at);
+    break;
+  }
+  $('#chat-latest').classList.toggle('hidden', chatAtEnd());
+}
+
+function beginReading(at) {
+  returnPoint = null;
+  $('#chat-back-reading').classList.add('hidden');
+  $('#chat-latest').classList.add('hidden');
+  readingTarget = { scope: readingScope(), at };
+}
+
+function restoreReading() {
+  const target = readingTarget;
+  if (!target || target.scope !== readingScope()) return;
+  const id = appState.textView, state = id && appState.textMessages.get(id);
+  if (id && (!state || state.loading)) return;
+  const messages = id ? state.messages : appState.channelChats.get(appState.currentChannelId) || [];
+  const oldest = messages[0];
+  // Um canal já visitado ainda vazio também tem um ponto de leitura.
+  if (id && !oldest && !target.reply && !textLastSeen(id)) {
+    savePrefs({ textLastSeen: { ...prefs.textLastSeen, [id]: 1 } });
+  }
+  if (target.reply) {
+    if (!chatMessageEl(target.reply) && state?.hasMore && oldest) {
+      loadTextHistory(id, oldest.id);
+      return;
+    }
+    readingTarget = null;
+    $('#chat-messages').classList.remove('follow-latest');
+    if (jumpToMessage(target.reply)) {
+      returnPoint = target.previous;
+      $('#chat-back-reading').classList.remove('hidden');
+    }
+    return;
+  }
+  if (target.at && state?.hasMore && oldest?.timestamp > target.at) {
+    loadTextHistory(id, oldest.id);
+    return;
+  }
+  readingTarget = null;
+  const next = target.at && messages.find(m => m.timestamp > target.at);
+  if (next) {
+    $('#chat-messages').classList.remove('follow-latest');
+    chatMessageEl(next.id)?.scrollIntoView({ block: 'start' });
+  }
+  requestAnimationFrame(recordVisibleMessages);
 }
 
 function renderTextChannels() {
   const tree = $('#text-channels-tree');
   if (!tree) return;
+  const foco = canalComFoco(tree);
   tree.innerHTML = '';
   updateCategoryHeaders();
   for (const ch of appState.textChannels.values()) {
@@ -3111,6 +3266,7 @@ function renderTextChannels() {
     tree.appendChild(li);
   }
   channelOrganizer?.decorate('text', tree);
+  restaurarFocoDoCanal(tree, foco);
   renderServerHome();
 }
 
@@ -3152,7 +3308,7 @@ function updateTextLayout() {
   const toggle = $('#btn-toggle-chat');
   drawer?.classList.toggle('hidden', !available);
   toggle?.classList.toggle('hidden', !available);
-  const chatOpen = available && !drawer?.classList.contains('collapsed');
+  const chatOpen = available && !drawer?.classList.contains('collapsed') && !$('#modal-music:not(.hidden)');
   toggle?.classList.toggle('active', chatOpen);
   toggle?.setAttribute('aria-expanded', String(chatOpen));
   const central = Boolean(appState.textView) && chatOpen;
@@ -3169,17 +3325,22 @@ function markCallChatSeen() {
 
 function openCallChat() {
   if (!appState.currentChannelId) return;
+  musicUI?.fecharConversa();
+  setBrowsingHome(false);
   setMobileView('chat');
   closeTextView();
   markCallChatSeen();
   $('#chat-drawer')?.classList.remove('collapsed');
   $('#btn-toggle-chat')?.classList.add('active');
   updateTextLayout();
+  renderChannelChat(appState.currentChannelId);
   $('#chat-input')?.focus();
 }
 
 function openTextChannel(id) {
   if (!appState.textChannels.has(id)) return;
+  musicUI?.fecharConversa();
+  setBrowsingHome(false);
   setMobileView('chat');
   if (appState.textView !== id) setReplyTo(null);
   appState.textView = id;
@@ -3187,12 +3348,12 @@ function openTextChannel(id) {
   const drawer = $('#chat-drawer');
   drawer?.classList.remove('collapsed');
   $('#btn-toggle-chat')?.classList.add('active');
-  markTextSeen(id);
+  beginReading(textLastSeen(id));
   renderTextChannels();
   updateTopBar();
   updateTextLayout();
   const state = appState.textMessages.get(id);
-  if (state) renderTextChat();
+  if (state) { renderTextChat(); restoreReading(); }
   else loadTextHistory(id);
   $('#chat-input')?.focus();
 }
@@ -3214,10 +3375,17 @@ function loadTextHistory(id, before = null) {
   state.loading = true;
   appState.textMessages.set(id, state);
   if (!before) renderTextChat(); // mostra "carregando" enquanto chega
-  socket.emit('text-history', before ? { channelId: id, before } : { channelId: id }, (res) => {
+  socket.timeout(10000).emit('text-history', before ? { channelId: id, before } : { channelId: id }, (err, res) => {
     state.loading = false;
     if (!appState.textChannels.has(id)) return;
-    if (!res?.success) return;
+    if (err || !res?.success) {
+      if (!before && !state.messages.length) appState.textMessages.delete(id);
+      if (appState.textView === id) {
+        readingTarget = null;
+        showToast('Não deu para carregar o histórico. Abra o canal de novo.', 'error');
+      }
+      return;
+    }
     const container = $('#chat-messages');
     const keepFromBottom = container ? container.scrollHeight - container.scrollTop : 0;
     // Mensagem que chegou ao vivo enquanto o histórico vinha não fica repetida
@@ -3227,19 +3395,31 @@ function loadTextHistory(id, before = null) {
     state.messages = [...fresh, ...state.messages];
     state.hasMore = res.hasMore;
     if (appState.textView !== id) return;
-    renderTextChat();
+    const manterLeitura = before && container && !container.classList.contains('follow-latest');
+    renderTextChat(!manterLeitura);
     // Carregou as antigas em cima: a tela não pula
-    if (before && container) container.scrollTop = container.scrollHeight - keepFromBottom;
+    if (manterLeitura) container.scrollTop = container.scrollHeight - keepFromBottom;
+    restoreReading();
   });
 }
 
-function renderTextChat() {
+// O tamanho final do histórico só é conhecido depois que anexos e layout assentam.
+const textChatResize = new ResizeObserver(() => {
+  const container = $('#chat-messages');
+  if (appState.textView && container.classList.contains('follow-latest')) container.scrollTop = container.scrollHeight;
+});
+
+function renderTextChat(followLatest = true) {
   const container = $('#chat-messages');
   const id = appState.textView;
   const ch = appState.textChannels.get(id);
   if (!container || !ch) return;
   const state = appState.textMessages.get(id) || { messages: [], hasMore: false, loading: true };
-  container.innerHTML = '';
+  const history = document.createElement('div');
+  history.className = 'chat-text-history';
+  textChatResize.disconnect();
+  container.replaceChildren(history);
+  container.classList.toggle('follow-latest', followLatest);
   const banner = document.createElement('div');
   banner.className = 'chat-welcome-banner';
   if (state.hasMore || (state.loading && !state.messages.length)) {
@@ -3250,9 +3430,11 @@ function renderTextChat() {
       <p>Tudo que mandarem aqui fica salvo, mesmo depois de todo mundo sair.</p>
     `;
   }
-  container.appendChild(banner);
-  state.messages.forEach((msg) => appendChatMessage(msg, false));
-  container.scrollTop = container.scrollHeight;
+  history.appendChild(banner);
+  for (const msg of state.messages) history.appendChild(buildChatMessage(msg));
+  if (followLatest) container.scrollTop = container.scrollHeight;
+  textChatResize.observe(history);
+  textChatResize.observe(container);
 }
 
 function setupTextChannels() {
@@ -3315,11 +3497,34 @@ function setupTextChannels() {
   window.addEventListener('resize', () => {
     if (streamPreviewPos && layout?.classList.contains('text-with-stream')) applyStreamPreviewPosition();
   });
+  $('#chat-latest').onclick = () => {
+    readingTarget = null;
+    const el = $('#chat-messages');
+    el.scrollTop = el.scrollHeight;
+    recordVisibleMessages();
+  };
+  $('#chat-back-reading').onclick = () => {
+    const el = $('#chat-messages'), row = returnPoint?.scope === readingScope() && chatMessageEl(returnPoint.id);
+    $('#chat-back-reading').classList.add('hidden');
+    if (row) {
+      el.classList.toggle('follow-latest', returnPoint.atEnd);
+      const top = returnPoint.atEnd ? el.scrollHeight : el.scrollTop + row.getBoundingClientRect().top - el.getBoundingClientRect().top - returnPoint.offset;
+      el.scrollTo({ top, behavior: 'instant' });
+    }
+    returnPoint = null;
+    recordVisibleMessages();
+  };
+  document.addEventListener('visibilitychange', recordVisibleMessages);
   // Perto do topo: busca as mensagens mais antigas
   $('#chat-messages')?.addEventListener('scroll', (e) => {
+    recordVisibleMessages();
+    e.target.classList.toggle('follow-latest', chatAtEnd());
     const id = appState.textView;
     const state = id && appState.textMessages.get(id);
-    if (!state || !state.hasMore || state.loading || e.target.scrollTop > 60) return;
+    if (!state || !e.target.clientHeight) return;
+    const distance = e.target.scrollHeight - e.target.clientHeight - e.target.scrollTop;
+    e.target.classList.toggle('follow-latest', distance <= 2);
+    if (distance <= 2 || !state.hasMore || state.loading || e.target.scrollTop > 60) return;
     const oldest = state.messages[0];
     if (oldest) loadTextHistory(id, oldest.id);
   });
@@ -3348,8 +3553,10 @@ socket.on('text-message', (msg) => {
   const state = appState.textMessages.get(msg.channelId);
   if (state && !state.messages.some((m) => m.id === msg.id)) state.messages.push(msg);
   if (appState.textView === msg.channelId) {
-    appendChatMessage(msg, true);
-    markTextSeen(msg.channelId);
+    const container = $('#chat-messages');
+    const follow = container.classList.contains('follow-latest') || isMyMessage(msg);
+    appendChatMessage(msg, follow);
+    requestAnimationFrame(recordVisibleMessages);
   }
   renderTextChannels();
 });
@@ -3398,8 +3605,9 @@ function addSystemChatMessage(text, channelId = appState.currentChannelId) {
   const div = document.createElement('div');
   div.className = 'chat-system-notice';
   div.textContent = text;
+  const follow = chatAtEnd();
   container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+  if (follow) container.scrollTop = container.scrollHeight;
 }
 
 function spawnFloatingReaction(userName, emoji) {
@@ -3543,10 +3751,15 @@ function setupChatAndReactions() {
     if (!appState.currentChannelId && !appState.textView) return;
     const drawer = $('#chat-drawer');
     if (drawer) {
-      drawer.classList.toggle('collapsed');
+      if (musicUI?.fecharConversa()) drawer.classList.remove('collapsed');
+      else drawer.classList.toggle('collapsed');
       $('#btn-toggle-chat')?.classList.toggle('active', !drawer.classList.contains('collapsed'));
       if (!drawer.classList.contains('collapsed') && !appState.textView) markCallChatSeen();
       updateTextLayout();
+      if (!drawer.classList.contains('collapsed')) {
+        if (appState.textView) openTextChannel(appState.textView);
+        else renderChannelChat(appState.currentChannelId);
+      }
     }
   });
 
@@ -3915,11 +4128,7 @@ function setupModals() {
   $('#btn-stage-fullscreen')?.addEventListener('click', () => toggleStageFullscreen());
   $('#btn-stage-pip')?.addEventListener('click', toggleStagePip);
   $('#btn-stage-stop-watching')?.addEventListener('click', () => {
-    // Mosaico: para todas; uma aberta: só ela (a sua própria transmissão fica)
-    const ids = isMosaicView() ? [...appState.activeStreams.keys()] : [appState.focusedStreamUserId];
-    ids.forEach((id) => {
-      if (id && !appState.activeStreams.get(id)?.isLocal) unwatchScreen(id);
-    });
+    transmissoesParaFechar().forEach(unwatchScreen);
   });
 
   // O mesmo editor atende o atalho no próprio perfil e a aba nas configurações.
@@ -4495,6 +4704,8 @@ function openUserPopover(userId, anchorEvent) {
   popoverUserId = userId;
   const isMe = userId === appState.myId;
   const shown = isMe ? { ...u, ...myProfile, id: userId } : u;
+  accountUI.friends?.mostrarPerfil(isMe ? null : u.accountId);
+  $('#user-popover-admin').open = false;
 
   const avatar = $('#user-popover-avatar');
   avatar.style.backgroundColor = safeColor(shown.color);
@@ -4945,8 +5156,8 @@ async function readJoinSound(file) {
   if (!/^data:audio\/(ogg|mpeg|mp3|wav|x-wav|webm|mp4|x-m4a|aac);base64,/i.test(dataUrl)) {
     throw new Error('Esse formato não serve: use .ogg, .mp3, .wav ou .m4a.');
   }
-  const ctx = appState.mixerManager?.audioContext;
-  if (ctx) {
+  const ctx = appState.audioContext || new OfflineAudioContext(1, 1, 24000);
+  {
     let buffer;
     try {
       buffer = await ctx.decodeAudioData(await file.arrayBuffer());
@@ -5060,6 +5271,7 @@ function setupProfileSettings() {
 // o mesmo usado pra registrar o atalho global no app desktop.
 // -----------------------------------------------------------------------------
 const DEFAULT_HOTKEYS = { mute: 'M', deafen: 'D' };
+if (!Object.values(prefs.hotkeys || {}).includes('Ctrl+Shift+F9')) DEFAULT_HOTKEYS.clip = 'Ctrl+Shift+F9';
 const hotkeys = { ...DEFAULT_HOTKEYS, ...(prefs.hotkeys || {}) };
 let hotkeysGlobal = prefs.hotkeysGlobal !== false;
 let hotkeyCapture = null; // ação esperando a tecla nova
@@ -5134,7 +5346,8 @@ function triggerHotkey(action) {
   const now = Date.now();
   if (now - (lastHotkeyAt[action] || 0) < 250) return;
   lastHotkeyAt[action] = now;
-  if (action === 'mute') $('#btn-toggle-mic')?.click();
+  if (action === 'clip' && appState.currentChannelId) $('#btn-dock-clip')?.click();
+  else if (action === 'mute') $('#btn-toggle-mic')?.click();
   else if (action === 'deafen') $('#btn-toggle-deafen')?.click();
 }
 
@@ -5353,6 +5566,32 @@ function setupAdminSettings() {
 }
 
 function setupThemeSelect() {
+  const cursor = $('#terminal-cursor');
+  const root = document.documentElement;
+  cursor.value = root.dataset.terminalCursor;
+  cursor.addEventListener('change', async () => {
+    const previous = root.dataset.terminalCursor;
+    root.dataset.terminalCursor = cursor.value;
+    cursor.disabled = true;
+    try {
+      if (!await savePrefs({ terminalCursor: cursor.value })) {
+        prefs.terminalCursor = previous;
+        root.dataset.terminalCursor = previous;
+        cursor.value = previous;
+        showToast('Não consegui salvar o cursor neste aparelho.', 'error');
+      }
+    } finally { cursor.disabled = false; }
+  });
+
+  for (const option of document.querySelectorAll('.visual-choice input')) {
+    option.checked = option.value === document.documentElement.dataset.visual;
+    option.addEventListener('change', async () => {
+      window.aplicarVisual(option.value);
+      updateVoiceLounge();
+      updateTextLayout();
+      if (!await savePrefs({ visual: option.value })) showToast('O visual mudou, mas não foi salvo neste aparelho.', 'error');
+    });
+  }
   const select = $('#select-theme');
   if (!select) return;
   select.value = document.documentElement.dataset.theme;
@@ -5386,14 +5625,14 @@ function setupPerformanceSelect() {
 }
 
 // Novidades da versão: mostra uma vez só (quem abre o app pela primeira vez vê o perfil, não isso)
-const WHATS_NEW_VERSION = '4.7.0';
+const WHATS_NEW_VERSION = '4.8.0';
 let whatsNewReturnFocus = null;
 
 function openWhatsNew(seen = 0, returnFocus = document.activeElement) {
   closeUserPopover();
   whatsNewReturnFocus = returnFocus;
   const seenParts = String(seen).split('.').map(Number);
-  for (const version of ['4-6-0', '4-5-1', '4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
+  for (const version of ['4-7-0', '4-6-0', '4-5-1', '4-5-0', '4-4-0', '4-3-3', '4-3-2', '4-3-1', '4-3-0', '4-2-1', '4-2-0', '4-1-0', '4-0-0', '3-9-0', '3-8-0', '3-7-0', '3-6-2', '3-6-0', '3-5-0', '3-4-1', '3-4', '3-3', '3-2', '3-1', '3-0', '2-2', '2-1', '2-0']) {
     const parts = version.split('-').map(Number);
     // Compara também a correção: quem viu 3.4.0 ainda precisa das novidades de 3.4.1.
     const difference = parts.findIndex((part, index) => part !== (seenParts[index] || 0));
@@ -5571,7 +5810,9 @@ function liveBadgesHtml(u, { compact = false } = {}) {
     const watching = appState.activeStreams.has(key);
     const n = kind === 'screen' ? 1 : extraScreenNumber(kind);
     const what = kind === 'camera' ? 'Câmera' : `Tela ${n}`;
-    return `<span class="badge-live-stream${watching ? ' watching' : ''}" data-stream-key="${escapeHtml(key)}" title="${what}: ${watching ? 'você está assistindo' : 'clique pra assistir'}">${label}</span>`;
+    const protegida = u.protectedStreams?.includes(kind);
+    const lock = protegida ? '<svg class="icon-svg" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>' : '';
+    return `<button type="button" class="badge-live-stream${watching ? ' watching' : ''}" data-stream-key="${escapeHtml(key)}" title="${what}${protegida ? ' com acesso restrito' : ''}: ${watching ? 'você está assistindo' : 'clique pra assistir'}">${lock}${label}</button>`;
   };
   const extras = Array.isArray(u.extraScreens) ? u.extraScreens.filter((n) => EXTRA_SCREEN_NUMBERS.includes(n)) : [];
   // Com mais de uma tela, cada selo diz qual é
@@ -5582,7 +5823,7 @@ function liveBadgesHtml(u, { compact = false } = {}) {
 }
 
 // "AO VIVO" da lista: começa a assistir (se ainda não assiste) e abre essa transmissão
-function openStream(userId) {
+async function openStream(userId) {
   if (streamOwner(userId) === appState.myId) {
     const preview = appState.localPreviews.get(userId);
     if (!preview) return;
@@ -5591,6 +5832,7 @@ function openStream(userId) {
     return;
   }
   if (!appState.activeStreams.has(userId)) {
+    if (streamAccess.supported && !(await streamAccess.autorizar(userId))) return;
     watchScreen(userId);
     // Já assistindo outra: quando essa chegar, abre ela em vez do mosaico
     if (appState.activeStreams.size > 0) appState.expandedStreamUserId = userId;
@@ -5610,6 +5852,7 @@ function unwatchScreen(userId) {
 
 // Abas do topo: abre essa transmissão (com várias, sai do mosaico)
 function focusStream(userId) {
+  setBrowsingHome(false);
   setMobileView('sala');
   appState.focusedStreamUserId = userId;
   if (appState.activeStreams.size > 1) appState.expandedStreamUserId = userId;
@@ -5720,16 +5963,8 @@ function updateSpeakingIndicators(userId, isSpeaking) {
   }
 
   // 3. Voice Lounge cards
-  const loungeCards = document.querySelectorAll('.lounge-user-card');
-  loungeCards.forEach((card) => {
-    const wrap = card.querySelector('.user-avatar-wrap');
-    const nameSpan = card.querySelector('.lounge-user-name');
-    const ch = appState.channels.get(appState.currentChannelId);
-    const u = ch?.users.get(userId);
-    if (u && nameSpan && (nameSpan.textContent.includes(u.name) || card.getAttribute('data-user-id') === userId)) {
-      if (wrap) wrap.classList.toggle('is-speaking', isSpeaking);
-    }
-  });
+  const card = document.querySelector(`.lounge-user-card[data-user-id="${CSS.escape(userId)}"]`);
+  card?.querySelector('.user-avatar-wrap')?.classList.toggle('is-speaking', isSpeaking);
 }
 
 function attachVoiceStream(userId, stream) {
@@ -5854,14 +6089,20 @@ function setupTileIdleCursor(tile) {
   const wake = () => {
     tile.classList.remove('idle');
     clearTimeout(timer);
-    timer = setTimeout(() => tile.classList.add('idle'), 2500);
+    tile.classList.add('controles-visiveis');
+    timer = setTimeout(() => {
+      tile.classList.remove('controles-visiveis');
+      tile.classList.add('idle');
+    }, 2500);
   };
-  tile.addEventListener('mousemove', wake);
-  tile.addEventListener('mouseenter', wake);
+  tile.addEventListener('pointermove', wake);
+  tile.addEventListener('pointerenter', wake);
   tile.addEventListener('pointerdown', wake);
-  tile.addEventListener('mouseleave', () => {
+  tile.addEventListener('pointerleave', (event) => {
+    // No toque, o dedo sai antes de a pessoa poder escolher um controle.
+    if (event.pointerType === 'touch') return;
     clearTimeout(timer);
-    tile.classList.remove('idle');
+    tile.classList.remove('idle', 'controles-visiveis');
   });
 }
 
@@ -6091,15 +6332,28 @@ function registerScreenStream(userId, userName, stream, isLocal) {
       toggleStageFullscreen(tile);
     });
 
-    tile.appendChild(badge);
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'tile-btn tile-close-btn';
+    close.title = isLocal ? 'Esconder esta prévia' : 'Parar de assistir';
+    close.setAttribute('aria-label', `${close.title} · ${userName}`);
+    close.innerHTML = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>';
+    close.addEventListener('click', (event) => {
+      event.stopPropagation();
+      if (isLocal) removeScreenStream(userId);
+      else unwatchScreen(userId);
+    });
+
+    const hud = document.createElement('div');
+    hud.className = 'tile-top-hud';
+    hud.append(badge, zoomResetBtn, fsBtn, close);
+    tile.appendChild(hud);
     tile.appendChild(video);
     const popupNotice = document.createElement('div');
     popupNotice.className = 'tile-popup-notice';
     popupNotice.textContent = 'Transmissão aberta no popup. Ao fechar, ela volta pra cá.';
     tile.appendChild(popupNotice);
     tile.appendChild(unmuteBtn);
-    tile.appendChild(zoomResetBtn);
-    tile.appendChild(fsBtn);
     setupTileIdleCursor(tile);
 
     if (!isLocal) {
@@ -6313,14 +6567,21 @@ function placeGutter(grid, gutter, i) {
   gutter.style.left = `${padL + (inner * before) / total + gap * i + gap / 2}px`;
 }
 
+function transmissoesParaFechar() {
+  const streams = appState.activeStreams;
+  const foco = streams.has(appState.expandedStreamUserId) ? appState.expandedStreamUserId : appState.focusedStreamUserId;
+  const ids = isMosaicView() ? [...streams.keys()] : [foco];
+  return ids.filter(id => streams.has(id) && !streams.get(id).isLocal);
+}
+
 // Cada controle aparece junto da ação que está disponível na sala.
 function updateStageControls() {
   musicUI?.syncChannel();
   stageSocialUI?.update();
   const inCall = Boolean(appState.currentChannelId);
   const watching = appState.activeStreams.size > 0;
-  const watchingOthers = [...appState.activeStreams.values()].some((info) => !info.isLocal);
-  $('#stage-controls-bar')?.classList.toggle('hidden', !inCall && !watching);
+  const quantidadeRemotas = transmissoesParaFechar().length;
+  $('#stage-controls-bar')?.classList.toggle('hidden', appState.browsingHome || (!inCall && !watching));
   $('#stage-controls-bar')?.classList.toggle('has-streams', watching);
   $('.stage-controls-left')?.classList.toggle('hidden', !watching);
   $('.reactions-bar')?.classList.toggle('hidden', !inCall);
@@ -6328,7 +6589,10 @@ function updateStageControls() {
   for (const id of ['btn-share-screen', 'btn-share-camera', 'btn-soundboard', 'btn-voice-clip']) {
     document.getElementById(id)?.classList.toggle('hidden', !inCall);
   }
-  $('#btn-stage-stop-watching')?.classList.toggle('hidden', !watchingOthers);
+  const parar = $('#btn-stage-stop-watching');
+  parar.classList.toggle('hidden', !quantidadeRemotas);
+  parar.querySelector('span').textContent = quantidadeRemotas > 1 ? 'Parar de assistir a todas' : 'Parar de assistir';
+  if (appState.browsingHome || (!inCall && !watching)) $('#stage-more').open = false;
   for (const id of ['btn-stage-pip', 'btn-stage-fullscreen']) {
     document.getElementById(id)?.classList.toggle('hidden', !watching);
   }
@@ -6355,18 +6619,18 @@ function updateStageLayout() {
 
   if (count === 0) {
     if (grid) grid.classList.add('hidden');
-    if (lounge) lounge.classList.toggle('hidden', !appState.currentChannelId);
-    $('#server-home')?.classList.toggle('hidden', Boolean(appState.currentChannelId));
-    if (!appState.currentChannelId) renderServerHome();
+    if (lounge) lounge.classList.toggle('hidden', appState.browsingHome || !appState.currentChannelId);
+    $('#server-home')?.classList.toggle('hidden', !appState.browsingHome && Boolean(appState.currentChannelId));
+    if (appState.browsingHome || !appState.currentChannelId) renderServerHome();
     if (watchingLabel) watchingLabel.textContent = '';
     if (streamTabs) streamTabs.innerHTML = '';
     $('#stream-volume-control')?.classList.add('hidden');
     return;
   }
 
-  if (grid) grid.classList.remove('hidden');
   if (lounge) lounge.classList.add('hidden');
-  $('#server-home')?.classList.add('hidden');
+  $('#server-home')?.classList.toggle('hidden', !appState.browsingHome);
+  if (appState.browsingHome) renderServerHome();
 
   // Render stream tabs in topbar
   if (streamTabs) {
@@ -6378,25 +6642,6 @@ function updateStageLayout() {
       tab.addEventListener('click', () => {
         focusStream(uid);
       });
-      if (!info.isLocal || prefs.hideOwnStream) {
-        const close = document.createElement('span');
-        close.className = 'stream-tab-close';
-        close.textContent = '✕';
-        close.title = info.isLocal ? 'Esconder esta prévia' : 'Parar de assistir';
-        close.setAttribute('role', 'button');
-        close.tabIndex = 0;
-        close.setAttribute('aria-label', close.title);
-        const hide = (e) => {
-          e.stopPropagation();
-          if (info.isLocal) removeScreenStream(uid);
-          else unwatchScreen(uid);
-        };
-        close.addEventListener('click', hide);
-        close.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); hide(e); }
-        });
-        tab.appendChild(close);
-      }
       streamTabs.appendChild(tab);
     }
   }
@@ -6404,13 +6649,17 @@ function updateStageLayout() {
   const mosaic = isMosaicView();
   // Uma transmissão sozinha ocupa o palco; com várias, a aberta é a "expandida"
   const shownAlone = count === 1 ? appState.activeStreams.keys().next().value : appState.expandedStreamUserId;
-  if (grid) grid.className = `videos-grid ${mosaic ? 'mosaic-grid' : 'single-stage'}${count > 1 ? ' multi' : ''}`;
+  if (grid) {
+    grid.className = `videos-grid ${mosaic ? 'mosaic-grid' : 'single-stage'}${count > 1 ? ' multi' : ''}`;
+    grid.classList.toggle('hidden', appState.browsingHome);
+  }
 
   for (const [uid, info] of appState.activeStreams.entries()) {
     const tile = document.getElementById(`video-tile-${uid}`);
     const videoEl = document.getElementById(`video-el-${uid}`);
     if (!tile || !videoEl) continue;
 
+    tile.querySelector('.tile-close-btn').hidden = info.isLocal && !prefs.hideOwnStream;
     syncRoomStreamVideo(uid, info);
 
     tile.title = count > 1 ? (mosaic ? 'Clique pra ver só essa · duplo clique: tela cheia' : 'Clique pra voltar pro mosaico · duplo clique: tela cheia') : 'Duplo clique: tela cheia';
@@ -6768,6 +7017,7 @@ async function createScreenOfferForUser(targetId, kind = 'screen') {
     });
     await applySenderBitrates(pc, kind === 'camera' ? CAMERA_BITRATE : preset.maxBitrate, 256000);
 
+    if (appState.screenPeersOut.get(key) !== pc) return;
     socket.emit('webrtc-offer', {
       targetId,
       sdp: pc.localDescription,
@@ -6801,6 +7051,7 @@ async function handleIncomingScreenOffer(senderId, sdp, kind = 'screen') {
   const MediaStreamClass = window.MediaStream || globalThis.MediaStream;
   const remoteStream = new MediaStreamClass();
   pc.ontrack = (event) => {
+    if (appState.screenPeersIn.get(key) !== pc) return;
     if (!remoteStream.getTracks().includes(event.track)) {
       remoteStream.addTrack(event.track);
     }
@@ -6967,6 +7218,7 @@ async function handleIncomingVoiceOffer(senderId, sdp) {
 // -----------------------------------------------------------------------------
 
 function onWebRTCChannelChange(oldChannelId, newChannelId) {
+  if (oldChannelId !== newChannelId) streamAccess.reset();
   console.log(`[WebRTC] Channel changed from #${oldChannelId} to #${newChannelId}. Tearing down old mesh...`);
 
   voiceClips?.stop();
@@ -7008,6 +7260,7 @@ function onWebRTCChannelChange(oldChannelId, newChannelId) {
   }
   stopCameraShare({ silent: true });
   stopAllExtraScreens();
+  if (oldChannelId && oldChannelId !== newChannelId) streamAccess.mudouDeCall();
 
   // Fora da call, o Android não deve manter captura sem o serviço de microfone.
   if (window.TeletelaAndroid && !newChannelId) {
@@ -7249,7 +7502,7 @@ function onDeafenToggle(isDeafened) {
   }
 }
 
-function promptElectronDesktopSource() {
+function promptElectronDesktopSource(kind = 'screen') {
   return new Promise(async (resolve) => {
     if (!window.electronAPI || typeof window.electronAPI.getDesktopSources !== 'function') {
       return resolve(null);
@@ -7257,6 +7510,7 @@ function promptElectronDesktopSource() {
     const modal = document.getElementById('modal-screen-picker');
     const grid = document.getElementById('screen-picker-grid');
     if (!modal || !grid) return resolve(null);
+    modal.querySelector('[data-quality-chooser]').dataset.sourceKind = kind;
 
     let sources = [];
     try {
@@ -7320,6 +7574,17 @@ function promptElectronDesktopSource() {
   });
 }
 
+const SHARE_PATHS = {
+  app: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18m-14-2.5h.1m2.4 0h.1"/>',
+  screen: '<rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8m-4-3v3"/>',
+  add: '<rect x="2" y="4" width="20" height="14" rx="2"/><path d="M8 21h8m-4-3v3m0-13v6m-3-3h6"/>',
+  eye: '<path d="M2 12s3.7-7 10-7 10 7 10 7-3.7 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>',
+  stop: '<rect x="5" y="5" width="14" height="14" rx="2"/>'
+};
+function shareIcon(name) {
+  return `<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${SHARE_PATHS[name]}</svg>`;
+}
+
 // Linux (app desktop): escolhe entre o som de um app só, o PC inteiro ou nenhum.
 // Resolve { mode: 'app', key, name } | { mode: 'system' } | { mode: 'none' } | false (cancelou)
 function promptAudioSource() {
@@ -7331,45 +7596,73 @@ function promptAudioSource() {
       return resolve({ mode: 'system' });
     }
 
+    const refresh = $('#audio-picker-refresh');
+    const status = $('#audio-picker-status');
+    const appsBox = $('#audio-picker-apps');
+    const other = $('#audio-picker-other');
+    const origem = document.activeElement;
+    let fechado = false;
     const cleanup = (result) => {
+      fechado = true;
       modal.classList.add('hidden');
+      modal.removeEventListener('keydown', onKey);
+      if (origem?.isConnected) origem.focus({ preventScroll: true });
       resolve(result);
     };
+    function onKey(event) {
+      if (event.key === 'Escape') { event.stopPropagation(); cleanup(false); }
+      if (event.key !== 'Tab') return;
+      const visible = [...modal.querySelectorAll('button:not(:disabled), summary')].filter(el => el.getClientRects().length);
+      const first = visible[0], last = visible.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    }
 
-    const option = (label, hint, result) => {
+    function option(icon, label, hint, result, playing = false) {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.style.cssText = 'display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--bg-secondary);border:1px solid var(--border-medium);border-radius:8px;padding:10px 12px;color:var(--text-header);cursor:pointer;text-align:left;font-size:14px;';
-      btn.innerHTML = `<span>${label}</span><span style="font-size:12px;color:#949ba4;">${hint}</span>`;
+      btn.className = 'audio-source';
+      btn.innerHTML = `<span class="audio-source-icon">${icon}</span><span class="audio-source-copy"><strong></strong><small></small></span>${playing ? '<span class="audio-source-meter" aria-hidden="true"><i></i><i></i><i></i><i></i></span>' : ''}`;
+      btn.querySelector('strong').textContent = label;
+      btn.querySelector('small').textContent = hint;
       btn.addEventListener('click', () => cleanup(result));
-      list.appendChild(btn);
-    };
+      return btn;
+    }
 
-    const render = async () => {
-      let apps = [];
+    let carregando = false;
+    async function render() {
+      if (carregando) return;
+      carregando = true;
+      refresh.setAttribute('aria-disabled', 'true');
+      status.textContent = 'Procurando aplicativos…';
       try {
-        apps = await api.listAudioApps();
-      } catch (_) {}
-      list.innerHTML = '';
-      apps.forEach((a) => {
-        option(`🎮 ${escapeHtml(a.name)}`, a.playing ? '🔊 tocando agora' : 'pausado', {
-          mode: 'app',
-          key: a.key,
-          name: a.name
-        });
-      });
-      option('🖥️ Som do PC inteiro', 'inclui as vozes da chamada', { mode: 'system' });
-      option('🔇 Sem som', 'só a imagem', { mode: 'none' });
-    };
-
-    modal.querySelectorAll('[data-close-modal="modal-audio-picker"]').forEach((btn) => {
-      btn.onclick = () => cleanup(false);
-    });
-    const refresh = document.getElementById('audio-picker-refresh');
-    if (refresh) refresh.onclick = render;
-
+        const apps = await api.listAudioApps();
+        if (fechado) return;
+        appsBox.replaceChildren(...apps.map(app => option(shareIcon('app'), app.name, app.playing ? 'Tocando agora' : 'Pausado',
+          { mode: 'app', key: app.key, name: app.name }, app.playing)));
+        status.textContent = apps.length ? '' : 'Nenhum aplicativo com áudio. Dê play no app e atualize a lista.';
+      } catch {
+        if (fechado) return;
+        appsBox.replaceChildren();
+        status.textContent = 'Não consegui listar os aplicativos. Tente atualizar.';
+      } finally {
+        carregando = false;
+        if (!fechado) refresh.removeAttribute('aria-disabled');
+      }
+    }
+    modal.querySelectorAll('[data-close-modal="modal-audio-picker"]').forEach(btn => { btn.onclick = () => cleanup(false); });
+    modal.addEventListener('keydown', onKey);
+    refresh.onclick = render;
+    appsBox.replaceChildren();
+    other.replaceChildren(
+      option(shareIcon('screen'), 'Som do PC inteiro', 'Inclui as vozes da call', { mode: 'system' }),
+      option(SPEAKER_OFF_SVG, 'Sem som', 'Transmitir só a imagem', { mode: 'none' })
+    );
+    modal.querySelector('.audio-quality').open = false;
     renderQualityChoosers();
-    render().then(() => modal.classList.remove('hidden'));
+    modal.classList.remove('hidden');
+    modal.querySelector('.modal-close-btn').focus();
+    render();
   });
 }
 
@@ -7505,24 +7798,31 @@ const QUALITY_LABELS = {
 };
 
 function renderQualityChoosers() {
+  $('#audio-picker-quality').textContent = QUALITY_LABELS[appState.myUser.streamQuality];
   $$('[data-quality-chooser]').forEach((box) => {
     box.innerHTML = `
-      <span class="quality-chooser-label">Qualidade da transmissão</span>
-      <div class="quality-options">
+      ${box.closest('.audio-quality') ? '' : '<span class="quality-chooser-label">Qualidade da transmissão</span>'}
+      <div class="quality-options" role="group" aria-label="Qualidade da transmissão">
         ${Object.entries(QUALITY_LABELS).filter(([key]) => !window.TeletelaAndroid?.startScreenCapture || ['720p30', '1080p30'].includes(key))
           .map(
             ([key, label]) =>
-              `<button type="button" class="quality-option ${key === appState.myUser.streamQuality ? 'selected' : ''}" data-quality="${key}">${label}</button>`
+              `<button type="button" class="quality-option ${key === appState.myUser.streamQuality ? 'selected' : ''}" aria-pressed="${key === appState.myUser.streamQuality}" data-quality="${key}">${label}</button>`
           )
           .join('')}
       </div>
-      <p class="quality-hint">${window.TeletelaAndroid?.startScreenCapture ? 'O Android vai pedir permissão para compartilhar. O áudio interno precisa de Android 10+; alguns apps bloqueiam a captura. O microfone continua separado.' : 'Internet fraca ou amigos travando? Use 720p. 60 fps é melhor pra jogo; 30 fps pra filme.'}</p>
+      ${streamAccess.supported && !box.closest('.audio-quality') ? `<button type="button" class="stream-access-link" data-stream-access-open="${box.dataset.sourceKind || 'screen'}">Escolher quem pode assistir</button>` : ''}
+      <p class="quality-hint">${window.TeletelaAndroid?.startScreenCapture ? 'O Android vai pedir permissão para compartilhar. O áudio interno precisa de Android 10+; alguns apps bloqueiam a captura. O microfone continua separado.' : '720p usa menos banda. Para jogos, 60 fps deixa o movimento mais fluido.'}</p>
     `;
     box.querySelectorAll('[data-quality]').forEach((btn) => {
       btn.addEventListener('click', () => {
         appState.myUser.streamQuality = btn.dataset.quality;
         savePrefs({ streamQuality: btn.dataset.quality });
-        renderQualityChoosers();
+        $('#audio-picker-quality').textContent = QUALITY_LABELS[btn.dataset.quality];
+        $$('[data-quality-chooser] [data-quality]').forEach(option => {
+          const selected = option.dataset.quality === btn.dataset.quality;
+          option.classList.toggle('selected', selected);
+          option.setAttribute('aria-pressed', String(selected));
+        });
       });
     });
   });
@@ -7549,6 +7849,7 @@ function promptShareQuality() {
 let screenCaptureRun = 0;
 let mobileScreenSource = null;
 async function onStartScreenShare() {
+  if (!streamAccess.podeTransmitir('screen')) { appState.myUser.isSharing = false; updateShareButton(); return; }
   const nativeScreen = Boolean(window.TeletelaAndroid?.startScreenCapture);
   const run = ++screenCaptureRun, channelId = appState.currentChannelId;
   if (!nativeScreen && (!navigator.mediaDevices || (!navigator.mediaDevices.getDisplayMedia && !window.electronAPI))) {
@@ -7756,6 +8057,10 @@ async function onStartScreenShare() {
       audioTrack.contentHint = 'music';
     }
 
+    if (run !== screenCaptureRun || channelId !== appState.currentChannelId || !streamAccess.podeTransmitir('screen')) {
+      stream.getTracks().forEach(track => track.stop());
+      return;
+    }
     appState.localScreenStream = stream;
     appState.myUser.isSharing = true;
 
@@ -7864,6 +8169,7 @@ function getCameraSource() {
 async function toggleCameraShare() {
   if (appState.myUser.isCameraOn || appState.cameraBusy) { stopCameraShare(); return; }
   if (!appState.currentChannelId) { showToast('Entre num canal pra ligar a câmera.'); return; }
+  if (!streamAccess.podeTransmitir('camera')) return;
   try {
     if (await getCameraSource().start()) showToast('📷 Câmera ligada! Seus amigos veem clicando em "CÂMERA" do seu lado.', 'success');
   } catch (error) {
@@ -7884,6 +8190,7 @@ async function flipCameraShare() {
 
 function stopCameraShare({ silent = false } = {}) {
   if (!appState.myUser.isCameraOn && !appState.localCameraStream && !appState.cameraBusy) return;
+  if (appState.localCameraStream) streamAccess.terminou('camera');
   cameraSource?.stop();
   appState.myUser.isCameraOn = false;
   appState.localCameraStream?.getTracks().forEach((track) => track.stop());
@@ -7933,6 +8240,18 @@ function setHideOwnStream(hide) {
 function updateShareButton() {
   const live = appState.myUser.isSharing || appState.extraScreens.size > 0;
   document.getElementById('btn-share-screen')?.classList.toggle('sharing', live);
+  if (!live) closeShareMenu();
+  for (const id of ['btn-share-screen', 'btn-lounge-start-share']) {
+    const btn = document.getElementById(id);
+    if (!btn) continue;
+    if (live) {
+      btn.setAttribute('aria-haspopup', 'menu');
+      btn.setAttribute('aria-controls', 'share-menu');
+      if (!btn.hasAttribute('aria-expanded')) btn.setAttribute('aria-expanded', 'false');
+    } else {
+      for (const attr of ['aria-haspopup', 'aria-controls', 'aria-expanded']) btn.removeAttribute(attr);
+    }
+  }
   // O botão grande do meio abre o mesmo menu quando já tem tela no ar
   const label = document.getElementById('lounge-share-label');
   if (label) label.textContent = live ? 'Gerenciar minhas telas' : 'Transmitir minha tela';
@@ -7950,12 +8269,14 @@ async function startExtraScreen() {
     showToast(`Dá pra transmitir até ${EXTRA_SCREEN_NUMBERS.length + 1} telas ao mesmo tempo.`);
     return;
   }
-  if (!appState.currentChannelId) return;
+  const channelId = appState.currentChannelId;
+  const sessionId = socket.id;
+  if (!channelId || !streamAccess.podeTransmitir(`screen${n}`)) return;
   const preset = QUALITY_PRESETS[appState.myUser.streamQuality] || QUALITY_PRESETS['1080p60'];
   let stream;
   try {
     if (window.electronAPI && !window.electronAPI.isWayland && typeof window.electronAPI.getDesktopSources === 'function') {
-      const sourceId = await promptElectronDesktopSource();
+      const sourceId = await promptElectronDesktopSource(`screen${n}`);
       if (sourceId === false) return;
     }
     stream = await navigator.mediaDevices.getDisplayMedia({
@@ -7971,7 +8292,7 @@ async function startExtraScreen() {
     return;
   }
   // Escolheu enquanto outra tela ocupava esse número, ou saiu do canal no meio
-  if (appState.extraScreens.has(n) || !appState.currentChannelId) {
+  if (appState.extraScreens.has(n) || channelId !== appState.currentChannelId || sessionId !== socket.id || !streamAccess.podeTransmitir(`screen${n}`)) {
     stream.getTracks().forEach((track) => track.stop());
     return;
   }
@@ -8008,6 +8329,7 @@ function stopExtraScreen(n, { silent = false } = {}) {
     appState.screenPeersOut.delete(key);
   }
   dropLocalPreview(key);
+  streamAccess.terminou(`screen${n}`);
   socket.emit('user-state-changed', { extraScreens: extraScreensState() });
   updateShareButton();
   if (!silent) showToast(`Tela ${n} encerrada.`);
@@ -8028,28 +8350,38 @@ function openShareMenu(anchor) {
     closeShareMenu();
     return;
   }
-  const item = (label, action, danger = false) =>
-    `<button type="button" class="share-menu-item${danger ? ' danger' : ''}" data-share-action="${action}">${label}</button>`;
-  const rows = [];
-  const total = (appState.myUser.isSharing ? 1 : 0) + appState.extraScreens.size;
+  const item = (action, icon, label, danger = false) =>
+    `<button type="button" role="menuitem" class="share-menu-item${danger ? ' danger' : ''}" data-share-action="${action}">${icon}<span>${label}</span></button>`;
+  const rows = [], stops = [];
+  const total = Number(appState.myUser.isSharing) + appState.extraScreens.size;
   if (!window.TeletelaAndroid?.startScreenCapture && total < EXTRA_SCREEN_NUMBERS.length + 1) {
-    rows.push(item(appState.myUser.isSharing ? '➕ Transmitir outra tela' : '➕ Transmitir a tela 1 (com som)', 'add'));
+    rows.push(item('add', shareIcon('add'), appState.myUser.isSharing ? 'Transmitir outra tela' : 'Transmitir a tela 1 com som'));
   }
-  if (appState.myUser.isSharing) rows.push(item(appState.extraScreens.size ? '⏹ Parar a tela 1' : '⏹ Parar a transmissão', 'stop-1', true));
-  for (const n of extraScreensState()) rows.push(item(`⏹ Parar a tela ${n}`, `stop-${n}`, true));
-  if (total > 1) rows.push(item('⏹ Parar todas', 'stop-all', true));
-  rows.push(item(prefs.hideOwnStream ? '👁 Mostrar minha transmissão aqui' : '🙈 Esconder minha transmissão daqui', 'toggle-preview'));
-  menu.innerHTML = rows.join('');
-
+  rows.push(item('toggle-preview', shareIcon('eye'), prefs.hideOwnStream ? 'Mostrar minha prévia' : 'Ocultar minha prévia'));
+  if (streamAccess.supported) rows.push(item('access', CHANNEL_LOCK_SVG, 'Escolher quem pode assistir'));
+  if (appState.myUser.isSharing) stops.push(item('stop-1', shareIcon('stop'), appState.extraScreens.size ? 'Parar a tela 1' : 'Parar a transmissão', true));
+  for (const n of extraScreensState()) stops.push(item(`stop-${n}`, shareIcon('stop'), `Parar a tela ${n}`, true));
+  if (total > 1) stops.push(item('stop-all', shareIcon('stop'), 'Parar todas as telas', true));
+  menu.innerHTML = `<div class="share-menu-status" aria-hidden="true">${total === 1 ? '1 tela no ar' : total + ' telas no ar'}</div>${rows.join('')}<div class="share-menu-stop" role="group" aria-label="Encerrar transmissão">${stops.join('')}</div>`;
+  menu.dataset.anchor = anchor.id;
+  anchor.setAttribute('aria-expanded', 'true');
+  mountStageOverlay(menu);
   menu.classList.remove('hidden');
   const rect = anchor.getBoundingClientRect();
   const menuRect = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - menuRect.width - 8))}px`;
-  menu.style.top = `${Math.max(8, rect.top - menuRect.height - 8)}px`;
+  const above = rect.top - menuRect.height - 8;
+  menu.style.top = Math.max(8, above >= 8 ? above : Math.min(rect.bottom + 8, innerHeight - menuRect.height - 8)) + 'px';
+  menu.querySelector('button')?.focus({ preventScroll: true });
 }
 
-function closeShareMenu() {
-  $('#share-menu')?.classList.add('hidden');
+function closeShareMenu(restoreFocus = false) {
+  const menu = $('#share-menu');
+  if (!menu || menu.classList.contains('hidden')) return;
+  menu.classList.add('hidden');
+  const anchor = document.getElementById(menu.dataset.anchor);
+  anchor?.setAttribute('aria-expanded', 'false');
+  if (restoreFocus) anchor?.focus({ preventScroll: true });
 }
 
 function setupShareMenu() {
@@ -8058,7 +8390,7 @@ function setupShareMenu() {
   menu.addEventListener('click', (e) => {
     const action = e.target.closest('[data-share-action]')?.getAttribute('data-share-action');
     if (!action) return;
-    closeShareMenu();
+    closeShareMenu(true);
     if (action === 'add') {
       if (appState.myUser.isSharing) {
         startExtraScreen();
@@ -8067,6 +8399,8 @@ function setupShareMenu() {
         updateShareButton();
         onStartScreenShare();
       }
+    } else if (action === 'access') {
+      streamAccess.open(appState.myUser.isSharing ? 'screen' : 'screen' + extraScreensState()[0]);
     } else if (action === 'stop-1') {
       onStopScreenShare();
     } else if (action === 'toggle-preview') {
@@ -8086,8 +8420,18 @@ function setupShareMenu() {
     if (e.target.closest('#btn-share-screen, #btn-lounge-start-share')) return;
     closeShareMenu();
   });
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') closeShareMenu();
+  menu.addEventListener('focusout', e => {
+    if (e.relatedTarget && !menu.contains(e.relatedTarget) && e.relatedTarget.id !== menu.dataset.anchor) closeShareMenu();
+  });
+  menu.addEventListener('keydown', e => {
+    const items = [...menu.querySelectorAll('[role="menuitem"]')];
+    const index = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeShareMenu(true); }
+    else if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) {
+      e.preventDefault();
+      const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (index + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+      items[next].focus();
+    }
   });
 }
 
@@ -8100,6 +8444,7 @@ function onStopScreenShare() {
   appState.myUser.isSharing = false;
 
   if (appState.localScreenStream) {
+    streamAccess.terminou('screen');
     appState.localScreenStream.getTracks().forEach((track) => track.stop());
     appState.localScreenStream = null;
   }
@@ -8281,15 +8626,17 @@ function initApp() {
   }
   initAudioSystem();
   voiceClips = setupVoiceClips({ appState, socket, showToast });
-  musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options) });
-  diceUI = setupDice({ socket, appState, showToast, escapeHtml });
+  musicUI = setupMusic({ socket, appState, prefs, savePrefs, showToast, createSfuSession: options => new SfuSession(options),
+    onPanelChange: () => { updateTextLayout(); serverMembersUI?.renderVisibility(); } });
+  diceUI = setupDice({ socket, appState, showToast, escapeHtml, mountStageOverlay });
   watchTogetherUI = setupWatchTogether({ socket, appState, serverUrl: SERVER_URL, mountStageOverlay, showToast });
   stageSocialUI = setupStageSocial({ appState, prefs, savePrefs, music: musicUI,
     avatarInnerHtml, safeColor, frameClass, frameStyle, nameStyle, sortedUsers,
-    isWatching: () => appState.activeStreams.size > 0,
+    isWatching: () => !appState.browsingHome && appState.activeStreams.size > 0,
     openUserPopover });
-  setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: closeTextView, openSettings,
+  setupMobileUI({ getState: () => appState, openChat: openCallChat, showRoom: () => { closeTextView(); setBrowsingHome(false); }, openSettings,
     closeMembers: () => serverMembersUI?.closeOverlay(),
+    closeMusic: () => musicUI?.fecharConversa(),
     toggleScreen: () => {
       if (appState.myUser.isSharing) onStopScreenShare();
       else $('#btn-share-screen')?.click();
@@ -8313,7 +8660,9 @@ function initApp() {
   setupPins();
   setupProfileTransfer();
   setupMentionAutocomplete();
+  setupScreenPreviews({ appState, socket, localStreamFor, streamKey, streamKind, streamOwner, streamLabel });
   setupSoundboard();
+  setupSoundTrim({ socket, readAsDataUrl, showToast });
   setupModals();
   setupUserPopover();
   setupProfileSettings();

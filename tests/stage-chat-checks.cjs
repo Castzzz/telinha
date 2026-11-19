@@ -7,8 +7,9 @@ module.exports = async function checkStageChat(win) {
   const rect = selector => js(`(() => { const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2),width:r.width}; })()`);
   async function click(selector) {
     const p = await rect(selector);
-    assert(await js(`document.querySelector(${JSON.stringify(selector)}).contains(document.elementFromPoint(${p.x},${p.y}))`), 'Clique bloqueado: ' + selector + ' ' + await js(`JSON.stringify({hit:document.elementFromPoint(${p.x},${p.y})?.outerHTML.slice(0,300),bar:getComputedStyle(document.querySelector('#stage-section')).cssText,classes:document.body.className,stage:document.querySelector('#stage-section').getBoundingClientRect().toJSON()})`));
     win.webContents.sendInputEvent({ type: 'mouseMove', x:p.x, y:p.y });
+    await js("new Promise(resolve => requestAnimationFrame(() => resolve(true)))");
+    assert(await js(`document.querySelector(${JSON.stringify(selector)}).contains(document.elementFromPoint(${p.x},${p.y}))`), 'Clique bloqueado: ' + selector + ' ' + await js(`JSON.stringify({hit:document.elementFromPoint(${p.x},${p.y})?.outerHTML.slice(0,300),bar:getComputedStyle(document.querySelector('#stage-section')).cssText,classes:document.body.className,stage:document.querySelector('#stage-section').getBoundingClientRect().toJSON()})`));
     win.webContents.sendInputEvent({ type: 'mouseDown', x:p.x, y:p.y, button:'left', clickCount:1 });
     win.webContents.sendInputEvent({ type: 'mouseUp', x:p.x, y:p.y, button:'left', clickCount:1 });
     await pause(100);

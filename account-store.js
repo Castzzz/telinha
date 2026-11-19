@@ -210,7 +210,7 @@ export class AccountStore {
   changeFriend(accountId, action, payload = {}) {
     return this.transaction(next => {
       if (!next.accounts.some(account => account.id === accountId)) throw new AccountError('Entre na conta de novo.');
-      const other = action === 'request'
+      const other = action === 'request' && !payload.accountId
         ? next.accounts.find(account => account.username === usernameKey(payload.username))
         : next.accounts.find(account => account.id === payload.accountId);
       if (!other) throw new AccountError('Não encontrei essa conta nesta sala. Confira o @usuário.');

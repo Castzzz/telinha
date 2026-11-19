@@ -2,12 +2,12 @@ import { enhanceOpusStereoSdp } from './audio-manager.js';
 
 const MIXER_ID = 'teletela-music-bot';
 const MAX_QUEUE_TRACKS = 150;
-const MUSIC_BOT_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
+const AVATAR_K7 = '<img class="k7-avatar" src="k7.svg" alt="">';
 const PLAY_ICON_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M7 5.5v13l11-6.5z"/></svg>';
 const PAUSE_ICON_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 const SKIP_ICON_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true"><path d="M5.5 5.5v13l9.5-6.5z"/><rect x="16.5" y="5.5" width="2.5" height="13" rx="1"/></svg>';
 
-export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {}, showToast = () => {}, createSfuSession } = {}) {
+export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {}, showToast = () => {}, onPanelChange = () => {}, createSfuSession } = {}) {
   const $ = selector => document.querySelector(selector);
   let channelId = null;
   let state = null;
@@ -259,7 +259,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     }
     audio.srcObject = stream;
     audio.play().catch(() => {});
-    appState.mixerManager.attachUserStream(MIXER_ID, stream, 'Bot de música');
+    appState.mixerManager.attachUserStream(MIXER_ID, stream, 'K7');
     appState.mixerManager.setUserVolume(MIXER_ID, volume);
     const ctx = appState.mixerManager?.audioContext;
     const entry = appState.mixerManager?.userMixers?.get(MIXER_ID);
@@ -302,27 +302,75 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
       if (generation === expected) { closeAudio(); notify(error.message, true); }
     });
   };
+  const painel = $('#modal-music');
+  const lugarDoPainel = painel?.parentElement;
+  let voltarPara;
   const syncModalParent = () => {
-    const modal = $('#modal-music');
-    if (!modal) return;
-    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
-    if (fsEl && fsEl !== document.documentElement && fsEl !== document.body && !modal.classList.contains('hidden')) {
-      if (modal.parentElement !== fsEl) fsEl.appendChild(modal);
-    } else if (modal.parentElement !== document.body && document.body) {
-      document.body.appendChild(modal);
-    }
+    if (!painel) return;
+    const telaCheia = document.fullscreenElement || document.webkitFullscreenElement;
+    const destino = (!painel.classList.contains('hidden') && telaCheia) || lugarDoPainel;
+    if (destino && painel.parentElement !== destino) destino.append(painel);
   };
-  const open = () => {
+  function fecharConversa(devolverFoco = false) {
+    if (!painel || painel.classList.contains('hidden')) return;
+    painel.classList.add('hidden');
+    syncModalParent();
+    onPanelChange();
+    if (devolverFoco) (voltarPara?.isConnected ? voltarPara : $('#stage-more summary'))?.focus();
+    return true;
+  }
+  function mostrarFila(fila) {
+    if (!$('#k7-requests')) return;
+    $('#k7-requests').hidden = fila;
+    $('#k7-deck').hidden = !fila;
+    $('#k7-show-requests').setAttribute('aria-pressed', String(!fila));
+    $('#k7-show-queue').setAttribute('aria-pressed', String(fila));
+  }
+  function mensagemK7(texto, minha = false, rolar = true) {
+    const log = $('#k7-log');
+    if (!log) return;
+    const linha = document.createElement('div'), nome = document.createElement('strong'), fala = document.createElement('p');
+    linha.className = minha ? 'k7-message k7-own' : 'k7-message';
+    nome.textContent = minha ? 'Você' : 'K7';
+    fala.textContent = texto;
+    linha.append(nome, fala); log.append(linha);
+    if (log.children.length > 60) log.firstElementChild.remove();
+    if (rolar && linha.getClientRects().length) linha.scrollIntoView({ block: 'nearest' });
+  }
+  function responderConsulta(comando, pergunta) {
+    mensagemK7(pergunta, true);
+    if (!state) { mensagemK7('Ainda estou esperando a fila do canal. Pergunta de novo daqui a pouco?'); return; }
+    if (comando === '/fila') {
+      const proximas = (state?.queue || []).slice(0, 3).map(faixa => faixa.title);
+      mensagemK7(proximas.length ? 'Na sequência: ' + proximas.join(' → ') + '. A lista completa está em Fila.' : 'Por enquanto a fila está vazia.');
+    } else mensagemK7(state?.track ? `${state.phase === 'paused' ? 'Em pausa' : 'Na vez'}: ${state.track.title}.` : 'Ainda não tem música tocando.');
+  }
+  for (const botao of document.querySelectorAll('[data-k7-question]')) {
+    botao.addEventListener('click', () => responderConsulta(botao.dataset.k7Question, botao.textContent));
+  }
+  $('#k7-show-queue')?.addEventListener('click', () => mostrarFila(true));
+  $('#k7-show-requests')?.addEventListener('click', () => mostrarFila(false));
+  $('#k7-request-track')?.addEventListener('click', () => { mostrarFila(false); $('#music-input').focus(); });
+  $('#k7-close')?.addEventListener('click', () => fecharConversa(true), true);
+  painel?.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.stopPropagation(); fecharConversa(true); }
+  });
+  const open = event => {
     if (!appState?.musicEnabled || !appState?.currentChannelId) return;
+    const origem = event?.currentTarget || document.activeElement;
+    voltarPara = origem?.closest('#mobile-call-options') ? $('#mobile-call-more') : origem?.closest('details')?.querySelector('summary') || origem;
     $('#mobile-call-options')?.close?.();
     const modal = $('#modal-music');
     if (modal) {
       modal.classList.remove('hidden');
       syncModalParent();
+      onPanelChange();
     }
     appState.mixerManager?.ensureAudioContext?.();
     subscribe();
-    $('#music-input')?.focus?.();
+    mostrarFila(false);
+    const foco = matchMedia('(pointer: coarse)').matches ? $('#k7-show-requests') : $('#music-input');
+    foco?.focus();
     render();
   };
   const action = async (name, id, mode, toIndex) => {
@@ -376,7 +424,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
       const iconSpan = document.createElement('span');
       iconSpan.className = 'music-mini-icon';
       iconSpan.setAttribute('aria-hidden', 'true');
-      iconSpan.innerHTML = MUSIC_BOT_SVG;
+      iconSpan.innerHTML = AVATAR_K7;
 
       const viz = document.createElement('span');
       viz.className = 'music-mini-viz';
@@ -439,8 +487,8 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
 
     const titleBtn = mini.querySelector('.music-mini-title-btn');
     if (titleBtn) {
-      titleBtn.title = `${fullTitle} · Abrir o bot de música`;
-      titleBtn.setAttribute('aria-label', `${fullTitle} · Abrir o bot de música`);
+      titleBtn.title = `${fullTitle} · Conversar com K7`;
+      titleBtn.setAttribute('aria-label', `${fullTitle} · Conversar com K7`);
     }
     const viz = mini.querySelector('.music-mini-viz');
     if (viz) viz.classList.toggle('is-playing', isPlaying);
@@ -470,28 +518,29 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   };
   const renderBot = () => {
     document.querySelectorAll('.music-bot-row, .music-bot-card').forEach(element => element.remove());
-    if (!channelId || !state?.track) {
+    if (!channelId) {
       document.getElementById('music-stage-miniplayer')?.remove();
       stopVisualizer();
       emitSnapshot();
       return;
     }
     const canWrite = canControlMusic();
-    const isPlaying = state.phase === 'playing';
-    const isPaused = state.phase === 'paused';
-    const statusText = isPaused ? 'Pausada' : state.phase === 'preparing' ? 'Preparando…' : 'Tocando';
-    const title = `Música · ${state.track.title}${isPaused ? ' (pausada)' : ''}`;
+    const track = state?.track;
+    const isPlaying = state?.phase === 'playing';
+    const isPaused = state?.phase === 'paused';
+    const statusText = isPaused ? 'Pausada' : state?.phase === 'preparing' ? 'Preparando…' : 'Tocando';
+    const title = track ? `K7 · ${track.title}${isPaused ? ' (pausada)' : ''}` : 'K7 · Pedir uma música';
 
     // Linha alinhada na barra lateral igual aos participantes da call
     const row = document.createElement('li');
     row.dataset.musicBot = 'true';
     row.className = `channel-user music-bot-row${isPlaying ? ' is-speaking' : ''}`;
-    row.title = `${title} · Abrir o bot de música`;
+    row.title = `${title} · Conversar com K7`;
     const rowAvatarWrap = document.createElement('div');
     rowAvatarWrap.className = `user-avatar-wrap${isPlaying ? ' is-speaking' : ''}`;
     const rowAvatar = document.createElement('div');
     rowAvatar.className = 'user-avatar music-bot-avatar';
-    rowAvatar.innerHTML = MUSIC_BOT_SVG;
+    rowAvatar.innerHTML = AVATAR_K7;
     const rowHalo = document.createElement('span');
     rowHalo.className = 'speaking-halo';
     rowAvatarWrap.append(rowAvatar, rowHalo);
@@ -501,17 +550,22 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     rowName.className = 'channel-user-name';
     const rowNameText = document.createElement('span');
     rowNameText.className = 'user-name-text';
-    rowNameText.textContent = 'Bot de música';
+    rowNameText.textContent = 'K7';
     const rowBadge = document.createElement('span');
     rowBadge.className = 'badge-role';
     rowBadge.textContent = 'BOT';
     rowName.append(rowNameText, rowBadge);
     const rowSub = document.createElement('span');
     rowSub.className = 'music-bot-row-sub';
-    rowSub.textContent = `${state.track.title}${isPaused ? ' (pausada)' : ''}`;
+    rowSub.textContent = track ? `${track.title}${isPaused ? ' (pausada)' : ''}` : 'Pedir uma música';
     rowInfo.append(rowName, rowSub);
     row.append(rowAvatarWrap, rowInfo);
+    row.tabIndex = 0;
+    row.setAttribute('role', 'button');
     row.addEventListener('click', open);
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(event); }
+    });
     document.getElementById(`channel-users-${channelId}`)?.append(row);
 
     // Card no centro da call com visualizador circular em tempo real e mini controles
@@ -520,7 +574,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     card.setAttribute('tabindex', '0');
     card.dataset.musicBot = 'true';
     card.className = 'lounge-user-card music-bot-card';
-    card.title = `${state.track.title} · Abrir o bot de música`;
+    card.title = title + ' · Conversar com K7';
     const avatarWrap = document.createElement('div');
     avatarWrap.className = `user-avatar-wrap music-bot-avatar-wrap${isPlaying ? ' is-speaking' : ''}`;
     const canvas = document.createElement('canvas');
@@ -530,21 +584,22 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     canvas.setAttribute('aria-hidden', 'true');
     const avatar = document.createElement('div');
     avatar.className = 'user-avatar music-bot-avatar';
-    avatar.innerHTML = MUSIC_BOT_SVG;
+    avatar.innerHTML = AVATAR_K7;
     const halo = document.createElement('span');
     halo.className = 'speaking-halo';
     avatarWrap.append(canvas, avatar, halo);
     const name = document.createElement('strong');
     name.className = 'lounge-user-name';
-    name.textContent = 'Bot de música';
+    name.textContent = 'K7';
     const description = document.createElement('span');
     description.className = 'music-bot-title';
-    description.textContent = state.track.title;
+    description.textContent = track?.title || 'Pedir uma música';
     const status = document.createElement('span');
-    status.className = `music-bot-status is-${state.phase || 'idle'}`;
+    status.className = `music-bot-status is-${state?.phase || 'idle'}`;
     status.textContent = statusText;
-    card.append(avatarWrap, name, description, status);
-    if (canWrite) {
+    card.append(avatarWrap, name, description);
+    if (track) card.append(status);
+    if (track && canWrite) {
       const quickActions = document.createElement('div');
       quickActions.className = 'music-bot-quick-actions';
       const pauseBtn = document.createElement('button');
@@ -612,8 +667,15 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     if ($('#music-shuffle')) $('#music-shuffle').disabled = !canWrite || (state?.queue?.length || 0) < 2;
     updateSelection();
     const queue = state?.queue || [];
+    if ($('#k7-deck')) {
+      $('#k7-deck').dataset.phase = state?.phase || 'idle';
+      $('#k7-deck .music-playback-actions').classList.toggle('hidden', !state?.track && !queue.length);
+      $('#music-shuffle').classList.toggle('hidden', queue.length < 2);
+    }
+    if ($('#k7-count')) $('#k7-count').textContent = queue.length;
+    if ($('#k7-channel')) $('#k7-channel').textContent = 'Bot de música · ' + (appState.channels?.get(channelId)?.name || 'Call');
     $('#music-queue-empty')?.classList.toggle('hidden', queue.length > 0);
-    if ($('#music-queue-title')) $('#music-queue-title').textContent = `Próximas músicas (${queue.length}/${MAX_QUEUE_TRACKS})`;
+    if ($('#music-queue-count')) $('#music-queue-count').textContent = `${queue.length}/${MAX_QUEUE_TRACKS}`;
     $('#music-queue')?.replaceChildren();
     queue.forEach((track, index) => {
       const row = document.createElement('li');
@@ -656,9 +718,14 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
           document.querySelectorAll('#music-queue .is-drop-target').forEach(el => el.classList.remove('is-drop-target'));
         });
       }
-      const text = document.createElement('span');
-      text.textContent = `${track.title} · pedido por ${track.requestedBy.name}`;
-      left.append(text);
+      const info = document.createElement('div');
+      info.className = 'k7-track';
+      const titulo = document.createElement('strong');
+      titulo.textContent = track.title;
+      const pedido = document.createElement('small');
+      pedido.textContent = `Pedido por ${track.requestedBy.name}`;
+      info.append(titulo, pedido);
+      left.append(info);
       const actionsWrap = document.createElement('div');
       actionsWrap.className = 'music-queue-actions';
       const remove = document.createElement('button');
@@ -703,21 +770,24 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   const syncChannel = (refresh = false) => {
     const next = appState?.musicEnabled && socket?.connected ? appState.currentChannelId : null;
     for (const id of ['btn-music', 'btn-mobile-music']) document.getElementById(id)?.classList.toggle('hidden', !next);
-    if (next === channelId && !refresh) { renderBot(); return; }
+    if (next === channelId) {
+      if (refresh && next) {
+        const atual = revision;
+        request('music-get').then(result => { if (revision === atual) receive(result.state); }).catch(() => {});
+      }
+      renderBot(); return;
+    }
     revision++;
     channelRevision++;
     searchBusy = false;
-    playlist = null;
     retries = 0;
     closeAudio();
     channelId = next;
     state = null;
-    $('#modal-music')?.classList.add('hidden');
-    syncModalParent();
-    $('#music-results')?.replaceChildren();
-    $('#music-results-heading')?.classList.add('hidden');
-    $('#music-playlist-tools')?.classList.add('hidden');
-    notify('Cole uma música ou playlist do YouTube/Spotify, ou escreva título e artista.');
+    fecharConversa();
+    $('#k7-log')?.replaceChildren();
+    for (const campo of ['#music-input', '#music-refinement']) if ($(campo)) $(campo).value = '';
+    recolherResultados();
     render();
     if (next) {
       const expectedRevision = revision;
@@ -772,11 +842,11 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   });
   function renderVolume() {
     $('#music-volume')?.style.setProperty('--music-volume-fill', `${volume / 2}%`);
+    $('#music-volume')?.setAttribute('aria-valuetext', `${volume}%`);
     if ($('#music-volume-value')) $('#music-volume-value').textContent = `${volume}%`;
   }
   renderVolume();
   if ($('#music-volume')) $('#music-volume').value = volume;
-  if ($('#music-volume-value')) $('#music-volume-value').textContent = `${volume}%`;
   $('#music-volume')?.addEventListener('input', event => {
     volume = Number(event.target.value);
     appState.mixerManager?.setUserVolume(MIXER_ID, volume);
@@ -801,55 +871,81 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
     updateSelection();
   });
   $('#music-add-playlist')?.addEventListener('click', async () => {
+    const turno = channelRevision;
+    const busca = searchRevision;
     const ids = [...document.querySelectorAll('#music-results [data-music-track]:checked')].map(input => input.value);
     playlistAdding = true;
     updateSelection();
     try {
       const result = await request('music-enqueue-playlist', { ids, shuffle: Boolean($('#music-playlist-shuffle')?.checked) });
-      showToast(`${result.added} músicas adicionadas à fila.`);
-    } catch (error) { notify(error.message, true); }
-    finally { playlistAdding = false; updateSelection(); }
+      if (turno === channelRevision) confirmarPedido(busca, `Coloquei ${result.added} ${result.added === 1 ? 'faixa' : 'faixas'} na fila da call.`);
+    } catch (error) { if (turno === channelRevision && busca === searchRevision) notify(error.message, true); }
+    finally { if (turno === channelRevision && busca === searchRevision) { playlistAdding = false; updateSelection(); } }
   });
   $('#music-next-page')?.addEventListener('click', () => { if (playlist?.nextOffset != null) searchMusic(playlist.nextOffset, playlistInput); });
-  function clearSearch() {
-    // Invalida respostas em trânsito sem reiniciar a música ou mexer na fila.
-    searchRevision++;
-    searchBusy = false;
+  function recolherResultados() {
     playlist = null;
     playlistInput = '';
-    for (const id of ['music-input', 'music-refinement']) if ($('#' + id)) $('#' + id).value = '';
+    playlistAdding = false;
     $('#music-results')?.replaceChildren();
     $('#music-results-heading')?.classList.add('hidden');
     $('#music-playlist-tools')?.classList.add('hidden');
     notify('');
+  }
+  function confirmarPedido(busca, texto) {
+    const mesmaBusca = busca === searchRevision;
+    if (mesmaBusca) {
+      const focoNosResultados = document.activeElement?.closest('#music-results, #music-playlist-tools');
+      searchRevision++;
+      recolherResultados();
+      if (focoNosResultados) $('#music-input')?.focus({ preventScroll: true });
+    }
+    mensagemK7(texto, false, mesmaBusca);
+  }
+  function clearSearch() {
+    searchRevision++;
+    searchBusy = false;
+    for (const id of ['music-input', 'music-refinement']) if ($('#' + id)) $('#' + id).value = '';
+    recolherResultados();
     render();
   }
   $('#music-clear-search')?.addEventListener('click', clearSearch);
   async function searchMusic(offset = 0, override = '') {
     const input = (override || $('#music-input')?.value || '').trim();
     if (!input) { clearSearch(); return; }
+    if (input === '/fila' || input === '/tocando') {
+      $('#music-input').value = '';
+      responderConsulta(input, input);
+      return;
+    }
+    if (!canControlMusic()) { notify('Você pode acompanhar a fila. Os pedidos estão bloqueados para você nesta call.', true); return; }
+    if (searchBusy && !override) return;
+    mensagemK7(offset ? 'Ver mais faixas da playlist' : input, true);
+    if ($('#k7-log') && !offset) $('#music-input').value = '';
     const expectedSearch = ++searchRevision;
     const expectedChannel = channelId;
     const expectedRevision = channelRevision;
     searchBusy = true;
     if ($('#music-search-button')) $('#music-search-button').disabled = true;
-    $('#music-results')?.replaceChildren();
-    $('#music-results-heading')?.classList.add('hidden');
-    $('#music-playlist-tools')?.classList.add('hidden');
-    playlist = null;
+    recolherResultados();
     notify('Procurando músicas…');
     try {
       const { result } = await request('music-search', { input, refinement: $('#music-refinement')?.value || '', offset, limit: MAX_QUEUE_TRACKS }, 65000);
       if (channelId !== expectedChannel || channelRevision !== expectedRevision || searchRevision !== expectedSearch) return;
-      notify(`${result.source.title}. ${result.notice}${result.searchError ? ` ${result.searchError}` : ''}`, Boolean(result.searchError));
+      notify('');
       playlist = result.playlist || null;
+      const tracks = playlist?.tracks || result.candidates || [];
+      if (result.searchError) mensagemK7(result.searchError);
+      else if (playlist) mensagemK7(`Achei a playlist “${playlist.title}”. Marca as faixas que você quer ouvir. ${result.notice || ''}`.trim());
+      else if (!tracks.length) mensagemK7('Não encontrei essa faixa. Tenta outro nome ou link?');
+      else if (result.source.kind === 'spotify') mensagemK7(`Procurei “${result.source.title}” no YouTube. Confere o artista e escolhe a versão que você quer ouvir.`);
+      else mensagemK7(tracks.length === 1 ? `Achei “${tracks[0].title}”. Quer colocar na fila?` : `Achei ${tracks.length} opções. Qual delas vai pra fila?`);
       if (playlist) {
         playlistInput = result.source.url;
         $('#music-playlist-tools')?.classList.remove('hidden');
         if ($('#music-playlist-name')) $('#music-playlist-name').textContent = `${playlist.title} · ${playlist.tracks.length} faixas nesta página`;
         $('#music-next-page')?.classList.toggle('hidden', playlist.nextOffset == null);
       }
-      const tracks = playlist?.tracks || result.candidates || [];
       $('#music-results-heading')?.classList.toggle('hidden', !tracks.length);
       if ($('#music-results-count')) $('#music-results-count').textContent = `${tracks.length} ${tracks.length === 1 ? 'opção' : 'opções'}`;
       let resultIndex = 0;
@@ -872,8 +968,12 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
         add.setAttribute('aria-label', add.title);
         add.addEventListener('click', async () => {
           add.disabled = true;
-          try { await request('music-enqueue', { id: track.id }); showToast('Música adicionada à fila.'); }
-          catch (error) { notify(error.message, true); }
+          try {
+            await request('music-enqueue', { id: track.id });
+            if (channelRevision === expectedRevision) {
+              confirmarPedido(expectedSearch, `Coloquei “${track.title}” na fila da call.`);
+            }
+          } catch (error) { if (channelRevision === expectedRevision && expectedSearch === searchRevision) notify(error.message, true); }
           finally { add.disabled = false; }
         });
         info.append(title, description);
@@ -903,7 +1003,11 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
         });
         $('#music-results')?.append(load);
       }
-    } catch (error) { if (channelId === expectedChannel && channelRevision === expectedRevision && searchRevision === expectedSearch) notify(error.message, true); }
+    } catch (error) {
+      if (channelRevision === expectedRevision && searchRevision === expectedSearch) {
+        notify(''); mensagemK7(error.message);
+      }
+    }
     finally { if (channelRevision === expectedRevision && searchRevision === expectedSearch) { searchBusy = false; render(); } }
   }
   const onStageOrFullscreenChange = () => {
@@ -936,6 +1040,7 @@ export function setupMusic({ socket, appState, prefs = {}, savePrefs = () => {},
   syncChannel();
   return {
     syncChannel,
+    fecharConversa,
     renderBot,
     renderStageMiniplayer,
     getSnapshot,

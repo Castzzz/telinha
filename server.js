@@ -4,6 +4,9 @@
  */
 
 import express from 'express';
+import { createStreamAccess } from './stream-access.js';
+import { getLinkPreview } from './link-previews.js';
+import { installDirectMessages } from './direct-messages.js';
 import { ChannelExtras } from './channel-extras.js';
 import { DailyCallStore } from './daily-call-store.js';
 import http from 'node:http';
@@ -75,6 +78,7 @@ const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
   maxHttpBufferSize: 3e7 // 30MB (acomoda GIFs de 10MB em base64)
 });
+const streamAccess = createStreamAccess({ io, revoke: revokeSfuMedia, limit: accountLimit, changed: broadcastChannels });
 app.get('/api/identity', (_req, res) => {
   const challenge = `${Date.now() + 60000}.${randomBytes(16).toString('hex')}`;
   res.set({ 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' }).json({ challenge: `${challenge}.${permissions.signature('profile-challenge|' + challenge)}` });
@@ -884,12 +888,13 @@ function prepareAttachment(payload) {
     mime = payload.mime;
     ext = mp4 ? 'mp4' : 'webm';
   }
-  // Só o PCM mono de 16 kHz gerado pelo recorte abre no player de voz.
-  if (payload.mime === 'audio/wav' && data.length > 44 && data.length <= 44 + 60 * 32000 &&
+  // Inclui os clipes antigos de 16 kHz e os atuais na taxa do mixer até 48 kHz.
+  const rate = data.length > 44 ? data.readUInt32LE(24) : 0;
+  if (payload.mime === 'audio/wav' && data.length > 44 && rate >= 8000 && rate <= 48000 && data.length <= 44 + 60 * rate * 2 &&
       data.length % 2 === 0 && data.toString('latin1', 0, 4) === 'RIFF' &&
       data.readUInt32LE(4) === data.length - 8 && data.toString('latin1', 8, 16) === 'WAVEfmt ' &&
       data.readUInt32LE(16) === 16 && data.readUInt16LE(20) === 1 && data.readUInt16LE(22) === 1 &&
-      data.readUInt32LE(24) === 16000 && data.readUInt32LE(28) === 32000 &&
+      data.readUInt32LE(28) === rate * 2 &&
       data.readUInt16LE(32) === 2 && data.readUInt16LE(34) === 16 &&
       data.toString('latin1', 36, 40) === 'data' && data.readUInt32LE(40) === data.length - 44) {
     mime = 'audio/wav';
@@ -954,6 +959,8 @@ function publicUser(u) {
   return {
     id: u.id,
     memberId: u.accessId,
+    accountId: u.accountId,
+    protectedStreams: ['screen', 'screen2', 'screen3', 'camera'].filter(kind => streamAccess.live(u, kind) && streamAccess.mode(u, kind) !== 'open'),
     name: u.channelId ? chatName(u, 'call', u.channelId) : u.name,
     profileName: u.name,
     color: u.color,
@@ -1810,6 +1817,7 @@ io.on('connection', (socket) => {
 
   user.isAdmin = permissions.isOwner(user);
   if (accountSession) {
+    user.accountId = accountSession.account.id;
     user.accountProfileId = accountSession.profile.id;
     applyProfile(user, { ...accountSession.profile, profileId: accountSession.profile.id });
     if (!user.avatar && user.accessId) {
@@ -1834,7 +1842,15 @@ io.on('connection', (socket) => {
   });
   installAccountHandlers({ socket, store: accounts, user, getProfile: storedAccountProfile,
     limit: accountLimit, onRevoke: revokeAccountSockets, onFriendsChanged: broadcastFriends, isOnline: friendOnline, getFriendState: friendState });
+  installDirectMessages({ socket, accounts, directory: DATA_DIR, io, limit: accountLimit });
   if (accountSession) queueMicrotask(broadcastFriends);
+  const previewAddress = accountClientAddress(socket.handshake.address, socket.handshake.headers['x-forwarded-for']);
+  socket.on('link-preview', safeHandler(async (url, callback) => {
+    if (typeof callback !== 'function') return;
+    if (accountLimit('link-preview:' + previewAddress, 60)) return callback(null);
+    callback(await getLinkPreview(url));
+  }));
+  streamAccess.setup(socket, user, safeHandler);
   setupDiceSocket(socket);
   watchTogether.setup(socket);
   if (accessIdentity.token) socket.emit('permission-identity', { token: accessIdentity.token });
@@ -2038,7 +2054,7 @@ io.on('connection', (socket) => {
   sendMemberKey(socket);
 
   // Admin: define ou tira a senha da sala. Quem está conectado recebe a nova e guarda.
-  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, presenceVersion: 2, brandingVersion: 1, server: publicServerInfo(), assetKey: user.assetKey });
+  socket.emit('room-info', { hasPassword: Boolean(roomPassword), connectionPing: true, linkPreviews: true, streamAccess: true, diceVersion: 2, accounts: accounts.available, membersVersion: 1, presenceVersion: 2, brandingVersion: 1, server: publicServerInfo(), assetKey: user.assetKey });
   refreshPresence(user, true);
   socket.on('admin-reset-members', safeHandler((_rawPayload, maybeCallback) => {
     const cb = safeCallback(maybeCallback);
@@ -2304,7 +2320,9 @@ io.on('connection', (socket) => {
       if (userName) user.name = userName;
       if (isMicOn !== undefined) user.isMicOn = isMicOn;
       if (isDeafened !== undefined) user.isDeafened = isDeafened;
+      if (isSharing === false && user.isSharing) streamAccess.end(user, 'screen');
       if (isSharing !== undefined) user.isSharing = isSharing;
+      if (!user.isSharing) socket.data.screenPreviews?.delete('screen');
       applyServerModeration(user);
       const stateEvt = {
         userId: socket.id,
@@ -2392,11 +2410,14 @@ io.on('connection', (socket) => {
     let presenceChanged = false;
 
     if (typeof rawPayload.isSharing === 'boolean' && user.isSharing !== rawPayload.isSharing) {
+      if (!rawPayload.isSharing) streamAccess.end(user, 'screen');
       user.isSharing = rawPayload.isSharing;
+      if (!user.isSharing) socket.data.screenPreviews?.delete('screen');
       presenceChanged = true;
     }
     // Câmera é uma transmissão separada da tela (dá pra ter as duas ao mesmo tempo)
     if (typeof rawPayload.isCameraOn === 'boolean' && user.isCameraOn !== rawPayload.isCameraOn) {
+      if (!rawPayload.isCameraOn) streamAccess.end(user, 'camera');
       user.isCameraOn = rawPayload.isCameraOn;
       presenceChanged = true;
     }
@@ -2404,6 +2425,10 @@ io.on('connection', (socket) => {
     if (Array.isArray(rawPayload.extraScreens)) {
       const next = [...new Set(rawPayload.extraScreens.filter((n) => EXTRA_SCREEN_NUMBERS.includes(n)))].sort();
       if (next.join() !== user.extraScreens.join()) {
+        for (const n of user.extraScreens) if (!next.includes(n)) {
+          streamAccess.end(user, 'screen' + n);
+          socket.data.screenPreviews?.delete('screen' + n);
+        }
         user.extraScreens = next;
         presenceChanged = true;
       }
@@ -2485,9 +2510,13 @@ io.on('connection', (socket) => {
     // Telas a mais: "screen2" → "__s2"
     const extra = typeof payload.kind === 'string' && /^screen([23])$/.exec(payload.kind);
     const suffix = payload.kind === 'voice' ? '__voz' : payload.kind === 'camera' ? '__cam' : extra ? `__s${extra[1]}` : '';
-    const sala = `${user.channelId}__${ownerId}${suffix}`;
+    const kind = payload.kind || 'screen';
+    if (kind !== 'voice' && !['screen', 'camera', 'screen2', 'screen3'].includes(kind)) return callback({ ok: false });
+    if (kind !== 'voice' && role === 'viewer' && (!streamAccess.live(owner, kind) || !streamAccess.permits(owner, kind, user))) return callback({ ok: false });
+    const sala = `${user.channelId}__${ownerId}${suffix}${streamAccess.suffix(owner, kind)}`;
     const exp = String(Math.floor(Date.now() / 1000) + 60);
-    const mediaId = payload.kind === 'voice' ? (role === 'host' ? user.voiceHostId : user.voiceViewerId) : user.mediaId;
+    const mediaId = payload.kind === 'voice' ? (role === 'host' ? user.voiceHostId : user.voiceViewerId)
+      : role === 'viewer' ? streamAccess.mediaId(owner, kind, user) : user.mediaId;
     const signature = createHmac('sha256', SFU_SECRET).update(`${sala}|${role}|${exp}|${mediaId}`).digest('hex');
     const token = `${mediaId}.${signature}`;
     callback({ ok: true, path: SFU_PATH, sala, role, exp, token });
@@ -2599,6 +2628,12 @@ io.on('connection', (socket) => {
     if (!signal || typeof signal !== 'object') return;
     if (!isSameChannel(socket, target)) return;
 
+    const peer = io.sockets.sockets.get(target).data.user;
+    if (type !== 'voice') {
+      const kind = type || 'screen';
+      if (signal.type === 'offer' && !streamAccess.permits(user, kind, peer)) return;
+      if (signal.type === 'answer' && !streamAccess.permits(peer, kind, user)) return;
+    }
     io.to(target).emit('webrtc-signal', {
       sender: socket.id,
       target,
@@ -2614,6 +2649,8 @@ io.on('connection', (socket) => {
     if (typeof targetId !== 'string' || !targetId.trim()) return;
     if (!sdp || (typeof sdp !== 'object' && typeof sdp !== 'string')) return;
     if (!isSameChannel(socket, targetId)) return;
+    const peer = io.sockets.sockets.get(targetId).data.user;
+    if (type !== 'voice' && !streamAccess.permits(user, type || 'screen', peer)) return;
 
     io.to(targetId).emit('webrtc-offer', {
       senderId: socket.id,
@@ -2628,6 +2665,8 @@ io.on('connection', (socket) => {
     if (typeof targetId !== 'string' || !targetId.trim()) return;
     if (!sdp || (typeof sdp !== 'object' && typeof sdp !== 'string')) return;
     if (!isSameChannel(socket, targetId)) return;
+    const peer = io.sockets.sockets.get(targetId).data.user;
+    if (type !== 'voice' && !streamAccess.permits(peer, type || 'screen', user)) return;
 
     io.to(targetId).emit('webrtc-answer', {
       senderId: socket.id,
@@ -2643,6 +2682,13 @@ io.on('connection', (socket) => {
     if (!candidate || (typeof candidate !== 'object' && typeof candidate !== 'string')) return;
     if (!isSameChannel(socket, targetId)) return;
 
+    const peer = io.sockets.sockets.get(targetId).data.user;
+    const direction = /^(screen[23]?|camera)-(in|out)$/.exec(type);
+    if (direction) {
+      const [, kind, dir] = direction;
+      if (dir === 'in' ? !streamAccess.permits(peer, kind, user) : !streamAccess.permits(user, kind, peer)) return;
+    }
+
     io.to(targetId).emit('webrtc-ice-candidate', {
       senderId: socket.id,
       candidate,
@@ -2650,11 +2696,37 @@ io.on('connection', (socket) => {
     });
   }));
 
+  const sharingScreen = (person, kind) => kind === 'screen' ? person.isSharing
+    : ['screen2', 'screen3'].includes(kind) && person.extraScreens.includes(Number(kind.slice(-1)));
+
+  socket.on('screen-preview-set', safeHandler((payload) => {
+    if (!user.channelId || !isPlainObject(payload) || !sharingScreen(user, payload.kind) || streamAccess.mode(user, payload.kind) !== 'open') return;
+    const frames = socket.data.screenPreviews ||= new Map();
+    if (Date.now() - (frames.get(payload.kind)?.at || 0) < 5000) return;
+    const image = payload.image;
+    if (typeof image !== 'string' || image.length > 65536 || !/^data:image\/jpeg;base64,\/9j\/[A-Za-z0-9+/=]+$/.test(image)) return;
+    frames.set(payload.kind, { image, at: Date.now() });
+  }));
+
+  socket.on('screen-preview-get', safeHandler((payload, callback) => {
+    const reply = safeCallback(callback);
+    if (!isPlainObject(payload)) return reply(null);
+    const sender = io.sockets.sockets.get(payload.targetId);
+    const person = sender?.data.user;
+    const ch = channels.get(person?.channelId);
+    if (!ch || !permissions.visible(user, ch) || (ch.password && user.channelId !== ch.id)
+      || !sharingScreen(person, payload.kind) || streamAccess.mode(person, payload.kind) !== 'open' || !streamAccess.permits(person, payload.kind, user)) return reply(null);
+    const frame = sender.data.screenPreviews?.get(payload.kind);
+    reply(frame && Date.now() - frame.at < 45000 ? frame.image : null);
+  }));
+
   socket.on('request-stream', safeHandler((rawPayload) => {
     if (!isPlainObject(rawPayload) || !user.channelId) return;
     const { targetId, type } = rawPayload;
     if (typeof targetId !== 'string' || !targetId.trim()) return;
     if (!isSameChannel(socket, targetId)) return;
+    const peer = io.sockets.sockets.get(targetId).data.user;
+    if (type !== 'voice' && !streamAccess.permits(peer, type || 'screen', user)) return;
 
     io.to(targetId).emit('request-stream', {
       requesterId: socket.id,
@@ -3051,6 +3123,7 @@ io.on('connection', (socket) => {
     cb({ success: true, messages: matches.slice(0, 30).map(messageAuthor), hasMore: matches.length > 30 });
   }));
 
+
   socket.on('message-context', safeHandler((raw, callback) => {
     const cb = safeCallback(callback), payload = safeObject(raw), target = chatTarget(payload);
     if (!target) return cb({ success: false, error: 'Você não tem acesso a esse canal.' });
@@ -3203,6 +3276,11 @@ io.on('connection', (socket) => {
           text: typeof payload.text === 'string' ? payload.text.trim().slice(0, isText ? MAX_TEXT_LENGTH : 600) : '',
           attachment: { url: `/api/${scope}-file/${file}`, name: prepared.name, mime: prepared.mime, size: prepared.data.length }
         };
+        if (isText && prepared.mime === 'audio/wav' && Number.isSafeInteger(payload.clippedAt) &&
+            payload.clippedAt > 0 && payload.clippedAt <= Date.now() + 86400000) {
+          msg.attachment.clippedAt = payload.clippedAt;
+          msg.attachment.sampleRate = prepared.data.readUInt32LE(24);
+        }
         if (isText) {
           appendTextMessage(channel, msg);
           emitText(channel, 'text-message', msg);
@@ -3324,6 +3402,8 @@ function callSoundSeed() {
 function leaveCurrentChannel(socket) {
   const user = socket.data?.user;
   if (!user || !user.channelId) return;
+  streamAccess.leave(user);
+  socket.data.screenPreviews?.clear();
   watchTogether.leave(socket.id);
   if (SFU_SECRET) for (const id of [user.mediaId, user.voiceHostId, user.voiceViewerId]) revokeSfuMedia(id);
 

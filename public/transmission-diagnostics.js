@@ -113,7 +113,7 @@ export function setupTransmissionDiagnostics({ getConnections, mountStageOverlay
     timer = setTimeout(() => update(version), 2000);
   }
   function open(event) {
-    stop(); returnFocus = event.currentTarget;
+    stop(); returnFocus = event.currentTarget.closest('details')?.querySelector('summary') || event.currentTarget;
     mountStageOverlay(modal); modal.classList.remove('hidden');
     modal.querySelector('button').focus(); update(generation);
   }

@@ -18,6 +18,12 @@
   <link rel="stylesheet" href="personalization.css">
 
   <link rel="stylesheet" href="channel-extras.css">
+  <link rel="stylesheet" href="interface.css" data-visual-css="alternativo" media="not all">
+  <link rel="stylesheet" href="sala.css" data-visual-css="alternativo" media="not all">
+  <link rel="stylesheet" href="roda.css" data-visual-css="roda" media="not all">
+  <link rel="stylesheet" href="terminal.css" data-visual-css="terminal" media="not all">
+  <script src="visual.js"></script>
+  <link rel="stylesheet" href="theme-color.css">
 </head>
 <body class="theme-discord">
 
@@ -43,6 +49,7 @@
 
   <section id="mobile-callbar" class="mobile-only mobile-callbar" aria-label="Chamada em andamento">
     <button type="button" id="mobile-return-call" class="mobile-callbar-open"><span class="mobile-call-signal" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19v-4M9 19v-8M14 19V7M19 19V3"/></svg></span><span><strong id="mobile-callbar-name">Sua call</strong><small id="mobile-callbar-status">Toque para voltar à call</small></span></button>
+    <button type="button" class="mobile-icon-button" data-mobile-proxy="btn-dock-clip" aria-label="Clipar vozes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 12 12M8 16 20 4"/></svg></button>
     <button type="button" class="mobile-icon-button mobile-mic-button" data-mobile-proxy="btn-toggle-mic" aria-label="Ligar microfone"></button>
     <button type="button" class="mobile-icon-button mobile-call-leave" data-mobile-proxy="btn-dock-leave" aria-label="Sair da call"></button>
   </section>
@@ -58,20 +65,47 @@
   <dialog id="mobile-call-options" class="mobile-sheet" aria-labelledby="mobile-call-options-title">
     <div class="mobile-sheet-handle" aria-hidden="true"></div>
     <div class="mobile-sheet-header"><h2 id="mobile-call-options-title">Opções da chamada</h2><button type="button" id="mobile-close-options" class="mobile-icon-button" aria-label="Fechar opções">✕</button></div>
+    <button type="button" data-stream-access-open class="mobile-settings-row hidden"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Acesso às minhas transmissões</button>
     <button type="button" id="btn-mobile-screen" class="mobile-settings-row hidden"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><span><span id="mobile-screen-label">Transmitir tela com som</span><small id="mobile-screen-hint">O Android vai pedir permissão</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row hidden" id="mobile-flip-camera-option" data-mobile-proxy="btn-mobile-flip-camera"><span>Virar câmera<small id="mobile-flip-camera-hint">Usar câmera traseira</small></span><span class="mobile-row-icon" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-5L3 9m0-6v6h6m-5 4a8 8 0 0 0 14 5l3-3m0 6v-6h-6"/></svg></span></button>
     <button type="button" class="mobile-settings-row" id="mobile-voice-clip">Clipar vozes<small>Últimos 10 a 60 segundos</small></button>
-    <button type="button" id="btn-mobile-music" class="mobile-settings-row hidden"><span>Música<small>Fila e controles do bot nesta call</small></span><span aria-hidden="true">›</span></button>
+    <button type="button" id="btn-mobile-music" class="mobile-settings-row hidden"><span>K7 · Música<small>Pedidos e fila desta call</small></span><span aria-hidden="true">›</span></button>
+    <button type="button" id="btn-mobile-watch" class="mobile-settings-row" aria-controls="modal-watch-together">Assistir juntos</button>
     <button type="button" id="btn-mobile-audio-output" class="mobile-settings-row"><span class="mobile-row-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m11 5-6 4H2v6h3l6 4zM15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14"/></svg></span><span>Saída de áudio<small>Escolher alto-falante ou fone</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="microfone"><span class="mobile-row-icon" data-mobile-icon="mic"></span><span>Microfone<small>Volume e redução de ruído</small></span><span aria-hidden="true">›</span></button>
     <button type="button" class="mobile-settings-row" data-mobile-settings="som"><span class="mobile-row-icon" data-mobile-icon="audio"></span><span>Volume e sons<small>Áudio da call e das transmissões</small></span><span aria-hidden="true">›</span></button>
   </dialog>
+  <dialog id="dm-dialog" class="modal-card" aria-labelledby="dm-title">
+    <div class="modal-header"><button type="button" id="dm-back" class="btn-secondary" hidden aria-label="Voltar às conversas">←</button><h3 id="dm-title">Conversas</h3><button type="button" id="dm-close" class="modal-close-btn" aria-label="Fechar">✕</button></div>
+    <div id="dm-friends"></div>
+    <section id="dm-thread" hidden>
+      <button id="dm-older" class="btn-secondary" type="button" hidden>Ver anteriores</button>
+      <button id="dm-latest" class="btn-secondary" type="button" hidden>Ir às recentes ↓</button>
+      <div id="dm-log" role="log" aria-label="Histórico da conversa"></div>
+      <form id="dm-compose"><input id="dm-input" class="form-input" aria-label="Mensagem privada" placeholder="Escreva uma mensagem…" maxlength="2000" autocomplete="off" required><button class="btn-primary" type="submit">Enviar</button></form>
+    </section>
+    <p id="dm-status" role="status"></p>
+  </dialog>
   <dialog id="voice-clip-dialog" class="modal-card" aria-labelledby="voice-clip-title">
     <div class="modal-header"><h3 id="voice-clip-title">Clipar vozes</h3><button type="button" class="modal-close-btn" aria-label="Fechar">✕</button></div>
     <form class="tools-form">
-      <label>Últimos segundos<input class="form-input" type="number" name="duration" min="10" max="60" value="30" required></label>
+      <label>Duração do trecho (segundos)<input class="form-input" type="number" name="duration" min="10" max="60" value="30" required></label>
+      <audio id="voice-clip-preview" controls aria-label="Ouvir prévia do clipe"></audio>
+      <label>Título do clipe<input class="form-input" name="clipTitle" maxlength="120" autocomplete="off"></label>
       <label>Enviar no canal<select class="form-select" name="channel" required></select></label>
+      <button type="button" id="clip-to-sound" class="btn-secondary">Recortar para o soundboard</button>
       <button type="submit" class="btn-primary">Enviar clipe</button>
+    </form>
+  </dialog>
+  <dialog id="sound-trim" class="modal-card" aria-labelledby="trim-title">
+    <div class="modal-header"><h3 id="trim-title">Recortar para o soundboard</h3><button type="button" class="modal-close-btn" aria-label="Fechar">✕</button></div>
+    <form class="tools-form">
+      <label>Início (segundos)<input class="form-input" type="number" name="start" min="0" step="any" required></label>
+      <label>Fim (até 15 segundos de trecho)<input class="form-input" type="number" name="end" min="0" step="any" required></label>
+      <audio controls aria-label="Ouvir trecho selecionado"></audio>
+      <label>Nome do som<input class="form-input" name="soundName" required maxlength="30"></label>
+      <p role="status"></p>
+      <button class="btn-primary" type="submit">Adicionar ao soundboard</button>
     </form>
   </dialog>
   <dialog id="mobile-message-options" class="mobile-sheet" aria-labelledby="mobile-message-options-title">
@@ -114,14 +148,16 @@
         aria-label="Largura da barra de canais" tabindex="0"
         title="Arraste pra mudar a largura (duplo clique volta ao normal)"></div>
       <div class="sidebar-header">
-        <span class="sidebar-server-icon" data-server-icon aria-hidden="true"></span><h2 class="sidebar-title">Canais</h2>
+        <h2 class="sidebar-title"><button type="button" id="btn-channels-home" title="Voltar ao início da sala" aria-label="Canais — voltar ao início da sala"><span class="sidebar-server-icon" data-server-icon aria-hidden="true"></span>Canais</button></h2>
         <button type="button" id="btn-organize-channels" class="btn-icon-add hidden" title="Organizar categorias e ausentes" aria-label="Organizar categorias e ausentes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></svg></button>
         <button id="btn-header-add-channel" class="btn-icon-add" title="Criar novo canal de voz">+</button>
       </div>
 
+      <p id="terminal-teclas" data-somente-terminal hidden><kbd>↑</kbd><kbd>↓</kbd> navegar <kbd>Enter</kbd> abrir</p>
       <!-- CHANNELS LIST WRAPPER -->
       <nav class="channels-scroller" aria-label="Canais de voz">
         <div class="mobile-only mobile-room-status"><span class="mobile-status-dot" aria-hidden="true"></span><span id="mobile-room-summary">A sala está aberta. Chega mais!</span></div>
+        <button type="button" id="dm-open" class="hidden" aria-haspopup="dialog"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/></svg>Conversas <span id="dm-badge" hidden></span></button>
         <div class="category-header" id="category-voice" role="button" tabindex="0" aria-expanded="true" title="Recolher/mostrar os canais de voz">
           <span class="category-caret">▼</span>
           <span class="category-title">Canais de Voz</span>
@@ -194,6 +230,7 @@
           </span>
           <span class="voice-panel-channel" id="voice-panel-channel"></span>
         </div>
+        <button type="button" id="btn-dock-clip" class="dock-btn" aria-label="Clipar vozes" title="Clipar vozes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 12 12M8 16 20 4"/></svg></button>
         <button id="btn-dock-leave" class="dock-btn dock-leave" title="Sair da call">
           <span class="dock-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="M23 1L1 23"/></svg></span>
         </button>
@@ -247,8 +284,9 @@
         <div class="home-content">
           <header class="home-header">
             <div>
-              <span class="home-eyebrow">Sua sala</span>
-              <h1>Bora conversar?</h1>
+              <span class="home-eyebrow visual-classico">Sua sala</span>
+              <span class="visual-alternativo sidebar-server-icon home-server-icon" data-server-icon aria-hidden="true"></span>
+              <h1><span class="visual-classico">Bora conversar?</span><span class="visual-alternativo">Sala de encontro</span></h1>
               <p id="home-summary" class="home-summary"></p>
             </div>
             <button type="button" id="btn-home-whats-new" class="home-news-button">
@@ -274,6 +312,7 @@
           <h2 id="lounge-channel-title">Escolha um canal para começar</h2>
         </div>
 
+        <div id="terminal-colunas" data-somente-terminal hidden><span>Pessoa</span><span>Fala</span><span>Mic</span><span>Vídeo</span></div>
         <div id="lounge-users-grid" class="lounge-users-grid">
           <!-- Cards grandes dos amigos conectados no canal com VAD verde pulsante -->
         </div>
@@ -334,7 +373,7 @@
                 🎵 Escolher áudio
                 <input type="file" id="input-soundboard-file" accept="audio/*" hidden />
               </label>
-              <span id="soundboard-file-name" class="soundboard-file-name">até 10 s e 1 MB</span>
+              <span id="soundboard-file-name" class="soundboard-file-name">até 15 s e 1 MB</span>
               <button type="submit" class="btn-primary" id="btn-soundboard-save">Salvar</button>
             </div>
           </form>
@@ -342,13 +381,19 @@
         </div>
 
         <div class="stage-controls-right">
-          <button type="button" id="btn-music" class="btn-control-icon hidden" title="Bot de música: fila do canal" aria-label="Música do canal" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></button>
           <button type="button" id="btn-voice-clip" class="btn-control-icon" title="Clipar os últimos 10 a 60 segundos de voz" aria-label="Clipar vozes"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8 8 12 12M8 16 20 4"/></svg></button>
           <button id="btn-soundboard" class="btn-control-icon" title="Soundboard: tocar um som pra toda a call" aria-label="Soundboard" aria-expanded="false"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 14v-3a9 9 0 0 1 18 0v3"/><rect x="2" y="12" width="5" height="9" rx="2"/><rect x="17" y="12" width="5" height="9" rx="2"/></svg></button>
-          <button type="button" id="btn-stage-diagnostics" class="btn-control-icon" title="Diagnóstico das transmissões" aria-label="Diagnóstico das transmissões"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V7"/></svg></button>
-          <button id="btn-stage-stop-watching" class="btn-control-icon hidden" title="Parar de assistir (o AO VIVO continua na lista pra voltar)" aria-label="Parar de assistir">⏹</button>
           <button id="btn-stage-pip" class="btn-control-icon hidden" title="Abrir transmissão em janela (P)" aria-label="Abrir transmissão em janela">⧉</button>
           <button id="btn-stage-fullscreen" class="btn-control-icon hidden" title="Tela cheia (F)" aria-label="Tela cheia">⛶</button>
+          <details id="stage-more">
+            <summary class="btn-control-icon" title="Mais opções" aria-label="Mais opções"><svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></summary>
+            <div id="stage-options">
+              <button type="button" id="btn-music" class="stage-option hidden" title="Conversar com K7" aria-label="K7 · Música da call" aria-controls="modal-music"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>K7 · Música</button>
+              <button type="button" data-stream-access-open class="stage-option hidden"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Acesso às minhas transmissões</button>
+              <button type="button" id="btn-stage-diagnostics" class="stage-option" aria-controls="modal-transmission-diagnostics"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 20V10m5 10V4m5 16v-7m5 7V7"/></svg>Diagnóstico da transmissão</button>
+              <button type="button" id="btn-stage-stop-watching" class="stage-option hidden"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg><span>Parar de assistir</span></button>
+            </div>
+          </details>
         </div>
       </footer>
     </main>
@@ -363,10 +408,12 @@
           <span class="chat-hash">💬</span>
           <span id="chat-channel-label">#geral-chat</span>
         </div>
-        <button type="button" id="btn-chat-search" class="btn-icon-close" title="Buscar mensagens" aria-label="Buscar mensagens"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg></button>
-        <button id="btn-chat-pins" class="btn-icon-close btn-chat-pins hidden" title="Mensagens fixadas" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
-        <button id="btn-chat-back-voice" class="btn-chat-back hidden" title="Voltar pro chat da call">🔊 Chat da call</button>
-        <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
+        <div class="chat-header-actions">
+          <button type="button" id="btn-chat-search" class="btn-icon-close" title="Buscar mensagens" aria-label="Buscar mensagens"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></svg></button>
+          <button id="btn-chat-pins" class="btn-icon-close btn-chat-pins hidden" title="Mensagens fixadas" aria-label="Mensagens fixadas"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 17v5M9 3h6l-1 7 4 3v2H6v-2l4-3z"/></svg></button>
+          <button id="btn-chat-back-voice" class="btn-chat-back hidden" title="Voltar pro chat da call">🔊 Chat da call</button>
+          <button id="btn-close-chat" class="btn-icon-close" title="Fechar Chat">✕</button>
+        </div>
       </div>
 
       <p id="chat-channel-description" class="chat-channel-description hidden"></p>
@@ -380,6 +427,10 @@
         </div>
       </div>
 
+      <nav id="chat-reading" aria-label="Navegação da conversa">
+        <button type="button" id="chat-back-reading" class="btn-secondary hidden">Voltar à leitura</button>
+        <button type="button" id="chat-latest" class="btn-secondary hidden">Ir às recentes ↓</button>
+      </nav>
       <div id="typing-indicator" class="typing-indicator hidden" aria-live="polite"></div>
       <!-- Respondendo a alguém / sugestões de @nome -->
       <div id="chat-reply-bar" class="chat-reply-bar hidden">
@@ -409,6 +460,70 @@
           <svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
         </button>
       </form>
+    </aside>
+    <aside id="modal-music" class="music-desk hidden" aria-labelledby="music-title">
+      <header class="k7-header">
+        <img src="k7.svg" width="54" height="46" alt="">
+        <div><h2 id="music-title">K7</h2><p id="k7-channel">Bot de música da call</p></div>
+        <button type="button" id="k7-close" class="modal-close-btn" data-close-modal="modal-music" aria-label="Fechar conversa com K7">✕</button>
+      </header>
+      <nav class="k7-navigation" aria-label="Música da call">
+        <button type="button" aria-pressed="true" aria-controls="k7-requests" id="k7-show-requests">Conversa</button>
+        <button type="button" aria-pressed="false" aria-controls="k7-deck" id="k7-show-queue">Fila <span id="k7-count">0</span></button>
+      </nav>
+      <section id="k7-requests" aria-label="Pedidos para o K7">
+        <div id="k7-thread">
+          <div class="k7-welcome"><strong>K7</strong><p>O que vai tocar? Me manda o nome da música, um artista ou um link do YouTube ou Spotify.</p>
+            <div class="k7-suggestions"><button type="button" data-k7-question="/tocando">O que tá tocando?</button><button type="button" data-k7-question="/fila">Quais são as próximas?</button></div>
+          </div>
+          <div id="k7-log" role="log" aria-label="Conversa com K7" aria-live="polite"></div>
+          <p id="music-search-status" role="status"></p>
+          <section id="music-playlist-tools" class="music-playlist-tools hidden" aria-label="Opções da playlist">
+            <strong id="music-playlist-name"></strong>
+            <div class="music-playlist-options"><label><input type="checkbox" id="music-select-all" checked> Selecionar todas</label><label><input type="checkbox" id="music-playlist-shuffle"> Embaralhar ao adicionar</label></div>
+            <div class="music-controls"><button type="button" id="music-add-playlist" class="btn-primary">Adicionar selecionadas</button><button type="button" id="music-next-page" class="btn-secondary hidden">Próxima página</button></div>
+          </section>
+          <div id="music-results-heading" class="music-results-heading hidden"><h4>Resultados da busca</h4><span id="music-results-count"></span></div><div id="music-results" aria-label="Versões encontradas"></div>
+        </div>
+        <form id="music-form" class="music-form">
+          <div class="k7-volume">
+            <label for="music-volume"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 13v-2a9 9 0 0 1 18 0v2"/><rect x="3" y="12" width="4" height="7" rx="2"/><rect x="17" y="12" width="4" height="7" rx="2"/></svg>Seu volume</label>
+            <input type="range" id="music-volume" min="0" max="200" value="50">
+            <output id="music-volume-value" for="music-volume">50%</output>
+          </div>
+          <label for="music-input" class="sr-only">Pedido para o K7</label>
+          <div class="k7-composer"><input id="music-input" maxlength="500" autocomplete="off" placeholder="Peça uma música ao K7…">
+            <button type="submit" id="music-search-button" aria-label="Enviar pedido" title="Enviar pedido"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg></button>
+          </div>
+          <details><summary>Opções de busca</summary><label for="music-refinement">Título e artista para refinar um link do Spotify</label><input id="music-refinement" class="form-input" maxlength="300"><button type="button" id="music-clear-search" class="btn-secondary">Limpar busca</button></details>
+        </form>
+      </section>
+      <section id="k7-deck" aria-label="Fila e controles da call" hidden>
+        <section class="k7-player" aria-labelledby="music-now">
+          <div class="k7-tape-label">
+            <img src="k7.svg" width="68" height="58" alt="">
+            <div><strong id="music-now">Nenhuma música tocando</strong><p id="music-phase" role="status"></p></div>
+          </div>
+          <div class="music-controls music-playback-actions">
+            <button type="button" id="music-pause" class="btn-secondary">Pausar</button>
+            <button type="button" id="music-skip" class="btn-secondary"><svg class="icon-svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 5v14l10-7zM17 5h3v14h-3z"/></svg>Pular</button>
+          </div>
+          <details class="k7-deck-options">
+            <summary>Opções da fila</summary>
+            <div class="music-repeat" role="group" aria-labelledby="music-repeat-label">
+              <span id="music-repeat-label">Repetir na call</span>
+              <div class="music-repeat-options"><button type="button" data-music-repeat="off" aria-pressed="true">Desligado</button><button type="button" data-music-repeat="one" aria-pressed="false">Faixa</button><button type="button" data-music-repeat="all" aria-pressed="false">Fila</button></div>
+              <select id="music-repeat" hidden aria-hidden="true" tabindex="-1"><option value="off">Desligado</option><option value="one">Esta faixa</option><option value="all">Fila inteira</option></select>
+            </div>
+            <button type="button" id="music-stop" class="btn-secondary">Parar e limpar fila</button>
+          </details>
+        </section>
+        <div class="music-queue-heading"><h4 class="music-queue-title">Na sequência <span id="music-queue-count">0/150</span></h4>
+          <button type="button" id="music-shuffle" class="btn-secondary">Embaralhar fila</button>
+        </div>
+        <ol id="music-queue" class="music-queue"></ol>
+        <div id="music-queue-empty" class="k7-empty"><p>Nenhuma faixa na sequência.</p><button type="button" id="k7-request-track">Pedir uma música</button></div>
+      </section>
     </aside>
     <section id="mobile-profile-page" class="mobile-only mobile-profile-page" aria-label="Seu perfil e preferências">
       <div class="mobile-profile-hero">
@@ -641,49 +756,26 @@
     </div>
   </div>
 
-  <div id="modal-music" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="music-title">
-    <div class="modal-card music-modal">
-      <div class="modal-header music-heading"><div class="music-heading-copy"><span class="music-heading-icon"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><div><span class="music-eyebrow">SUA CALL, SUA TRILHA</span><h3 id="music-title">Música do canal</h3></div></div><button type="button" class="modal-close-btn" data-close-modal="modal-music" aria-label="Fechar música">✕</button></div>
-      <div class="modal-body music-body">
-        <section class="music-current" aria-label="Tocando agora">
-          <div class="music-current-heading"><span class="music-current-art" aria-hidden="true"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></span><div class="music-current-copy"><span class="music-eyebrow">TOCANDO AGORA</span><strong id="music-now">Nenhuma música tocando</strong><p id="music-phase" role="status" aria-live="polite"></p></div></div>
-          <div class="music-controls music-playback-actions"><button type="button" id="music-pause" class="btn-secondary">Pausar</button><button type="button" id="music-skip" class="btn-secondary">Pular</button><button type="button" id="music-stop" class="btn-secondary">Parar e limpar fila</button></div>
-          <div class="music-preferences">
-            <div class="music-repeat" role="group" aria-labelledby="music-repeat-label"><span id="music-repeat-label">Repetir</span><div class="music-repeat-options"><button type="button" data-music-repeat="off" aria-pressed="true">Desligado</button><button type="button" data-music-repeat="one" aria-pressed="false">Uma faixa</button><button type="button" data-music-repeat="all" aria-pressed="false">Fila inteira</button></div><select id="music-repeat" hidden aria-hidden="true" tabindex="-1"><option value="off">Desligado</option><option value="one">Esta faixa</option><option value="all">Fila inteira</option></select></div>
-            <div class="music-volume-control"><div><label for="music-volume">Seu volume</label><output id="music-volume-value" for="music-volume">50%</output></div><input type="range" id="music-volume" min="0" max="200" value="50" aria-label="Seu volume da música"></div>
-          </div>
-          <button type="button" id="music-shuffle" class="btn-secondary">Embaralhar fila</button>
-        </section>
-        <form id="music-form" class="music-form">
-          <label for="music-input">Encontre a próxima música</label>
-          <div class="music-search-row"><input id="music-input" class="form-input" maxlength="500" placeholder="Nome da música, artista ou link do YouTube/Spotify"><button type="submit" id="music-search-button" class="btn-primary">Buscar</button><button type="button" id="music-clear-search" class="btn-secondary" title="Limpar resultados sem alterar a fila">Limpar busca</button></div>
-          <details><summary>Ajustar a busca do Spotify</summary><label for="music-refinement">Título e artista (opcional)</label><input id="music-refinement" class="form-input" maxlength="300" placeholder="Título e artista para encontrar a versão certa"></details>
-          <p id="music-search-status" role="status" aria-live="polite"></p>
-        </form>
-        <section id="music-playlist-tools" class="music-playlist-tools hidden" aria-label="Opções da playlist">
-          <strong id="music-playlist-name"></strong>
-          <div class="music-playlist-options"><label><input type="checkbox" id="music-select-all" checked> Selecionar todas</label><label><input type="checkbox" id="music-playlist-shuffle"> Embaralhar ao adicionar</label></div>
-          <div class="music-controls"><button type="button" id="music-add-playlist" class="btn-primary">Adicionar selecionadas</button><button type="button" id="music-next-page" class="btn-secondary hidden">Próxima página</button></div>
-        </section>
-        <div id="music-results-heading" class="music-results-heading hidden"><h4>Resultados da busca</h4><span id="music-results-count"></span></div><div id="music-results" aria-label="Versões encontradas"></div>
-        <div class="music-queue-heading"><h4 id="music-queue-title" class="music-queue-title">Próximas músicas (0)</h4></div><ol id="music-queue" class="music-queue"></ol><p id="music-queue-empty" class="music-empty">Escolha uma música para continuar a trilha.</p>
-        <p class="music-help">Seu volume é individual. Pausar e pular mudam a música para toda a call.</p>
-      </div>
-    </div>
-  </div>
-
   <!-- NOVIDADES: aparece uma vez na primeira vez que abre a versão nova -->
   <div id="modal-whats-new" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-whats-new-title">
     <div class="modal-card">
       <div class="modal-header">
-        <h3 id="modal-whats-new-title">📺 Teletela 4.7.0</h3>
+        <h3 id="modal-whats-new-title">Novidades do Teletela</h3>
         <button class="modal-close-btn" data-close-modal="modal-whats-new">✕</button>
       </div>
 
       <div class="modal-body">
         <ul class="whats-new-list">
+          <li>Escolha quem assiste à transmissão</li>
+          <li>Novo visual pro bot de música</li>
+          <li>Mudanças de visual no Teletela em geral</li>
+        </ul>
+        <div id="whats-new-4-7-0" class="whats-new-older hidden">
+          <h4>E o que chegou na 4.7.0</h4>
+        <ul class="whats-new-list">
           <li><strong>Clipes de voz na call.</strong> Clique na tesoura para guardar os últimos 10 a 60 segundos de conversa. Escolha o canal de texto para enviar o áudio com a data e a hora do clique.</li>
         </ul>
+        </div>
         <div id="whats-new-4-6-0" class="whats-new-older hidden">
           <h4>E o que chegou na 4.6.0</h4>
         <ul class="whats-new-list">
@@ -1113,6 +1205,33 @@
               <label class="checkbox-label"><input type="checkbox" id="check-autostart"> Abrir o Teletela ao iniciar o PC</label>
               <small id="autostart-status" role="status">Abre o aplicativo quando você entra no computador, sem entrar na call.</small>
             </div>
+            <fieldset class="visual-picker"><legend>Visual do aplicativo</legend>
+              <div class="visual-options">
+                <label class="visual-choice">
+                  <input type="radio" name="visual" value="classico">
+                  <img src="previews/classico.png" width="320" height="180" alt="">
+                  <span>Clássico</span>
+                </label>
+                <label class="visual-choice">
+                  <input type="radio" name="visual" value="roda">
+                  <img src="previews/roda.png" width="320" height="180" alt="">
+                  <span>Roda</span>
+                </label>
+                <label class="visual-choice">
+                  <input type="radio" name="visual" value="terminal">
+                  <img src="previews/terminal.png" width="320" height="180" alt="">
+                  <span>Terminal</span>
+                </label>
+              </div>
+            </fieldset>
+            <div class="form-group" data-somente-terminal hidden>
+              <label for="terminal-cursor">Cursor do Terminal</label>
+              <select id="terminal-cursor" class="form-select">
+                <option value="suave">Pulsar suavemente</option>
+                <option value="piscar">Piscar</option>
+                <option value="fixo">Ficar parado</option>
+              </select>
+            </div>
             <!-- Tema -->
             <div class="form-group">
               <label for="select-theme">Tema</label>
@@ -1127,7 +1246,18 @@
               <h5>Personalização</h5>
               <p>Escolha sua combinação. Só muda a aparência neste aparelho.</p>
               <div class="personal-field">
-                <label for="personal-accent">Cor de destaque</label>
+                <label for="personal-theme-color">Cor do tema</label>
+                <div class="personal-presets" role="group" aria-label="Cores do tema">
+                  <button type="button" data-theme-swatch="#8951b5" style="--swatch: #8951b5" aria-label="Roxo" title="Roxo"></button>
+                  <button type="button" data-theme-swatch="#497bb2" style="--swatch: #497bb2" aria-label="Azul" title="Azul"></button>
+                  <button type="button" data-theme-swatch="#42856e" style="--swatch: #42856e" aria-label="Verde" title="Verde"></button>
+                  <input type="color" id="personal-theme-color" value="#8951b5" aria-label="Escolher outra cor do tema">
+                </div>
+                <small>A cor dá o tom do fundo, dos painéis e dos menus.</small>
+                <div class="personal-actions"><button type="button" id="personal-clear-theme-color" class="btn-secondary">Voltar à paleta do visual</button></div>
+              </div>
+              <div class="personal-field">
+                <label for="personal-accent">Cor primária</label>
                 <div class="personal-presets" role="group" aria-label="Cores de destaque">
                   <button type="button" data-personal-accent="#5865f2" style="--swatch: #5865f2" aria-label="Azul" aria-pressed="false"></button>
                   <button type="button" data-personal-accent="#7c3aed" style="--swatch: #7c3aed" aria-label="Violeta" aria-pressed="false"></button>
@@ -1135,9 +1265,14 @@
                   <button type="button" data-personal-accent="#047857" style="--swatch: #047857" aria-label="Verde" aria-pressed="false"></button>
                   <button type="button" data-personal-accent="#b45309" style="--swatch: #b45309" aria-label="Âmbar" aria-pressed="false"></button>
                   <button type="button" data-personal-accent="#be123c" style="--swatch: #be123c" aria-label="Rosa" aria-pressed="false"></button>
-                  <input type="color" id="personal-accent" value="#5865f2" aria-label="Escolher outra cor de destaque">
+                  <input type="color" id="personal-accent" value="#5865f2" aria-label="Escolher cor primária">
                 </div>
                 <small>Cores muito claras são escurecidas para manter o texto dos botões legível.</small>
+              </div>
+              <div class="personal-field">
+                <label for="personal-secondary">Cor secundária</label>
+                <input type="color" id="personal-secondary" value="#7c3aed">
+                <small>Usada nos destaques, bordas e seleções.</small>
               </div>
               <div class="personal-field">
                 <label for="personal-wallpaper-file">Imagem de fundo</label>
@@ -1255,6 +1390,7 @@
 
             <!-- Ensurdecer e transmissões -->
             <div class="form-group">
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global">
                 <input type="checkbox" id="input-deafen-streams" />
                 Ensurdecer também silencia as transmissões (desligado: você para de ouvir as vozes, mas continua ouvindo as telas)
@@ -1263,6 +1399,7 @@
 
             <!-- Som de entrada/saída -->
             <div class="form-group">
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global">
                 <input type="checkbox" id="input-call-sounds" checked />
                 Sons de entrada e saída
@@ -1276,6 +1413,7 @@
             </div>
 
             <div class="form-group">
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global">
                 <input type="checkbox" id="input-control-sounds" checked />
                 Sons dos controles
@@ -1290,6 +1428,7 @@
 
             <!-- Soundboard -->
             <div class="form-group">
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global">
                 <input type="checkbox" id="input-soundboard-on" checked />
                 Ouvir o soundboard (sons que a galera toca pra call)
@@ -1331,6 +1470,7 @@
             <div class="form-group"><button type="button" class="btn-secondary" id="btn-settings-diagnostics">Diagnóstico das transmissões</button><small>Veja a qualidade real enquanto transmite ou assiste.</small></div>
             <!-- Esconder a própria transmissão -->
             <div class="form-group">
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global">
                 <input type="checkbox" id="input-hide-own-stream" />
                 Esconder automaticamente minha transmissão e câmera daqui
@@ -1360,6 +1500,7 @@
                 <span>🎧 Ensurdecer</span>
                 <button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="deafen"></button>
               </div>
+              <div class="hotkey-row"><span>Clipar vozes</span><button type="button" class="btn-secondary hotkey-btn" data-hotkey-action="clip"></button></div>
               <label class="hotkey-global" id="hotkey-global-wrap">
                 <input type="checkbox" id="input-hotkey-global" />
                 Funcionar mesmo com o Teletela minimizado (ex: no meio do jogo)
@@ -1374,7 +1515,7 @@
                 No Linux com Wayland quem segura a tecla no meio do jogo é o sistema. No Hyprland, coloque na config
                 (troque F8 pela sua tecla; <code>bindn</code> deixa o jogo receber a tecla também):<br />
                 <code>bindn = , F8, exec, curl -s --unix-socket $XDG_RUNTIME_DIR/telinha.sock http://telinha/mute</code><br />
-                Pra ensurdecer, use <code>/deafen</code> no fim.
+                Pra ensurdecer, use <code>/deafen</code>. Para clipar as vozes, use <code>/clip</code>.
               </p>
             </div>
           </section>
@@ -1467,7 +1608,7 @@
   </div>
 
   <!-- MENU DO BOTÃO DE TRANSMITIR (com tela no ar): pôr outra tela ou parar uma -->
-  <div id="share-menu" class="share-menu hidden" role="menu"></div>
+  <div id="share-menu" class="share-menu hidden" role="menu" aria-label="Gerenciar transmissão"></div>
 
   <!-- Reagir a uma mensagem do chat -->
   <div id="msg-react-popover" class="msg-react-popover hidden"></div>
@@ -1477,6 +1618,7 @@
     <div class="user-popover-banner" id="user-popover-banner"></div>
     <div class="user-popover-head">
       <div class="user-avatar user-popover-avatar" id="user-popover-avatar"></div>
+      <button type="button" class="perfil-amizade" id="user-popover-friend" hidden><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="7" r="3.5"/><path d="M2 20v-2a6 6 0 0 1 12 0v2"/><path data-sinal d="M18 8v6m-3-3h6"/></svg><span>Adicionar amigo</span></button>
       <div class="user-popover-names">
         <strong id="user-popover-name"></strong>
         <div id="user-popover-roles" class="profile-roles"></div>
@@ -1484,7 +1626,7 @@
         <span id="user-popover-activity"></span>
       </div>
     </div>
-    <label class="user-popover-label" id="user-popover-volume-label" for="user-popover-volume">Volume da voz (só pra você)</label>
+    <label class="user-popover-label" id="user-popover-volume-label" for="user-popover-volume">Volume só pra você</label>
     <div class="user-popover-volume" id="user-popover-volume-row">
       <input type="range" id="user-popover-volume" min="0" max="200" step="5" value="100" />
       <span id="user-popover-volume-text">100%</span>
@@ -1493,14 +1635,14 @@
       <button type="button" class="btn-secondary" id="user-popover-mute">Silenciar pra mim</button>
       <button type="button" class="btn-secondary" id="user-popover-reset">100%</button>
     </div>
-    <div class="user-popover-admin hidden" id="user-popover-admin">
-      <span class="user-popover-label">Moderação (vale pra todo mundo)</span>
+    <details class="user-popover-admin hidden" id="user-popover-admin">
+      <summary>Moderação da call</summary>
       <div class="user-popover-menu">
         <button type="button" class="popover-menu-item" id="user-popover-server-mute">Mutar pra todos</button>
         <button type="button" class="popover-menu-item" id="user-popover-server-deafen">Ensurdecer pra todos</button>
         <button type="button" class="popover-menu-item danger hidden" id="user-popover-kick"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg> Tirar da call</button>
       </div>
-    </div>
+    </details>
     <div class="user-popover-menu user-popover-footer">
       <button type="button" class="popover-menu-item hidden" id="user-popover-nickname" data-call-nickname><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg> Trocar apelido neste chat</button>
       <button type="button" class="popover-menu-item hidden" id="user-popover-edit-self"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m16 3 5 5L8 21H3v-5zM13 6l5 5"/></svg> Editar meu perfil</button>
@@ -1509,6 +1651,26 @@
     </div>
   </div>
 
+  <dialog id="acesso-transmissao" class="acesso-transmissao" aria-labelledby="acesso-titulo">
+    <form id="acesso-form">
+      <div class="acesso-titulo"><h3 id="acesso-titulo">Acesso à transmissão</h3><button type="button" data-fechar aria-label="Fechar">✕</button></div>
+      <label for="acesso-fonte">Transmissão</label><select id="acesso-fonte"><option value="screen">Tela principal</option><option value="screen2">Tela 2</option><option value="screen3">Tela 3</option><option value="camera">Câmera</option></select>
+      <fieldset id="acesso-campos"><label for="acesso-modo">Quem pode assistir?</label>
+        <select id="acesso-modo"><option value="open">Toda a call</option><option value="invite">Só quem eu escolher</option><option value="password">Quem tiver a senha</option></select>
+        <div id="acesso-segredo" hidden><label for="acesso-senha">Senha da transmissão</label><input type="password" id="acesso-senha" maxlength="128" autocomplete="new-password"></div>
+        <div id="acesso-pessoas" aria-label="Pessoas na call"></div>
+        <p class="acesso-ajuda" id="acesso-acao-ajuda" hidden>Bloquear ou expulsar tem efeito imediato.</p>
+      </fieldset>
+      <p role="status" id="acesso-aviso"></p>
+      <button type="submit" class="btn-primary">Salvar acesso</button>
+    </form>
+  </dialog>
+  <dialog id="entrar-transmissao" class="acesso-transmissao" aria-labelledby="entrar-titulo">
+    <form><div class="acesso-titulo"><h3 id="entrar-titulo">Transmissão com senha</h3><button type="button" data-fechar aria-label="Fechar">✕</button></div>
+      <label for="entrar-senha">Senha da transmissão</label><input type="password" id="entrar-senha" maxlength="128" autocomplete="off" required>
+      <p role="status"></p><button type="submit" class="btn-primary">Assistir</button>
+    </form>
+  </dialog>
   <!-- 4. MODAL NATIVO ELECTRON SCREEN PICKER (PREPARADO PARA M4) -->
   <div id="modal-screen-picker" class="modal-backdrop hidden" role="dialog" aria-modal="true">
     <div class="modal-card modal-screen-picker-card">
@@ -1531,20 +1693,28 @@
   </div>
 
   <!-- QUAL SOM TRANSMITIR (app desktop no Linux) -->
-  <div id="modal-audio-picker" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+  <div id="modal-audio-picker" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="audio-picker-title" aria-describedby="audio-picker-help">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>Qual som transmitir?</h3>
-        <button class="modal-close-btn" data-close-modal="modal-audio-picker">✕</button>
+        <div><h3 id="audio-picker-title">Qual som transmitir?</h3>
+          <p id="audio-picker-help">Escolha um aplicativo para compartilhar só o áudio dele.</p>
+        </div>
+        <button type="button" class="modal-close-btn" data-close-modal="modal-audio-picker" aria-label="Fechar">✕</button>
       </div>
-      <div class="quality-chooser" data-quality-chooser></div>
-      <p style="margin:0 0 12px;color:#b5bac1;font-size:13px;">
-        Escolha um app pra mandar <strong>só o som dele</strong> (sem as vozes da chamada e sem outros sons do PC).
-        O app precisa estar aberto tocando algum som.
-      </p>
-      <div id="audio-picker-list" style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;"></div>
+      <div class="audio-picker-heading"><h4>Aplicativos</h4>
+        <button type="button" id="audio-picker-refresh" title="Atualizar lista de aplicativos" aria-label="Atualizar lista de aplicativos"><svg class="icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7v5h-5M20 12a8 8 0 1 0-2 5"/></svg></button>
+      </div>
+      <div id="audio-picker-list">
+        <p id="audio-picker-status" role="status"></p>
+        <div id="audio-picker-apps" role="group" aria-label="Aplicativos com áudio"></div>
+        <div id="audio-picker-other" role="group" aria-label="Outras fontes de áudio"></div>
+      </div>
+      <details class="audio-quality">
+        <summary><span>Qualidade do vídeo</span><strong id="audio-picker-quality"></strong></summary>
+        <div class="quality-chooser" data-quality-chooser></div>
+      </details>
       <div class="modal-actions">
-        <button type="button" class="btn-secondary" id="audio-picker-refresh">🔄 Atualizar lista</button>
+        <button type="button" class="stream-access-link hidden" data-stream-access-open>Escolher quem pode assistir</button>
         <button type="button" class="btn-secondary" data-close-modal="modal-audio-picker">Cancelar</button>
       </div>
     </div>
